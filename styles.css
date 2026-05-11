@@ -261,13 +261,16 @@ h2 {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
   padding: 14px 14px 0;
 }
 
 .tab {
   height: 36px;
+  min-width: 0;
+  padding: 0 6px;
+  font-size: 13px;
   font-weight: 700;
 }
 

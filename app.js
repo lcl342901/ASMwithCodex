@@ -36,17 +36,50 @@ const params = {
   influentNh4: 32,
   influentNo3: 0.5,
   influentTss: 220,
+  solubleCodFraction: 38,
+  inertSolubleFraction: 25,
+  inertParticulateFraction: 25,
+  influentXbh: 25,
+  influentXba: 1,
+  influentOrganicNFactor: 0.2,
+  influentAlkalinity: 7,
   anaerobicVolume: 1200,
   anoxicVolume: 1800,
   aerobicVolume: 3500,
   clarifierArea: 1500,
-  captureEfficiency: 99.5,
   rasRatio: 0.75,
   internalRecycleRatio: 2.0,
   wasQ: 350,
   aerobicDo: 2.0,
   simulationDays: 20,
   timeStepHours: 0.5,
+  muH: 6,
+  muA: 0.8,
+  bH: 0.62,
+  bA: 0.15,
+  kH: 3,
+  kA: 0.08,
+  kS: 20,
+  kX: 0.03,
+  kOH: 0.2,
+  kOA: 0.4,
+  kNO: 0.5,
+  kNH: 1,
+  yH: 0.67,
+  yA: 0.24,
+  etaG: 0.8,
+  etaH: 0.4,
+  fp: 0.08,
+  temp: 15,
+  clarifierHeight: 4,
+  clarifierLayers: 10,
+  clarifierFeedLayer: 5,
+  captureEfficiency: 99.5,
+  takacsRH: 0.00019,
+  takacsRP: 0.00286,
+  takacsV0: 474,
+  takacsV0Max: 250,
+  maxLayerTss: 30000,
 };
 
 const fields = {
@@ -56,13 +89,19 @@ const fields = {
     ["influentNh4", "进水 NH4-N", "gN/m3", 0, 120],
     ["influentNo3", "进水 NO3-N", "gN/m3", 0, 50],
     ["influentTss", "进水 TSS", "g/m3", 0, 800],
+    ["solubleCodFraction", "溶解性 COD 比例", "% COD", 5, 95],
+    ["inertSolubleFraction", "溶解惰性比例", "% soluble COD", 0, 90],
+    ["inertParticulateFraction", "颗粒惰性比例", "% particulate COD", 0, 90],
+    ["influentXbh", "进水 X_BH", "gCOD/m3", 0, 300],
+    ["influentXba", "进水 X_BA", "gCOD/m3", 0, 80],
+    ["influentOrganicNFactor", "有机氮比例", "fraction of NH4-N", 0, 1],
+    ["influentAlkalinity", "进水碱度 S_ALK", "mol/m3", 0, 30],
   ],
   process: [
     ["anaerobicVolume", "厌氧池体积", "m3", 100, 20000],
     ["anoxicVolume", "缺氧池体积", "m3", 100, 20000],
     ["aerobicVolume", "好氧池体积", "m3", 100, 40000],
     ["clarifierArea", "二沉池表面积", "m2", 100, 20000],
-    ["captureEfficiency", "二沉池可沉降比例", "%", 80, 99.95],
   ],
   operation: [
     ["rasRatio", "RAS 回流比", "Qras / Qin", 0, 3],
@@ -71,6 +110,37 @@ const fields = {
     ["aerobicDo", "好氧池 DO 设定", "gO2/m3", 0.2, 5],
     ["simulationDays", "仿真天数", "d", 1, 80],
     ["timeStepHours", "计算步长", "h", 0.1, 4],
+  ],
+  asm1: [
+    ["muH", "mu_H 异养菌最大生长速率", "1/d", 0.1, 20],
+    ["muA", "mu_A 自养菌最大生长速率", "1/d", 0.05, 5],
+    ["bH", "b_H 异养菌衰减系数", "1/d", 0.01, 3],
+    ["bA", "b_A 自养菌衰减系数", "1/d", 0.01, 2],
+    ["kH", "k_h 水解速率", "1/d", 0.05, 25],
+    ["kA", "k_a 氨化速率", "m3/(gCOD d)", 0.001, 0.25],
+    ["kS", "K_S 易降解 COD 半饱和", "gCOD/m3", 1, 200],
+    ["kX", "K_X 水解半饱和", "gCOD/gCOD", 0.001, 1],
+    ["kOH", "K_OH 异养菌氧半饱和", "gO2/m3", 0.01, 5],
+    ["kOA", "K_OA 自养菌氧半饱和", "gO2/m3", 0.01, 5],
+    ["kNO", "K_NO 硝酸盐半饱和", "gN/m3", 0.01, 5],
+    ["kNH", "K_NH 氨氮半饱和", "gN/m3", 0.01, 10],
+    ["yH", "Y_H 异养菌产率", "gCOD/gCOD", 0.1, 1],
+    ["yA", "Y_A 自养菌产率", "gCOD/gN", 0.05, 0.6],
+    ["etaG", "eta_g 缺氧生长修正", "-", 0, 1],
+    ["etaH", "eta_h 缺氧水解修正", "-", 0, 1],
+    ["fp", "f_P 衰减惰性产物比例", "-", 0, 0.5],
+    ["temp", "温度", "degC", 5, 35],
+  ],
+  clarifier: [
+    ["clarifierHeight", "二沉池水深", "m", 1, 8],
+    ["clarifierLayers", "二沉池层数", "layers", 4, 20],
+    ["clarifierFeedLayer", "进水层序号", "1 = 顶层", 1, 20],
+    ["captureEfficiency", "不可沉降 TSS 修正", "% settleable", 80, 99.95],
+    ["takacsRH", "Takacs r_H", "m3/g", 0.00001, 0.002],
+    ["takacsRP", "Takacs r_P", "m3/g", 0.0001, 0.02],
+    ["takacsV0", "Takacs v0", "m/d", 10, 1000],
+    ["takacsV0Max", "Takacs v0 max", "m/d", 10, 1000],
+    ["maxLayerTss", "层浓度上限", "g/m3", 5000, 60000],
   ],
 };
 
@@ -262,7 +332,12 @@ function renderMetricOptions() {
 
 function renderForm() {
   parameterForm.innerHTML = "";
+  if (activeTab === "clarifier") {
+    params.clarifierLayers = clamp(Math.round(params.clarifierLayers), 4, 20);
+    params.clarifierFeedLayer = clamp(Math.round(params.clarifierFeedLayer), 1, params.clarifierLayers);
+  }
   fields[activeTab].forEach(([key, label, unit, min, max]) => {
+    const fieldMax = key === "clarifierFeedLayer" ? params.clarifierLayers : max;
     const field = document.createElement("div");
     field.className = "field";
     field.innerHTML = `
@@ -270,12 +345,19 @@ function renderForm() {
         <span>${label}</span>
         <small>${unit}</small>
       </label>
-      <input id="${key}" type="number" value="${params[key]}" min="${min}" max="${max}" step="any" />
+      <input id="${key}" type="number" value="${params[key]}" min="${min}" max="${fieldMax}" step="any" />
     `;
     const input = field.querySelector("input");
     input.addEventListener("input", () => {
       const parsed = Number(input.value);
-      if (Number.isFinite(parsed)) params[key] = parsed;
+      if (Number.isFinite(parsed)) {
+        params[key] = key === "clarifierLayers" || key === "clarifierFeedLayer" ? Math.round(parsed) : parsed;
+        if (key === "clarifierLayers") {
+          params.clarifierFeedLayer = clamp(Math.round(params.clarifierFeedLayer), 1, params.clarifierLayers);
+          renderForm();
+        }
+        syncAsm1Params();
+      }
     });
     parameterForm.appendChild(field);
   });
@@ -287,6 +369,27 @@ function safe(value, floor = 1e-9) {
 
 function zeros() {
   return Array(13).fill(0);
+}
+
+function syncAsm1Params() {
+  asm1.Y_A = params.yA;
+  asm1.Y_H = params.yH;
+  asm1.f_P = params.fp;
+  asm1.K_NH = params.kNH;
+  asm1.K_NO = params.kNO;
+  asm1.K_OA = params.kOA;
+  asm1.K_OH = params.kOH;
+  asm1.K_S = params.kS;
+  asm1.K_X = params.kX;
+  asm1.b_A = params.bA;
+  asm1.b_H = params.bH;
+  asm1.k_a = params.kA;
+  asm1.k_h = params.kH;
+  asm1.mu_A = params.muA;
+  asm1.mu_H = params.muH;
+  asm1.n_g = params.etaG;
+  asm1.n_h = params.etaH;
+  asm1.temp = params.temp;
 }
 
 function addScaled(base, delta, scale) {
@@ -306,22 +409,26 @@ function mixVectors(streams) {
 }
 
 function influentVector() {
-  const xCod = Math.min(params.influentCod * 0.62, params.influentTss / asm1.F_TSS_COD);
+  const solubleFraction = clamp(params.solubleCodFraction / 100, 0.05, 0.95);
+  const xCod = Math.min(params.influentCod * (1 - solubleFraction), params.influentTss / asm1.F_TSS_COD);
   const sCod = Math.max(0, params.influentCod - xCod);
+  const siFraction = clamp(params.inertSolubleFraction / 100, 0, 0.9);
+  const xiFraction = clamp(params.inertParticulateFraction / 100, 0, 0.9);
+  const organicN = params.influentNh4 * clamp(params.influentOrganicNFactor, 0, 1);
   const c = zeros();
-  c[C.S_I] = sCod * 0.25;
-  c[C.S_S] = sCod * 0.75;
+  c[C.S_I] = sCod * siFraction;
+  c[C.S_S] = sCod * (1 - siFraction);
   c[C.S_O] = 0.2;
   c[C.S_NO] = params.influentNo3;
   c[C.S_NH] = params.influentNh4;
-  c[C.S_ND] = params.influentNh4 * 0.08;
-  c[C.S_ALK] = 7;
-  c[C.X_I] = xCod * 0.25;
-  c[C.X_S] = xCod * 0.75;
-  c[C.X_BH] = 25;
-  c[C.X_BA] = 1;
+  c[C.S_ND] = organicN * 0.4;
+  c[C.S_ALK] = params.influentAlkalinity;
+  c[C.X_I] = xCod * xiFraction;
+  c[C.X_S] = xCod * (1 - xiFraction);
+  c[C.X_BH] = params.influentXbh;
+  c[C.X_BA] = params.influentXba;
   c[C.X_P] = 0;
-  c[C.X_ND] = params.influentNh4 * 0.12;
+  c[C.X_ND] = organicN * 0.6;
   return c;
 }
 
@@ -524,10 +631,10 @@ function clarify(c, qClarifier, rasQ, wasQ, capture) {
 }
 
 function settlingVelocity(x, xMin) {
-  const rH = 0.00019;
-  const rP = 0.00286;
-  const v0 = 474;
-  const v0Max = 250;
+  const rH = params.takacsRH;
+  const rP = params.takacsRP;
+  const v0 = params.takacsV0;
+  const v0Max = params.takacsV0Max;
   const effectiveX = Math.max(0, x - xMin);
   return clamp(v0 * (Math.exp(-rH * effectiveX) - Math.exp(-rP * effectiveX)), 0, v0Max);
 }
@@ -535,10 +642,10 @@ function settlingVelocity(x, xMin) {
 function takacsClarifierStep(layers, inlet, qClarifier, rasQ, wasQ, dt, capture) {
   const n = layers.length;
   const area = Math.max(params.clarifierArea, 1);
-  const height = 4;
+  const height = Math.max(params.clarifierHeight, 0.1);
   const hLayer = height / n;
   const vLayer = area * hLayer;
-  const feedLayer = Math.floor(n / 2);
+  const feedLayer = clamp(Math.round(params.clarifierFeedLayer) - 1, 0, n - 1);
   const qUnder = Math.max(rasQ + wasQ, 1e-6);
   const qEff = Math.max(qClarifier - qUnder, 1e-6);
   const xIn = Math.max(tss(inlet), 1e-6);
@@ -567,11 +674,11 @@ function takacsClarifierStep(layers, inlet, qClarifier, rasQ, wasQ, dt, capture)
     d[i + 1] += gravityFlux / hLayer;
   }
 
-  const nextLayers = layers.map((x, index) => clamp(x + dt * d[index], 0, 30000));
+  const nextLayers = layers.map((x, index) => clamp(x + dt * d[index], 0, params.maxLayerTss));
   const effTss = Math.max(xMin, nextLayers[0]);
   const underTss = Math.max(effTss, nextLayers[n - 1]);
   const effRatio = clamp(effTss / xIn, 0, 1.2);
-  const underRatio = clamp(underTss / xIn, 0, 20);
+  const underRatio = clamp(underTss / xIn, 0, Math.max(1, params.maxLayerTss / xIn));
   const eff = [...inlet];
   const under = [...inlet];
 
@@ -606,6 +713,7 @@ function initialReactorState(kind) {
 }
 
 function runAsm1Simulation() {
+  syncAsm1Params();
   const q = params.influentQ;
   const rasQ = q * params.rasRatio;
   const irQ = q * params.internalRecycleRatio;
@@ -619,7 +727,9 @@ function runAsm1Simulation() {
   let anoxic = initialReactorState("anoxic");
   let aerobic = initialReactorState("aerobic");
   let ras = [...aerobic];
-  let clarifierLayers = Array(10).fill(tss(aerobic));
+  const layerCount = clamp(Math.round(params.clarifierLayers), 4, 20);
+  params.clarifierFeedLayer = clamp(Math.round(params.clarifierFeedLayer), 1, layerCount);
+  let clarifierLayers = Array(layerCount).fill(tss(aerobic));
 
   const series = {
     time: [],
