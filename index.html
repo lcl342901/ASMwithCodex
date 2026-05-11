@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AAO 在线仿真教学平台</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">A2O / AAO Process Simulator</p>
+        <h1>AAO 工艺在线仿真</h1>
+      </div>
+      <div class="topbar-actions">
+        <button id="resetLayout" class="icon-button" title="重置流程图布局">↺</button>
+        <button id="runSimulation" class="primary-button">运行仿真</button>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <section class="canvas-panel" aria-label="AAO 工艺流程图">
+        <div class="panel-heading">
+          <div>
+            <h2>工艺流程</h2>
+            <p>拖动单元位置，点击节点编辑关键参数。</p>
+          </div>
+          <span id="statusBadge" class="status-badge">待运行</span>
+        </div>
+        <div id="flowCanvas" class="flow-canvas">
+          <svg id="edgeLayer" class="edge-layer" aria-hidden="true"></svg>
+        </div>
+      </section>
+
+      <aside class="params-panel" aria-label="参数设置">
+        <div class="panel-heading compact">
+          <div>
+            <h2>边界条件与尺寸</h2>
+            <p id="activeNodeLabel">全局参数</p>
+          </div>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="参数分组">
+          <button class="tab active" data-tab="influent">进水</button>
+          <button class="tab" data-tab="process">池体</button>
+          <button class="tab" data-tab="operation">运行</button>
+        </div>
+
+        <form id="parameterForm" class="parameter-form"></form>
+      </aside>
+
+      <section class="results-panel" aria-label="仿真结果">
+        <div class="panel-heading">
+          <div>
+            <h2>仿真结果</h2>
+            <p id="resultSummary">点击运行后显示出水水质；点击流程单体后可选择指标查看浓度变化。</p>
+          </div>
+          <div class="metric-strip">
+            <div>
+              <span>出水 NH4-N</span>
+              <strong id="metricNh4">--</strong>
+            </div>
+            <div>
+              <span>出水 TN</span>
+              <strong id="metricTn">--</strong>
+            </div>
+            <div>
+              <span>出水 TSS</span>
+              <strong id="metricTss">--</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="chart-toolbar">
+          <button class="chart-toggle active" data-chart="effluent">出水水质</button>
+          <button class="chart-toggle" data-chart="nitrogen">氮转化</button>
+          <button class="chart-toggle" data-chart="solids">污泥与 DO</button>
+          <button class="chart-toggle" data-chart="unit">单体过程</button>
+          <label class="metric-picker">
+            <span>指标</span>
+            <select id="unitMetricSelect"></select>
+          </label>
+        </div>
+        <canvas id="resultChart" width="1200" height="420"></canvas>
+        <div id="legend" class="legend"></div>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
