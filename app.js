@@ -58,6 +58,7 @@ const params = {
   aerobicDo: 2.0,
   simulationDays: 20,
   timeStepHours: 0.5,
+  outputIntervalHours: 6,
   muH: 6,
   muA: 0.8,
   bH: 0.62,
@@ -114,7 +115,8 @@ const fields = {
     ["wasQ", "剩余污泥流量", "m3/d", 0, 2000],
     ["aerobicDo", "好氧池 DO 设定", "gO2/m3", 0.2, 5],
     ["simulationDays", "仿真天数", "d", 1, 80],
-    ["timeStepHours", "计算步长", "h", 0.1, 4],
+    ["timeStepHours", "计算步长", "h", 0.05, 6],
+    ["outputIntervalHours", "结果输出间隔", "h", 0.1, 24],
   ],
   asm1: [
     ["muH", "mu_H 异养菌最大生长速率", "1/d", 0.1, 20],
@@ -829,8 +831,9 @@ function previewClarifierSplit(state) {
 
 function runAsm1Simulation() {
   syncAsm1Params();
-  const dt = Math.min(params.timeStepHours / 24, 0.0025);
+  const dt = solverStepDays();
   const steps = Math.max(1, Math.round(params.simulationDays / dt));
+  const outputEvery = Math.max(1, Math.round(outputIntervalDays() / dt));
 
   const influent = influentVector();
   const state = createSimulationState();
@@ -839,7 +842,7 @@ function runAsm1Simulation() {
   for (let step = 0; step <= steps; step += 1) {
     const split = stepSimulationState(state, influent, dt);
 
-    if (step % Math.max(1, Math.round(0.25 / dt)) === 0 || step === steps) {
+    if (step % outputEvery === 0 || step === steps) {
       pushSnapshot(series, step * dt, influent, state.anaerobic, state.anoxic, state.aerobic, split, state.ras, state.clarifierLayers);
     }
   }
@@ -904,7 +907,7 @@ function parseCsvTime(value, index, firstTimestamp) {
   if (numeric !== null) return numeric;
   const timestamp = Date.parse(value);
   if (Number.isFinite(timestamp)) return (timestamp - firstTimestamp) / 86400000;
-  return index * (params.timeStepHours / 24);
+  return index * requestedStepDays();
 }
 
 function normalizeCsvRecords(text) {
@@ -958,6 +961,35 @@ function normalizeCsvRecords(text) {
     .sort((a, b) => a.time - b.time);
 }
 
+function interpolateValues(previous, next, time) {
+  if (!previous) return next?.values || {};
+  if (!next) return previous.values;
+  const span = next.time - previous.time;
+  if (span <= 0) return previous.values;
+  const ratio = clamp((time - previous.time) / span, 0, 1);
+  const keys = new Set([...Object.keys(previous.values), ...Object.keys(next.values)]);
+  const values = {};
+  keys.forEach((key) => {
+    const a = previous.values[key];
+    const b = next.values[key];
+    if (a !== undefined && b !== undefined) values[key] = a + (b - a) * ratio;
+    else if (a !== undefined) values[key] = a;
+    else if (b !== undefined) values[key] = b;
+  });
+  return values;
+}
+
+function csvValuesAt(records, time, cursor) {
+  while (cursor.index < records.length - 2 && records[cursor.index + 1].time <= time) {
+    cursor.index += 1;
+  }
+  const previous = records[cursor.index];
+  const next = records[cursor.index + 1];
+  if (time <= records[0].time) return records[0].values;
+  if (!next) return previous.values;
+  return interpolateValues(previous, next, time);
+}
+
 function runHistoricalSimulation(records) {
   if (!records.length) return runAsm1Simulation();
   const savedParams = { ...params };
@@ -965,28 +997,22 @@ function runHistoricalSimulation(records) {
   const series = createResultSeries();
   series.mode = "csv";
   series.sourceName = csvFileName;
-  let currentTime = records[0].time;
+  const dt = solverStepDays();
+  const steps = Math.max(1, Math.round(params.simulationDays / dt));
+  const outputEvery = Math.max(1, Math.round(outputIntervalDays() / dt));
+  const cursor = { index: 0 };
 
   try {
-    records.forEach((record, index) => {
-      Object.assign(params, record.values);
+    for (let step = 0; step <= steps; step += 1) {
+      const currentTime = step * dt;
+      Object.assign(params, csvValuesAt(records, currentTime, cursor));
       syncAsm1Params();
       const influent = influentVector();
-      const split = previewClarifierSplit(state);
-      pushSnapshot(series, currentTime, influent, state.anaerobic, state.anoxic, state.aerobic, split, state.ras, state.clarifierLayers);
-
-      const nextRecord = records[index + 1];
-      const nextTime = nextRecord ? nextRecord.time : currentTime + params.timeStepHours / 24;
-      const duration = Math.max(0, nextTime - currentTime);
-      const baseDt = Math.min(params.timeStepHours / 24, 0.0025);
-      let remaining = duration;
-      while (remaining > 1e-9) {
-        const dt = Math.min(baseDt, remaining);
-        stepSimulationState(state, influent, dt);
-        remaining -= dt;
+      const split = stepSimulationState(state, influent, dt);
+      if (step % outputEvery === 0 || step === steps) {
+        pushSnapshot(series, currentTime, influent, state.anaerobic, state.anoxic, state.aerobic, split, state.ras, state.clarifierLayers);
       }
-      currentTime = nextTime;
-    });
+    }
   } finally {
     Object.assign(params, savedParams);
     syncAsm1Params();
@@ -998,6 +1024,18 @@ function runHistoricalSimulation(records) {
 function updateCsvStatus(message, isError = false) {
   csvStatus.textContent = message;
   csvStatus.classList.toggle("error", isError);
+}
+
+function requestedStepDays() {
+  return Math.max(0.001 / 24, params.timeStepHours / 24);
+}
+
+function solverStepDays() {
+  return Math.min(requestedStepDays(), 0.0025);
+}
+
+function outputIntervalDays() {
+  return Math.max(solverStepDays(), params.outputIntervalHours / 24);
 }
 
 function niceMax(values) {
@@ -1288,7 +1326,7 @@ csvFileInput.addEventListener("change", async () => {
     csvFileName = file.name;
     const start = records[0].time.toFixed(2);
     const end = records[records.length - 1].time.toFixed(2);
-    updateCsvStatus(`已加载 ${file.name}：${records.length} 条记录，时间范围 ${start} - ${end} d。点击“运行仿真”按历史数据回放。`);
+    updateCsvStatus(`已加载 ${file.name}：${records.length} 条记录，数据范围 ${start} - ${end} d。仿真会按“运行”页的仿真天数和计算步长推进，超出数据范围后保持最后一条边界条件。`);
   } catch (error) {
     csvRecords = [];
     csvFileName = "";
