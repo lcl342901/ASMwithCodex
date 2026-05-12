@@ -46,6 +46,16 @@
           <button class="tab" data-tab="operation">运行</button>
           <button class="tab" data-tab="asm1">ASM1</button>
           <button class="tab" data-tab="clarifier">二沉池</button>
+          <button class="tab" data-tab="data">数据</button>
+        </div>
+
+        <div id="dataTools" class="data-tools" hidden>
+          <label class="file-picker">
+            <span>上传 CSV 历史数据</span>
+            <input id="csvFileInput" type="file" accept=".csv,text/csv" />
+          </label>
+          <button id="clearCsvData" class="secondary-button" type="button">清除数据</button>
+          <p id="csvStatus">尚未加载历史数据。支持列：time, Q, COD, NH4, NO3, TSS, DO, RAS_Q, IR_Q, WAS_Q。</p>
         </div>
 
         <form id="parameterForm" class="parameter-form"></form>

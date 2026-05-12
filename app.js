@@ -7,6 +7,10 @@ const resultChart = document.getElementById("resultChart");
 const legend = document.getElementById("legend");
 const unitMetricSelect = document.getElementById("unitMetricSelect");
 const chartTooltip = document.getElementById("chartTooltip");
+const dataTools = document.getElementById("dataTools");
+const csvFileInput = document.getElementById("csvFileInput");
+const clearCsvData = document.getElementById("clearCsvData");
+const csvStatus = document.getElementById("csvStatus");
 
 const nodes = [
   { id: "influent", title: "进水", subtitle: "Q, COD, NH4-N", icon: "IN", type: "source", x: 30, y: 150 },
@@ -152,6 +156,8 @@ let activeChart = "effluent";
 let selectedMetric = "COD";
 let currentChartState = null;
 let hoverPoint = null;
+let csvRecords = [];
+let csvFileName = "";
 
 const C = {
   S_I: 0,
@@ -334,7 +340,9 @@ function renderMetricOptions() {
 }
 
 function renderForm() {
+  dataTools.hidden = activeTab !== "data";
   parameterForm.innerHTML = "";
+  if (activeTab === "data") return;
   if (activeTab === "clarifier") {
     params.clarifierLayers = clamp(Math.round(params.clarifierLayers), 4, 20);
     params.clarifierFeedLayer = clamp(Math.round(params.clarifierFeedLayer), 1, params.clarifierLayers);
@@ -617,6 +625,62 @@ function pushUnitMetrics(unitSeries, unitId, metricValues) {
   });
 }
 
+function createResultSeries() {
+  return {
+    time: [],
+    effCod: [],
+    effNh4: [],
+    effNo3: [],
+    effTn: [],
+    effTss: [],
+    anaerobicNo3: [],
+    anoxicNo3: [],
+    aerobicNo3: [],
+    aerobicDo: [],
+    aerobicMlss: [],
+    rasMlss: [],
+    mode: csvRecords.length ? "csv" : "manual",
+    sourceName: csvFileName,
+    units: createUnitSeries(),
+    clarifier: {
+      topTss: [],
+      middleTss: [],
+      bottomTss: [],
+      effluentTss: [],
+      underflowTss: [],
+    },
+  };
+}
+
+function pushSnapshot(series, time, influent, anaerobic, anoxic, aerobic, split, ras, clarifierLayers) {
+  series.time.push(Number(time.toFixed(4)));
+  series.effCod.push(cod(split.eff));
+  series.effNh4.push(split.eff[C.S_NH]);
+  series.effNo3.push(split.eff[C.S_NO]);
+  series.effTn.push(tn(split.eff));
+  series.effTss.push(tss(split.eff));
+  series.anaerobicNo3.push(anaerobic[C.S_NO]);
+  series.anoxicNo3.push(anoxic[C.S_NO]);
+  series.aerobicNo3.push(aerobic[C.S_NO]);
+  series.aerobicDo.push(aerobic[C.S_O]);
+  series.aerobicMlss.push(tss(aerobic));
+  series.rasMlss.push(tss(ras));
+
+  pushUnitMetrics(series.units, "influent", metricsFromVector(influent));
+  pushUnitMetrics(series.units, "anaerobic", metricsFromVector(anaerobic));
+  pushUnitMetrics(series.units, "anoxic", metricsFromVector(anoxic));
+  pushUnitMetrics(series.units, "aerobic", metricsFromVector(aerobic));
+  pushUnitMetrics(series.units, "clarifier", metricsFromVector(split.eff));
+  pushUnitMetrics(series.units, "effluent", metricsFromVector(split.eff));
+  pushUnitMetrics(series.units, "ras", metricsFromVector(ras));
+  pushUnitMetrics(series.units, "was", metricsFromVector(split.under));
+  series.clarifier.topTss.push(clarifierLayers[0]);
+  series.clarifier.middleTss.push(clarifierLayers[Math.floor(clarifierLayers.length / 2)]);
+  series.clarifier.bottomTss.push(clarifierLayers[clarifierLayers.length - 1]);
+  series.clarifier.effluentTss.push(tss(split.eff));
+  series.clarifier.underflowTss.push(tss(split.under));
+}
+
 function clarify(c, qClarifier, rasQ, wasQ, capture) {
   const qUnder = Math.max(rasQ + wasQ, 1e-6);
   const qEff = Math.max(qClarifier - qUnder, 1e-6);
@@ -715,98 +779,225 @@ function initialReactorState(kind) {
   return c;
 }
 
-function runAsm1Simulation() {
-  syncAsm1Params();
+function createSimulationState() {
+  const layerCount = clamp(Math.round(params.clarifierLayers), 4, 20);
+  params.clarifierFeedLayer = clamp(Math.round(params.clarifierFeedLayer), 1, layerCount);
+  const aerobic = initialReactorState("aerobic");
+  return {
+    anaerobic: initialReactorState("anaerobic"),
+    anoxic: initialReactorState("anoxic"),
+    aerobic,
+    ras: [...aerobic],
+    clarifierLayers: Array(layerCount).fill(tss(aerobic)),
+  };
+}
+
+function stepSimulationState(state, influent, dt) {
   const q = params.influentQ;
   const rasQ = q * params.rasRatio;
   const irQ = q * params.internalRecycleRatio;
   const wasQ = Math.min(params.wasQ, q * 0.8);
   const capture = clamp(params.captureEfficiency / 100, 0.8, 0.9995);
+
+  const anaerobicIn = mixVectors([
+    { q, c: influent },
+    { q: rasQ, c: state.ras },
+  ]);
+  state.anaerobic = rk4Reactor(state.anaerobic, anaerobicIn, q + rasQ, params.anaerobicVolume, 0, dt);
+
+  const anoxicIn = mixVectors([
+    { q: q + rasQ, c: state.anaerobic },
+    { q: irQ, c: state.aerobic },
+  ]);
+  state.anoxic = rk4Reactor(state.anoxic, anoxicIn, q + rasQ + irQ, params.anoxicVolume, 0, dt);
+
+  state.aerobic = rk4Reactor(state.aerobic, state.anoxic, q + rasQ + irQ, params.aerobicVolume, 60 * params.aerobicDo, dt);
+
+  const split = takacsClarifierStep(state.clarifierLayers, state.aerobic, q + rasQ, rasQ, wasQ, dt, capture);
+  state.clarifierLayers = split.layers;
+  state.ras = split.under;
+  return split;
+}
+
+function previewClarifierSplit(state) {
+  const q = params.influentQ;
+  const rasQ = q * params.rasRatio;
+  const wasQ = Math.min(params.wasQ, q * 0.8);
+  const capture = clamp(params.captureEfficiency / 100, 0.8, 0.9995);
+  return takacsClarifierStep(state.clarifierLayers, state.aerobic, q + rasQ, rasQ, wasQ, 0, capture);
+}
+
+function runAsm1Simulation() {
+  syncAsm1Params();
   const dt = Math.min(params.timeStepHours / 24, 0.0025);
   const steps = Math.max(1, Math.round(params.simulationDays / dt));
 
   const influent = influentVector();
-  let anaerobic = initialReactorState("anaerobic");
-  let anoxic = initialReactorState("anoxic");
-  let aerobic = initialReactorState("aerobic");
-  let ras = [...aerobic];
-  const layerCount = clamp(Math.round(params.clarifierLayers), 4, 20);
-  params.clarifierFeedLayer = clamp(Math.round(params.clarifierFeedLayer), 1, layerCount);
-  let clarifierLayers = Array(layerCount).fill(tss(aerobic));
-
-  const series = {
-    time: [],
-    effCod: [],
-    effNh4: [],
-    effNo3: [],
-    effTn: [],
-    effTss: [],
-    anaerobicNo3: [],
-    anoxicNo3: [],
-    aerobicNo3: [],
-    aerobicDo: [],
-    aerobicMlss: [],
-    rasMlss: [],
-    units: createUnitSeries(),
-    clarifier: {
-      topTss: [],
-      middleTss: [],
-      bottomTss: [],
-      effluentTss: [],
-      underflowTss: [],
-    },
-  };
+  const state = createSimulationState();
+  const series = createResultSeries();
 
   for (let step = 0; step <= steps; step += 1) {
-    const anaerobicIn = mixVectors([
-      { q, c: influent },
-      { q: rasQ, c: ras },
-    ]);
-    anaerobic = rk4Reactor(anaerobic, anaerobicIn, q + rasQ, params.anaerobicVolume, 0, dt);
-
-    const anoxicIn = mixVectors([
-      { q: q + rasQ, c: anaerobic },
-      { q: irQ, c: aerobic },
-    ]);
-    anoxic = rk4Reactor(anoxic, anoxicIn, q + rasQ + irQ, params.anoxicVolume, 0, dt);
-
-    aerobic = rk4Reactor(aerobic, anoxic, q + rasQ + irQ, params.aerobicVolume, 60 * params.aerobicDo, dt);
-
-    const split = takacsClarifierStep(clarifierLayers, aerobic, q + rasQ, rasQ, wasQ, dt, capture);
-    clarifierLayers = split.layers;
-    ras = split.under;
+    const split = stepSimulationState(state, influent, dt);
 
     if (step % Math.max(1, Math.round(0.25 / dt)) === 0 || step === steps) {
-      series.time.push(Number((step * dt).toFixed(2)));
-      series.effCod.push(cod(split.eff));
-      series.effNh4.push(split.eff[C.S_NH]);
-      series.effNo3.push(split.eff[C.S_NO]);
-      series.effTn.push(tn(split.eff));
-      series.effTss.push(tss(split.eff));
-      series.anaerobicNo3.push(anaerobic[C.S_NO]);
-      series.anoxicNo3.push(anoxic[C.S_NO]);
-      series.aerobicNo3.push(aerobic[C.S_NO]);
-      series.aerobicDo.push(aerobic[C.S_O]);
-      series.aerobicMlss.push(tss(aerobic));
-      series.rasMlss.push(tss(ras));
-
-      pushUnitMetrics(series.units, "influent", metricsFromVector(influent));
-      pushUnitMetrics(series.units, "anaerobic", metricsFromVector(anaerobic));
-      pushUnitMetrics(series.units, "anoxic", metricsFromVector(anoxic));
-      pushUnitMetrics(series.units, "aerobic", metricsFromVector(aerobic));
-      pushUnitMetrics(series.units, "clarifier", metricsFromVector(split.eff));
-      pushUnitMetrics(series.units, "effluent", metricsFromVector(split.eff));
-      pushUnitMetrics(series.units, "ras", metricsFromVector(ras));
-      pushUnitMetrics(series.units, "was", metricsFromVector(split.under));
-      series.clarifier.topTss.push(clarifierLayers[0]);
-      series.clarifier.middleTss.push(clarifierLayers[Math.floor(clarifierLayers.length / 2)]);
-      series.clarifier.bottomTss.push(clarifierLayers[clarifierLayers.length - 1]);
-      series.clarifier.effluentTss.push(tss(split.eff));
-      series.clarifier.underflowTss.push(tss(split.under));
+      pushSnapshot(series, step * dt, influent, state.anaerobic, state.anoxic, state.aerobic, split, state.ras, state.clarifierLayers);
     }
   }
 
   return series;
+}
+
+function parseCsvRows(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let quoted = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    const next = text[i + 1];
+    if (char === '"' && quoted && next === '"') {
+      cell += '"';
+      i += 1;
+    } else if (char === '"') {
+      quoted = !quoted;
+    } else if (char === "," && !quoted) {
+      row.push(cell.trim());
+      cell = "";
+    } else if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && next === "\n") i += 1;
+      row.push(cell.trim());
+      if (row.some((value) => value !== "")) rows.push(row);
+      row = [];
+      cell = "";
+    } else {
+      cell += char;
+    }
+  }
+  row.push(cell.trim());
+  if (row.some((value) => value !== "")) rows.push(row);
+  return rows;
+}
+
+function normalizeHeader(value) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function parseMaybeNumber(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = Number(String(value).replace(/,/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getCsvNumber(row, aliases, fallback = null) {
+  for (const alias of aliases) {
+    const key = normalizeHeader(alias);
+    if (row[key] !== undefined) {
+      const parsed = parseMaybeNumber(row[key]);
+      if (parsed !== null) return parsed;
+    }
+  }
+  return fallback;
+}
+
+function parseCsvTime(value, index, firstTimestamp) {
+  const numeric = parseMaybeNumber(value);
+  if (numeric !== null) return numeric;
+  const timestamp = Date.parse(value);
+  if (Number.isFinite(timestamp)) return (timestamp - firstTimestamp) / 86400000;
+  return index * (params.timeStepHours / 24);
+}
+
+function normalizeCsvRecords(text) {
+  const rows = parseCsvRows(text);
+  if (rows.length < 2) throw new Error("CSV 至少需要表头和一行数据。");
+  const headers = rows[0].map(normalizeHeader);
+  const rawRows = rows.slice(1).map((values) => {
+    const row = {};
+    headers.forEach((header, index) => {
+      row[header] = values[index] ?? "";
+    });
+    return row;
+  });
+  const timeAliases = ["time", "timestamp", "datetime", "date", "day", "days", "t"];
+  const firstTimeValue = timeAliases.map((alias) => rawRows[0][normalizeHeader(alias)]).find(Boolean);
+  const parsedFirstTimestamp = firstTimeValue && !Number.isFinite(Number(firstTimeValue)) ? Date.parse(firstTimeValue) : 0;
+  const firstTimestamp = Number.isFinite(parsedFirstTimestamp) ? parsedFirstTimestamp : 0;
+
+  const records = rawRows.map((row, index) => {
+    const timeValue = timeAliases.map((alias) => row[normalizeHeader(alias)]).find((value) => value !== undefined && value !== "");
+    const values = {};
+    const mapping = [
+      ["influentQ", ["q", "qin", "q in", "flow", "flowrate", "influentq"]],
+      ["influentCod", ["cod", "influentcod", "tcod"]],
+      ["influentNh4", ["nh4", "snh", "ammonium", "ammonia", "nh4n"]],
+      ["influentNo3", ["no3", "sno", "nitrate", "no3n"]],
+      ["influentTss", ["tss", "influenttss", "sst"]],
+      ["aerobicDo", ["do", "doset", "aerobicdo", "so", "setdo"]],
+      ["rasRatio", ["rasratio", "rasr", "qrasqin"]],
+      ["internalRecycleRatio", ["irratio", "internalrecycleratio", "qirqin"]],
+      ["wasQ", ["wasq", "qwas", "wasflow"]],
+      ["solubleCodFraction", ["solublecodfraction", "scodfraction", "scodpercent"]],
+      ["temp", ["temp", "temperature"]],
+    ];
+    mapping.forEach(([target, aliases]) => {
+      const value = getCsvNumber(row, aliases);
+      if (value !== null) values[target] = value;
+    });
+    const rasQ = getCsvNumber(row, ["rasq", "qras", "rasflow"]);
+    if (rasQ !== null && values.influentQ) values.rasRatio = rasQ / values.influentQ;
+    const irQ = getCsvNumber(row, ["irq", "qir", "internalrecycleq", "internalrecycleflow"]);
+    if (irQ !== null && values.influentQ) values.internalRecycleRatio = irQ / values.influentQ;
+    return {
+      time: parseCsvTime(timeValue, index, firstTimestamp),
+      values,
+    };
+  });
+
+  return records
+    .filter((record) => Number.isFinite(record.time))
+    .sort((a, b) => a.time - b.time);
+}
+
+function runHistoricalSimulation(records) {
+  if (!records.length) return runAsm1Simulation();
+  const savedParams = { ...params };
+  const state = createSimulationState();
+  const series = createResultSeries();
+  series.mode = "csv";
+  series.sourceName = csvFileName;
+  let currentTime = records[0].time;
+
+  try {
+    records.forEach((record, index) => {
+      Object.assign(params, record.values);
+      syncAsm1Params();
+      const influent = influentVector();
+      const split = previewClarifierSplit(state);
+      pushSnapshot(series, currentTime, influent, state.anaerobic, state.anoxic, state.aerobic, split, state.ras, state.clarifierLayers);
+
+      const nextRecord = records[index + 1];
+      const nextTime = nextRecord ? nextRecord.time : currentTime + params.timeStepHours / 24;
+      const duration = Math.max(0, nextTime - currentTime);
+      const baseDt = Math.min(params.timeStepHours / 24, 0.0025);
+      let remaining = duration;
+      while (remaining > 1e-9) {
+        const dt = Math.min(baseDt, remaining);
+        stepSimulationState(state, influent, dt);
+        remaining -= dt;
+      }
+      currentTime = nextTime;
+    });
+  } finally {
+    Object.assign(params, savedParams);
+    syncAsm1Params();
+  }
+
+  return series;
+}
+
+function updateCsvStatus(message, isError = false) {
+  csvStatus.textContent = message;
+  csvStatus.classList.toggle("error", isError);
 }
 
 function niceMax(values) {
@@ -1054,8 +1245,9 @@ function updateMetrics(result) {
   document.getElementById("metricNh4").textContent = `${result.effNh4[last].toFixed(1)} g/m3`;
   document.getElementById("metricTn").textContent = `${result.effTn[last].toFixed(1)} g/m3`;
   document.getElementById("metricTss").textContent = `${result.effTss[last].toFixed(1)} g/m3`;
+  const sourceText = result.mode === "csv" ? `历史数据 ${result.sourceName}` : "手动参数";
   document.getElementById("resultSummary").textContent =
-    `已完成 ${params.simulationDays} 天动态仿真。可点击任一单体并在下拉框选择 WEST 风格指标查看过程浓度。`;
+    `已完成 ${sourceText} 仿真。可点击任一单体并在下拉框选择 WEST 风格指标查看过程浓度。`;
 }
 
 document.querySelectorAll(".tab").forEach((tab) => {
@@ -1085,11 +1277,37 @@ unitMetricSelect.addEventListener("change", () => {
 resultChart.addEventListener("mousemove", updateChartTooltip);
 resultChart.addEventListener("mouseleave", hideChartTooltip);
 
+csvFileInput.addEventListener("change", async () => {
+  const file = csvFileInput.files?.[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const records = normalizeCsvRecords(text);
+    if (!records.length) throw new Error("没有读到有效数据行。");
+    csvRecords = records;
+    csvFileName = file.name;
+    const start = records[0].time.toFixed(2);
+    const end = records[records.length - 1].time.toFixed(2);
+    updateCsvStatus(`已加载 ${file.name}：${records.length} 条记录，时间范围 ${start} - ${end} d。点击“运行仿真”按历史数据回放。`);
+  } catch (error) {
+    csvRecords = [];
+    csvFileName = "";
+    updateCsvStatus(`CSV 解析失败：${error.message}`, true);
+  }
+});
+
+clearCsvData.addEventListener("click", () => {
+  csvRecords = [];
+  csvFileName = "";
+  csvFileInput.value = "";
+  updateCsvStatus("已清除历史数据。再次运行将使用手动参数。");
+});
+
 document.getElementById("runSimulation").addEventListener("click", () => {
   statusBadge.textContent = "计算中";
   hideChartTooltip();
   window.requestAnimationFrame(() => {
-    lastResult = runAsm1Simulation();
+    lastResult = csvRecords.length ? runHistoricalSimulation(csvRecords) : runAsm1Simulation();
     statusBadge.textContent = "已完成";
     updateMetrics(lastResult);
     drawChart(lastResult, activeChart);

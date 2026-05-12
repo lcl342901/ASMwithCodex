@@ -30,7 +30,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -76,7 +77,8 @@ h2 {
 .primary-button,
 .icon-button,
 .tab,
-.chart-toggle {
+.chart-toggle,
+.secondary-button {
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--ink);
@@ -100,7 +102,8 @@ h2 {
 .primary-button:hover,
 .icon-button:hover,
 .tab:hover,
-.chart-toggle:hover {
+.chart-toggle:hover,
+.secondary-button:hover {
   transform: translateY(-1px);
 }
 
@@ -261,7 +264,7 @@ h2 {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
   padding: 14px 14px 0;
 }
@@ -287,6 +290,53 @@ h2 {
   padding: 14px;
   max-height: calc(54vh - 124px);
   overflow: auto;
+}
+
+.data-tools {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  padding: 14px 14px 0;
+}
+
+.file-picker {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdfb;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.file-picker input {
+  max-width: 100%;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.secondary-button {
+  align-self: start;
+  height: 42px;
+  padding: 0 12px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.data-tools p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.data-tools p.error {
+  color: var(--red);
 }
 
 .field {
