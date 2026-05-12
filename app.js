@@ -1075,6 +1075,33 @@ function niceMax(values) {
   return Math.ceil(max / pow) * pow;
 }
 
+function niceYDomain(values) {
+  const finiteValues = values.filter((value) => Number.isFinite(value));
+  if (!finiteValues.length) return { min: 0, max: 1 };
+  let min = Math.min(...finiteValues);
+  let max = Math.max(...finiteValues);
+  if (min === max) {
+    const pad = Math.max(Math.abs(max) * 0.08, 1);
+    min -= pad;
+    max += pad;
+  } else {
+    const pad = (max - min) * 0.08;
+    min -= pad;
+    max += pad;
+  }
+  const span = max - min;
+  const step = 10 ** Math.floor(Math.log10(span / 5 || 1));
+  const niceStep = [1, 2, 5, 10].find((candidate) => candidate * step >= span / 5) * step;
+  return {
+    min: Math.floor(min / niceStep) * niceStep,
+    max: Math.ceil(max / niceStep) * niceStep,
+  };
+}
+
+function yToPixel(value, yMin, yMax, pad, plotH) {
+  return pad.top + plotH - ((value - yMin) / Math.max(yMax - yMin, 1e-9)) * plotH;
+}
+
 function formatChartValue(value) {
   const abs = Math.abs(value);
   if (abs >= 1000) return value.toFixed(0);
@@ -1181,7 +1208,9 @@ function drawChart(result, chartName) {
 
   const xMin = result.time[0];
   const xMax = result.time[result.time.length - 1] || 1;
-  const yMax = niceMax(activeDatasets.flatMap((dataset) => dataset.values));
+  const yDomain = niceYDomain(activeDatasets.flatMap((dataset) => dataset.values));
+  const yMin = yDomain.min;
+  const yMax = yDomain.max;
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
   currentChartState = {
@@ -1195,6 +1224,7 @@ function drawChart(result, chartName) {
     xMax,
     xMin,
     yMax,
+    yMin,
   };
 
   ctx.strokeStyle = "#d7dfd8";
@@ -1212,9 +1242,9 @@ function drawChart(result, chartName) {
   ctx.textAlign = "right";
   ctx.textBaseline = "middle";
   for (let i = 0; i <= 5; i += 1) {
-    const value = yMax - (yMax * i) / 5;
+    const value = yMax - ((yMax - yMin) * i) / 5;
     const y = pad.top + (plotH * i) / 5;
-    ctx.fillText(value.toFixed(value >= 10 ? 0 : 1), pad.left - 8, y);
+    ctx.fillText(formatChartValue(value), pad.left - 8, y);
   }
 
   ctx.textAlign = "center";
@@ -1231,7 +1261,7 @@ function drawChart(result, chartName) {
     ctx.beginPath();
     dataset.values.forEach((value, index) => {
       const x = pad.left + ((result.time[index] - xMin) / Math.max(xMax - xMin, 0.001)) * plotW;
-      const y = pad.top + plotH - (value / yMax) * plotH;
+      const y = yToPixel(value, yMin, yMax, pad, plotH);
       if (index === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     });
@@ -1263,7 +1293,7 @@ function drawChart(result, chartName) {
 
 function drawHoverOverlay(ctx, index) {
   if (!currentChartState) return;
-  const { datasets, height, pad, plotH, plotW, time, xMax, xMin, yMax } = currentChartState;
+  const { datasets, height, pad, plotH, plotW, time, xMax, xMin, yMax, yMin } = currentChartState;
   if (time[index] === undefined) return;
   const x = pad.left + ((time[index] - xMin) / Math.max(xMax - xMin, 0.001)) * plotW;
 
@@ -1279,7 +1309,7 @@ function drawHoverOverlay(ctx, index) {
 
   datasets.forEach((dataset) => {
     const value = dataset.values[index];
-    const y = pad.top + plotH - (value / yMax) * plotH;
+    const y = yToPixel(value, yMin, yMax, pad, plotH);
     ctx.fillStyle = "#ffffff";
     ctx.strokeStyle = dataset.color;
     ctx.lineWidth = 2;
