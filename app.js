@@ -1072,17 +1072,22 @@ function outputIntervalDays() {
 }
 
 async function runBackendSimulation() {
-  const response = await fetch(SIMULATION_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      params,
-      csvText: csvText || "",
-      csvFileName,
-    }),
-  });
+  let response;
+  try {
+    response = await fetch(SIMULATION_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        params,
+        csvText: csvText || "",
+        csvFileName,
+      }),
+    });
+  } catch (error) {
+    throw new Error("无法连接 Python 后端。请先启动 FastAPI：source .venv/bin/activate && uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000");
+  }
 
   if (!response.ok) {
     let message = `HTTP ${response.status}`;
