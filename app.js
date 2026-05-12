@@ -160,6 +160,7 @@ let currentChartState = null;
 let hoverPoint = null;
 let csvRecords = [];
 let csvFileName = "";
+const hiddenDatasets = new Set();
 
 const C = {
   S_I: 0,
@@ -1082,6 +1083,21 @@ function formatChartValue(value) {
   return value.toFixed(3);
 }
 
+function datasetKey(chartName, dataset) {
+  return `${chartName}:${dataset.key || dataset.name}`;
+}
+
+function visibleDatasets(chartName, datasets) {
+  return datasets.filter((dataset) => !hiddenDatasets.has(datasetKey(chartName, dataset)));
+}
+
+function toggleDataset(chartName, key) {
+  if (hiddenDatasets.has(key)) hiddenDatasets.delete(key);
+  else hiddenDatasets.add(key);
+  hideChartTooltip();
+  if (lastResult) drawChart(lastResult, chartName);
+}
+
 function drawChart(result, chartName) {
   const ctx = resultChart.getContext("2d");
   const rect = resultChart.getBoundingClientRect();
@@ -1134,18 +1150,19 @@ function drawChart(result, chartName) {
     const [, metricLabel, metricUnit] = metricById[selectedMetric];
     if (unitNodeId === "clarifier" && selectedMetric === "TSS") {
       datasets = [
-        { name: "二沉池顶层 TSS", color: "#2767b1", values: result.clarifier.topTss },
-        { name: "二沉池中层 TSS", color: "#1f7a4f", values: result.clarifier.middleTss },
-        { name: "二沉池底层 TSS", color: "#b56b16", values: result.clarifier.bottomTss },
+        { key: "clarifier.topTss", name: "二沉池顶层 TSS", color: "#2767b1", values: result.clarifier.topTss },
+        { key: "clarifier.middleTss", name: "二沉池中层 TSS", color: "#1f7a4f", values: result.clarifier.middleTss },
+        { key: "clarifier.bottomTss", name: "二沉池底层 TSS", color: "#b56b16", values: result.clarifier.bottomTss },
       ];
     } else if (unitNodeId === "clarifier") {
       datasets = [
-        { name: `二沉池出水 ${metricLabel}`, color: "#2767b1", values: result.units.effluent[selectedMetric] },
-        { name: `二沉池底流 ${metricLabel}`, color: "#b56b16", values: result.units.was[selectedMetric] },
+        { key: `clarifier.effluent.${selectedMetric}`, name: `二沉池出水 ${metricLabel}`, color: "#2767b1", values: result.units.effluent[selectedMetric] },
+        { key: `clarifier.underflow.${selectedMetric}`, name: `二沉池底流 ${metricLabel}`, color: "#b56b16", values: result.units.was[selectedMetric] },
       ];
     } else {
       datasets = [
         {
+          key: `unit.${unitNodeId}.${selectedMetric}`,
           name: `${unitNode ? unitNode.title : "出水"} ${metricLabel} (${metricUnit})`,
           color: "#1f7a4f",
           values: result.units[unitNodeId]?.[selectedMetric] || result.units.effluent[selectedMetric],
@@ -1160,14 +1177,15 @@ function drawChart(result, chartName) {
       values: key.includes(".") ? key.split(".").reduce((target, part) => target?.[part], result) : result[key],
     }));
   }
+  const activeDatasets = visibleDatasets(chartName, datasets);
 
   const xMin = result.time[0];
   const xMax = result.time[result.time.length - 1] || 1;
-  const yMax = niceMax(datasets.flatMap((dataset) => dataset.values));
+  const yMax = niceMax(activeDatasets.flatMap((dataset) => dataset.values));
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
   currentChartState = {
-    datasets,
+    datasets: activeDatasets,
     height,
     pad,
     plotH,
@@ -1207,7 +1225,7 @@ function drawChart(result, chartName) {
     ctx.fillText(`${value.toFixed(0)} d`, x, height - pad.bottom + 14);
   }
 
-  datasets.forEach((dataset) => {
+  activeDatasets.forEach((dataset) => {
     ctx.strokeStyle = dataset.color;
     ctx.lineWidth = 2.6;
     ctx.beginPath();
@@ -1226,14 +1244,21 @@ function drawChart(result, chartName) {
 
   legend.innerHTML = datasets
     .map(
-      (dataset) => `
-        <span class="legend-item">
+      (dataset) => {
+        const key = datasetKey(chartName, dataset);
+        const hidden = hiddenDatasets.has(key);
+        return `
+        <button class="legend-item${hidden ? " muted" : ""}" type="button" data-dataset-key="${key}">
           <span class="legend-swatch" style="background:${dataset.color}"></span>
           ${dataset.name}
-        </span>
-      `,
+        </button>
+      `;
+      },
     )
     .join("");
+  legend.querySelectorAll("[data-dataset-key]").forEach((item) => {
+    item.addEventListener("click", () => toggleDataset(chartName, item.dataset.datasetKey));
+  });
 }
 
 function drawHoverOverlay(ctx, index) {

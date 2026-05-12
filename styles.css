@@ -512,6 +512,17 @@ h2 {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.legend-item.muted {
+  opacity: 0.38;
+  text-decoration: line-through;
 }
 
 .legend-swatch {
