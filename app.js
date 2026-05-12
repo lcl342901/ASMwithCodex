@@ -643,6 +643,17 @@ function createResultSeries() {
     rasMlss: [],
     mode: csvRecords.length ? "csv" : "manual",
     sourceName: csvFileName,
+    boundaries: {
+      q: [],
+      cod: [],
+      nh4: [],
+      no3: [],
+      tss: [],
+      do: [],
+      rasQ: [],
+      irQ: [],
+      wasQ: [],
+    },
     units: createUnitSeries(),
     clarifier: {
       topTss: [],
@@ -654,8 +665,27 @@ function createResultSeries() {
   };
 }
 
+function boundarySnapshot(influent) {
+  const q = params.influentQ;
+  return {
+    q,
+    cod: cod(influent),
+    nh4: influent[C.S_NH],
+    no3: influent[C.S_NO],
+    tss: tss(influent),
+    do: params.aerobicDo,
+    rasQ: q * params.rasRatio,
+    irQ: q * params.internalRecycleRatio,
+    wasQ: Math.min(params.wasQ, q * 0.8),
+  };
+}
+
 function pushSnapshot(series, time, influent, anaerobic, anoxic, aerobic, split, ras, clarifierLayers) {
   series.time.push(Number(time.toFixed(4)));
+  const boundaries = boundarySnapshot(influent);
+  Object.entries(boundaries).forEach(([key, value]) => {
+    series.boundaries[key].push(value);
+  });
   series.effCod.push(cod(split.eff));
   series.effNh4.push(split.eff[C.S_NH]);
   series.effNo3.push(split.eff[C.S_NO]);
@@ -1068,6 +1098,17 @@ function drawChart(result, chartName) {
   ctx.fillRect(0, 0, width, height);
 
   const charts = {
+    boundaries: [
+      ["boundaries.q", "Q 进水流量 (m3/d)", "#1f7a4f"],
+      ["boundaries.cod", "COD 边界 (g/m3)", "#7b5795"],
+      ["boundaries.nh4", "NH4-N 边界 (g/m3)", "#b64242"],
+      ["boundaries.no3", "NO3-N 边界 (g/m3)", "#2767b1"],
+      ["boundaries.tss", "TSS 边界 (g/m3)", "#b56b16"],
+      ["boundaries.do", "DO 设定 (g/m3)", "#24939a"],
+      ["boundaries.rasQ", "RAS_Q (m3/d)", "#5d7c33"],
+      ["boundaries.irQ", "IR_Q (m3/d)", "#6b63b5"],
+      ["boundaries.wasQ", "WAS_Q (m3/d)", "#8b5a2b"],
+    ],
     effluent: [
       ["effCod", "COD", "#1f7a4f"],
       ["effNh4", "NH4-N", "#b64242"],
@@ -1116,7 +1157,7 @@ function drawChart(result, chartName) {
       key,
       name,
       color,
-      values: result[key],
+      values: key.includes(".") ? key.split(".").reduce((target, part) => target?.[part], result) : result[key],
     }));
   }
 
