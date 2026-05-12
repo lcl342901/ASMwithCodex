@@ -6,6 +6,7 @@ const statusBadge = document.getElementById("statusBadge");
 const resultChart = document.getElementById("resultChart");
 const legend = document.getElementById("legend");
 const unitMetricSelect = document.getElementById("unitMetricSelect");
+const chartTooltip = document.getElementById("chartTooltip");
 
 const nodes = [
   { id: "influent", title: "进水", subtitle: "Q, COD, NH4-N", icon: "IN", type: "source", x: 30, y: 150 },
@@ -149,6 +150,8 @@ let selectedNode = null;
 let lastResult = null;
 let activeChart = "effluent";
 let selectedMetric = "COD";
+let currentChartState = null;
+let hoverPoint = null;
 
 const C = {
   S_I: 0,
@@ -812,6 +815,14 @@ function niceMax(values) {
   return Math.ceil(max / pow) * pow;
 }
 
+function formatChartValue(value) {
+  const abs = Math.abs(value);
+  if (abs >= 1000) return value.toFixed(0);
+  if (abs >= 100) return value.toFixed(1);
+  if (abs >= 10) return value.toFixed(2);
+  return value.toFixed(3);
+}
+
 function drawChart(result, chartName) {
   const ctx = resultChart.getContext("2d");
   const rect = resultChart.getBoundingClientRect();
@@ -885,6 +896,18 @@ function drawChart(result, chartName) {
   const yMax = niceMax(datasets.flatMap((dataset) => dataset.values));
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
+  currentChartState = {
+    datasets,
+    height,
+    pad,
+    plotH,
+    plotW,
+    time: result.time,
+    width,
+    xMax,
+    xMin,
+    yMax,
+  };
 
   ctx.strokeStyle = "#d7dfd8";
   ctx.lineWidth = 1;
@@ -927,6 +950,10 @@ function drawChart(result, chartName) {
     ctx.stroke();
   });
 
+  if (hoverPoint) {
+    drawHoverOverlay(ctx, hoverPoint.index);
+  }
+
   legend.innerHTML = datasets
     .map(
       (dataset) => `
@@ -937,6 +964,89 @@ function drawChart(result, chartName) {
       `,
     )
     .join("");
+}
+
+function drawHoverOverlay(ctx, index) {
+  if (!currentChartState) return;
+  const { datasets, height, pad, plotH, plotW, time, xMax, xMin, yMax } = currentChartState;
+  if (time[index] === undefined) return;
+  const x = pad.left + ((time[index] - xMin) / Math.max(xMax - xMin, 0.001)) * plotW;
+
+  ctx.save();
+  ctx.strokeStyle = "rgba(23, 33, 27, 0.34)";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(x, pad.top);
+  ctx.lineTo(x, height - pad.bottom);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  datasets.forEach((dataset) => {
+    const value = dataset.values[index];
+    const y = pad.top + plotH - (value / yMax) * plotH;
+    ctx.fillStyle = "#ffffff";
+    ctx.strokeStyle = dataset.color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  });
+  ctx.restore();
+}
+
+function updateChartTooltip(event) {
+  if (!currentChartState || !lastResult) return;
+  const rect = resultChart.getBoundingClientRect();
+  const localX = event.clientX - rect.left;
+  const { datasets, pad, plotW, time, xMax, xMin } = currentChartState;
+  if (localX < pad.left || localX > pad.left + plotW) {
+    hideChartTooltip();
+    return;
+  }
+  const ratio = (localX - pad.left) / plotW;
+  const xValue = xMin + ratio * (xMax - xMin);
+  let index = 0;
+  let bestDistance = Infinity;
+  time.forEach((value, idx) => {
+    const distance = Math.abs(value - xValue);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      index = idx;
+    }
+  });
+  hoverPoint = { index };
+  drawChart(lastResult, activeChart);
+
+  const rows = datasets
+    .map((dataset) => {
+      const value = dataset.values[index];
+      return `
+        <div class="tooltip-row">
+          <span class="tooltip-dot" style="background:${dataset.color}"></span>
+          <span>${dataset.name}</span>
+          <span class="tooltip-value">${formatChartValue(value)}</span>
+        </div>
+      `;
+    })
+    .join("");
+  chartTooltip.innerHTML = `<strong>${time[index].toFixed(2)} d</strong>${rows}`;
+  chartTooltip.hidden = false;
+
+  const tooltipRect = chartTooltip.getBoundingClientRect();
+  const chartWidth = rect.width;
+  const left = localX + tooltipRect.width + 18 > chartWidth ? localX - tooltipRect.width - 14 : localX + 14;
+  const top = Math.max(10, Math.min(event.clientY - rect.top - 18, rect.height - tooltipRect.height - 10));
+  chartTooltip.style.left = `${left}px`;
+  chartTooltip.style.top = `${top}px`;
+}
+
+function hideChartTooltip() {
+  if (!hoverPoint && chartTooltip.hidden) return;
+  hoverPoint = null;
+  chartTooltip.hidden = true;
+  if (lastResult) drawChart(lastResult, activeChart);
 }
 
 function updateMetrics(result) {
@@ -959,19 +1069,25 @@ document.querySelectorAll(".tab").forEach((tab) => {
 
 document.querySelectorAll(".chart-toggle").forEach((toggle) => {
   toggle.addEventListener("click", () => {
+    hideChartTooltip();
     setActiveChart(toggle.dataset.chart);
     if (lastResult) drawChart(lastResult, activeChart);
   });
 });
 
 unitMetricSelect.addEventListener("change", () => {
+  hideChartTooltip();
   selectedMetric = unitMetricSelect.value;
   setActiveChart("unit");
   if (lastResult) drawChart(lastResult, activeChart);
 });
 
+resultChart.addEventListener("mousemove", updateChartTooltip);
+resultChart.addEventListener("mouseleave", hideChartTooltip);
+
 document.getElementById("runSimulation").addEventListener("click", () => {
   statusBadge.textContent = "计算中";
+  hideChartTooltip();
   window.requestAnimationFrame(() => {
     lastResult = runAsm1Simulation();
     statusBadge.textContent = "已完成";
