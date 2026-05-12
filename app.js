@@ -11,6 +11,7 @@ const dataTools = document.getElementById("dataTools");
 const csvFileInput = document.getElementById("csvFileInput");
 const clearCsvData = document.getElementById("clearCsvData");
 const csvStatus = document.getElementById("csvStatus");
+const SIMULATION_API_URL = "http://127.0.0.1:8000/api/simulate";
 
 const nodes = [
   { id: "influent", title: "进水", subtitle: "Q, COD, NH4-N", icon: "IN", type: "source", x: 30, y: 150 },
@@ -160,6 +161,7 @@ let currentChartState = null;
 let hoverPoint = null;
 let csvRecords = [];
 let csvFileName = "";
+let csvText = "";
 const hiddenDatasets = new Set();
 
 const C = {
@@ -1069,6 +1071,33 @@ function outputIntervalDays() {
   return Math.max(solverStepDays(), params.outputIntervalHours / 24);
 }
 
+async function runBackendSimulation() {
+  const response = await fetch(SIMULATION_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      params,
+      csvText: csvText || "",
+      csvFileName,
+    }),
+  });
+
+  if (!response.ok) {
+    let message = `HTTP ${response.status}`;
+    try {
+      const error = await response.json();
+      message = error.detail || message;
+    } catch {
+      message = await response.text();
+    }
+    throw new Error(message);
+  }
+
+  return response.json();
+}
+
 function niceMax(values) {
   const max = Math.max(...values, 1);
   const pow = 10 ** Math.floor(Math.log10(max));
@@ -1420,12 +1449,14 @@ csvFileInput.addEventListener("change", async () => {
     if (!records.length) throw new Error("没有读到有效数据行。");
     csvRecords = records;
     csvFileName = file.name;
+    csvText = text;
     const start = records[0].time.toFixed(2);
     const end = records[records.length - 1].time.toFixed(2);
     updateCsvStatus(`已加载 ${file.name}：${records.length} 条记录，数据范围 ${start} - ${end} d。仿真会按“运行”页的仿真天数和计算步长推进，超出数据范围后保持最后一条边界条件。`);
   } catch (error) {
     csvRecords = [];
     csvFileName = "";
+    csvText = "";
     updateCsvStatus(`CSV 解析失败：${error.message}`, true);
   }
 });
@@ -1433,19 +1464,23 @@ csvFileInput.addEventListener("change", async () => {
 clearCsvData.addEventListener("click", () => {
   csvRecords = [];
   csvFileName = "";
+  csvText = "";
   csvFileInput.value = "";
   updateCsvStatus("已清除历史数据。再次运行将使用手动参数。");
 });
 
-document.getElementById("runSimulation").addEventListener("click", () => {
+document.getElementById("runSimulation").addEventListener("click", async () => {
   statusBadge.textContent = "计算中";
   hideChartTooltip();
-  window.requestAnimationFrame(() => {
-    lastResult = csvRecords.length ? runHistoricalSimulation(csvRecords) : runAsm1Simulation();
+  try {
+    lastResult = await runBackendSimulation();
     statusBadge.textContent = "已完成";
     updateMetrics(lastResult);
     drawChart(lastResult, activeChart);
-  });
+  } catch (error) {
+    statusBadge.textContent = "计算失败";
+    updateCsvStatus(`后端计算失败：${error.message}`, true);
+  }
 });
 
 document.getElementById("resetLayout").addEventListener("click", () => {

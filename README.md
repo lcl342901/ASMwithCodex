@@ -30,12 +30,64 @@ It is intended as a learning and experimentation platform for ASM1-based process
 - `styles.css`: layout and visual styling.
 - `app.js`: ASM1 model, clarifier model, CSV replay, chart rendering, and UI logic.
 - `sample-data.csv`: example CSV that can be uploaded directly.
+- `backend/main.py`: FastAPI app and `/api/simulate` route.
+- `backend/model.py`: Python ASM1, AAO, RAS/WAS, Takacs clarifier, and CSV replay engine.
+- `backend/schemas.py`: API request schema.
+- `backend/requirements.txt`: backend Python dependencies.
 
 ## How To Run
 
-Open `index.html` in a browser.
+Start the backend first:
 
-No build step or package installation is currently required.
+```bash
+cd aao-simulator
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r backend/requirements.txt
+uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Then open `index.html` in a browser. The static frontend calls:
+
+```text
+http://127.0.0.1:8000/api/simulate
+```
+
+The page still contains the original JavaScript model as a reference path, but the `Run Simulation` button now uses the Python/FastAPI backend.
+
+## API
+
+### `POST /api/simulate`
+
+Request body:
+
+```json
+{
+  "params": {
+    "influentQ": 10000,
+    "influentCod": 420,
+    "influentNh4": 32,
+    "influentNo3": 0.5,
+    "influentTss": 220,
+    "simulationDays": 20,
+    "timeStepHours": 0.5,
+    "outputIntervalHours": 6
+  },
+  "csvText": "time,Q,COD,NH4,...",
+  "csvFileName": "sample-data.csv"
+}
+```
+
+`params` may include any current frontend parameter. `csvText` is optional. When `csvText` is provided, it is used as a boundary-condition time series, while `params.simulationDays` still controls the total simulation horizon.
+
+The response is compatible with the frontend `lastResult` structure, including:
+
+```text
+time, effCod, effNh4, effNo3, effTn, effTss,
+anaerobicNo3, anoxicNo3, aerobicNo3,
+aerobicDo, aerobicMlss, rasMlss,
+boundaries, units, clarifier, mode, sourceName
+```
 
 ## CSV Input
 
@@ -69,14 +121,15 @@ the simulator uses a smaller internal step while preserving the requested output
 
 ## Model Notes
 
-The current implementation is a frontend prototype. It uses ASM1-style reaction equations and a simplified
-Takacs-style layered clarifier. It is useful for teaching, exploration, and UI/product development.
+The current implementation uses a Python/FastAPI calculation API that mirrors the original browser JavaScript model.
+It uses ASM1-style reaction equations and a simplified Takacs-style layered clarifier. It is useful for teaching,
+exploration, and UI/product development.
 
 It is not yet a calibrated engineering-grade simulator.
 
 Important limitations:
 
-- The solver is implemented in browser JavaScript.
+- The Python backend is intended to match the current JavaScript RK4/stepper behavior before deeper model refactoring.
 - No backend state persistence yet.
 - No sensor quality checks beyond basic CSV parsing.
 - No formal unit conversion layer.
@@ -96,10 +149,10 @@ Main milestones:
 - Added CSV historical data replay.
 - Changed CSV replay so the UI simulation horizon controls total runtime.
 - Added `sample-data.csv`.
+- Added FastAPI backend calculation API and migrated the runtime simulation call to Python.
 
 ## Suggested Next Steps
 
-- Move the model engine into a Python/FastAPI backend.
 - Add CSV template download and stricter input validation.
 - Add model-state persistence for real-time data.
 - Add sensor quality flags and missing-data handling.
