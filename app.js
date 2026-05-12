@@ -3,6 +3,8 @@ const edgeLayer = document.getElementById("edgeLayer");
 const parameterForm = document.getElementById("parameterForm");
 const activeNodeLabel = document.getElementById("activeNodeLabel");
 const statusBadge = document.getElementById("statusBadge");
+const progressBar = document.getElementById("progressBar");
+const progressPercent = document.getElementById("progressPercent");
 const resultChart = document.getElementById("resultChart");
 const legend = document.getElementById("legend");
 const unitMetricSelect = document.getElementById("unitMetricSelect");
@@ -162,6 +164,8 @@ let hoverPoint = null;
 let csvRecords = [];
 let csvFileName = "";
 let csvText = "";
+let progressTimer = null;
+let progressValue = 0;
 const hiddenDatasets = new Set();
 
 const C = {
@@ -1071,6 +1075,35 @@ function outputIntervalDays() {
   return Math.max(solverStepDays(), params.outputIntervalHours / 24);
 }
 
+function setProgress(value, failed = false) {
+  progressValue = clamp(value, 0, 100);
+  progressBar.style.width = `${progressValue.toFixed(0)}%`;
+  progressPercent.textContent = `${progressValue.toFixed(0)}%`;
+  progressBar.closest(".simulation-status").classList.toggle("failed", failed);
+}
+
+function startProgress() {
+  if (progressTimer) window.clearInterval(progressTimer);
+  setProgress(0);
+  progressTimer = window.setInterval(() => {
+    const remaining = 90 - progressValue;
+    const increment = Math.max(0.6, remaining * 0.08);
+    setProgress(Math.min(90, progressValue + increment));
+    if (progressValue >= 90 && progressTimer) {
+      window.clearInterval(progressTimer);
+      progressTimer = null;
+    }
+  }, 180);
+}
+
+function finishProgress(failed = false) {
+  if (progressTimer) {
+    window.clearInterval(progressTimer);
+    progressTimer = null;
+  }
+  setProgress(failed ? Math.max(progressValue, 100) : 100, failed);
+}
+
 async function runBackendSimulation() {
   let response;
   try {
@@ -1476,14 +1509,17 @@ clearCsvData.addEventListener("click", () => {
 
 document.getElementById("runSimulation").addEventListener("click", async () => {
   statusBadge.textContent = "计算中";
+  startProgress();
   hideChartTooltip();
   try {
     lastResult = await runBackendSimulation();
     statusBadge.textContent = "已完成";
+    finishProgress();
     updateMetrics(lastResult);
     drawChart(lastResult, activeChart);
   } catch (error) {
     statusBadge.textContent = "计算失败";
+    finishProgress(true);
     updateCsvStatus(`后端计算失败：${error.message}`, true);
   }
 });
