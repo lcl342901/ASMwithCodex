@@ -681,6 +681,31 @@ class SimulationContext:
             self.sync_asm1_params()
         return series
 
+    def step_realtime_state(self, state: dict[str, Any], boundary_values: dict[str, float], step_hours: float) -> dict[str, Any]:
+        self.params.update(boundary_values)
+        self.sync_asm1_params()
+        dt = min(max(step_hours, 0.001) / 24, 0.0025)
+        influent = self.influent_vector()
+        split = self.step_simulation_state(state, influent, dt)
+        series = self.create_result_series()
+        self.push_snapshot(series, 0, influent, state["anaerobic"], state["anoxic"], state["aerobic"], split, state["ras"], state["clarifierLayers"])
+        return {
+            "state": state,
+            "snapshot": {
+                "effCod": series["effCod"][-1],
+                "effNh4": series["effNh4"][-1],
+                "effNo3": series["effNo3"][-1],
+                "effTn": series["effTn"][-1],
+                "effTss": series["effTss"][-1],
+                "aerobicDo": series["aerobicDo"][-1],
+                "aerobicMlss": series["aerobicMlss"][-1],
+                "rasMlss": series["rasMlss"][-1],
+                "boundaries": {key: values[-1] for key, values in series["boundaries"].items()},
+                "units": {unit_id: {metric_id: values[-1] for metric_id, values in metrics.items()} for unit_id, metrics in series["units"].items()},
+                "clarifier": {key: values[-1] for key, values in series["clarifier"].items()},
+            },
+        }
+
 
 def parse_csv_rows(text: str) -> list[list[str]]:
     rows: list[list[str]] = []

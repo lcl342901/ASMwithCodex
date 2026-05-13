@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from backend.model import DEFAULT_PARAMS, csv_values_at, normalize_csv_records, simulate, SimulationContext
+from backend import realtime
 
 
 REQUIRED_KEYS = {
@@ -40,6 +41,15 @@ def assert_finite_tree(test_case: unittest.TestCase, value):
 
 
 class ModelTest(unittest.TestCase):
+    def setUp(self):
+        realtime.DB_PATH = Path("/private/tmp/aao-realtime-test.db")
+        if realtime.DB_PATH.exists():
+            realtime.DB_PATH.unlink()
+
+    def tearDown(self):
+        if realtime.DB_PATH.exists():
+            realtime.DB_PATH.unlink()
+
     def test_manual_simulation_returns_frontend_shape_and_finite_values(self):
         params = {**DEFAULT_PARAMS, "simulationDays": 1, "outputIntervalHours": 12, "timeStepHours": 1}
         result = simulate(params=params)
@@ -84,6 +94,25 @@ class ModelTest(unittest.TestCase):
 
         self.assertGreater(result["validation"]["warningCount"], 0)
         self.assertTrue(any("内部求解器上限" in warning for warning in result["warnings"]))
+
+    def test_realtime_step_persists_latest_result(self):
+        step = realtime.realtime_step(values={"Q": 10000, "COD": 420, "NH4": 32, "NO3": 0.5, "TSS": 220}, step_hours=0.5)
+        latest = realtime.latest()
+
+        self.assertEqual(step["result"]["mode"], "realtime")
+        self.assertIsNotNone(latest["result"])
+        self.assertEqual(latest["result"]["id"], step["resultId"])
+        self.assertIn("effCod", latest["result"]["result"])
+
+    def test_realtime_reset_clears_state(self):
+        realtime.realtime_step(values={"Q": 10000}, step_hours=0.5)
+        realtime.reset()
+
+        latest = realtime.latest()
+
+        self.assertIsNone(latest["input"])
+        self.assertIsNone(latest["state"])
+        self.assertIsNone(latest["result"])
 
 
 if __name__ == "__main__":

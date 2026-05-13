@@ -10,9 +10,16 @@ const legend = document.getElementById("legend");
 const unitMetricSelect = document.getElementById("unitMetricSelect");
 const chartTooltip = document.getElementById("chartTooltip");
 const dataTools = document.getElementById("dataTools");
+const realtimeTools = document.getElementById("realtimeTools");
 const csvFileInput = document.getElementById("csvFileInput");
 const clearCsvData = document.getElementById("clearCsvData");
 const csvStatus = document.getElementById("csvStatus");
+const realtimeStatus = document.getElementById("realtimeStatus");
+const realtimeSummary = document.getElementById("realtimeSummary");
+const ingestRealtimeSample = document.getElementById("ingestRealtimeSample");
+const stepRealtime = document.getElementById("stepRealtime");
+const refreshRealtime = document.getElementById("refreshRealtime");
+const resetRealtime = document.getElementById("resetRealtime");
 const warningPanel = document.getElementById("warningPanel");
 const exportResultsCsv = document.getElementById("exportResultsCsv");
 const exportBoundariesCsv = document.getElementById("exportBoundariesCsv");
@@ -20,6 +27,7 @@ const exportUnitsCsv = document.getElementById("exportUnitsCsv");
 const exportConfigJson = document.getElementById("exportConfigJson");
 const importConfigJson = document.getElementById("importConfigJson");
 const SIMULATION_API_URL = "http://127.0.0.1:8000/api/simulate";
+const REALTIME_API_URL = "http://127.0.0.1:8000/api/realtime";
 
 const nodes = [
   { id: "influent", title: "进水", subtitle: "Q, COD, NH4-N", icon: "IN", type: "source", x: 30, y: 150 },
@@ -356,8 +364,9 @@ function renderMetricOptions() {
 
 function renderForm() {
   dataTools.hidden = activeTab !== "data";
+  realtimeTools.hidden = activeTab !== "realtime";
   parameterForm.innerHTML = "";
-  if (activeTab === "data") return;
+  if (activeTab === "data" || activeTab === "realtime") return;
   if (activeTab === "clarifier") {
     params.clarifierLayers = clamp(Math.round(params.clarifierLayers), 4, 20);
     params.clarifierFeedLayer = clamp(Math.round(params.clarifierFeedLayer), 1, params.clarifierLayers);
@@ -1142,6 +1151,100 @@ async function runBackendSimulation() {
   return response.json();
 }
 
+async function realtimeRequest(path, options = {}) {
+  let response;
+  try {
+    response = await fetch(`${REALTIME_API_URL}${path}`, options);
+  } catch (error) {
+    throw new Error("无法连接实时后端服务。");
+  }
+  if (!response.ok) {
+    let message = `HTTP ${response.status}`;
+    try {
+      const error = await response.json();
+      message = error.detail || message;
+    } catch {
+      message = await response.text();
+    }
+    throw new Error(message);
+  }
+  return response.json();
+}
+
+function realtimeBoundaryValues() {
+  return {
+    Q: params.influentQ,
+    COD: params.influentCod,
+    NH4: params.influentNh4,
+    NO3: params.influentNo3,
+    TSS: params.influentTss,
+    DO: params.aerobicDo,
+  };
+}
+
+function updateRealtimeStatus(message, isError = false) {
+  realtimeStatus.textContent = message;
+  realtimeStatus.classList.toggle("error", isError);
+}
+
+function renderRealtimeSummary(payload) {
+  const latestResult = payload?.result?.result || payload?.result;
+  if (!latestResult) {
+    realtimeSummary.innerHTML = "";
+    return;
+  }
+  realtimeSummary.innerHTML = `
+    <div><span>时间戳</span><strong>${latestResult.timestamp || payload.result.timestamp || "--"}</strong></div>
+    <div><span>输入 ID</span><strong>${latestResult.inputId ?? payload.result.inputId ?? "--"}</strong></div>
+    <div><span>出水 COD</span><strong>${formatChartValue(latestResult.effCod)} g/m3</strong></div>
+    <div><span>出水 NH4-N</span><strong>${formatChartValue(latestResult.effNh4)} g/m3</strong></div>
+    <div><span>出水 TN</span><strong>${formatChartValue(latestResult.effTn)} g/m3</strong></div>
+    <div><span>出水 TSS</span><strong>${formatChartValue(latestResult.effTss)} g/m3</strong></div>
+  `;
+}
+
+async function ingestCurrentRealtimeBoundary() {
+  const payload = await realtimeRequest("/ingest", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ timestamp: new Date().toISOString(), values: realtimeBoundaryValues() }),
+  });
+  updateRealtimeStatus(`已推送实时边界输入 #${payload.id}。`);
+  await refreshRealtimeLatest();
+}
+
+async function stepRealtimeModel() {
+  const payload = await realtimeRequest("/step", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      timestamp: new Date().toISOString(),
+      values: realtimeBoundaryValues(),
+      params,
+      stepHours: params.timeStepHours,
+    }),
+  });
+  updateRealtimeStatus(`已完成实时推进，结果 #${payload.resultId}。`);
+  renderRealtimeSummary(payload);
+}
+
+async function refreshRealtimeLatest() {
+  const payload = await realtimeRequest("/latest");
+  if (!payload.result) {
+    updateRealtimeStatus("暂无实时计算结果。");
+    renderRealtimeSummary(payload);
+    return;
+  }
+  updateRealtimeStatus(`已刷新最新实时结果 #${payload.result.id}。`);
+  renderRealtimeSummary(payload);
+}
+
+async function resetRealtimeState() {
+  await realtimeRequest("/reset", { method: "POST" });
+  updateRealtimeStatus("已重置实时输入、状态和结果。");
+  renderRealtimeSummary(null);
+}
+
 function csvCell(value) {
   if (value === undefined || value === null) return "";
   const text = String(value);
@@ -1626,6 +1729,38 @@ importConfigJson.addEventListener("change", async () => {
     updateCsvStatus(`配置导入失败：${error.message}`, true);
   } finally {
     importConfigJson.value = "";
+  }
+});
+
+ingestRealtimeSample.addEventListener("click", async () => {
+  try {
+    await ingestCurrentRealtimeBoundary();
+  } catch (error) {
+    updateRealtimeStatus(`实时数据推送失败：${error.message}`, true);
+  }
+});
+
+stepRealtime.addEventListener("click", async () => {
+  try {
+    await stepRealtimeModel();
+  } catch (error) {
+    updateRealtimeStatus(`实时推进失败：${error.message}`, true);
+  }
+});
+
+refreshRealtime.addEventListener("click", async () => {
+  try {
+    await refreshRealtimeLatest();
+  } catch (error) {
+    updateRealtimeStatus(`刷新实时结果失败：${error.message}`, true);
+  }
+});
+
+resetRealtime.addEventListener("click", async () => {
+  try {
+    await resetRealtimeState();
+  } catch (error) {
+    updateRealtimeStatus(`重置实时状态失败：${error.message}`, true);
   }
 });
 

@@ -26,6 +26,7 @@ It is intended as a learning and experimentation platform for ASM1-based process
 - Backend parameter/model validation with returned warnings.
 - CSV export for effluent/process results, boundary inputs, and unit-level series.
 - JSON export/import for simulation configuration.
+- Realtime MVP API with SQLite-backed input, model state, and latest result storage.
 
 ## Files
 
@@ -147,6 +148,43 @@ warnings, validation
 ```
 
 Invalid parameters return `400` with a clear message. Suspicious but runnable settings, such as very high clarifier overflow or a requested solver step above the internal cap, return as `warnings` in the normal response.
+
+## Realtime MVP API
+
+The realtime layer stores inputs, model state, and latest step results in SQLite:
+
+```text
+backend/realtime.db
+```
+
+Available endpoints:
+
+```http
+POST /api/realtime/ingest
+POST /api/realtime/step
+GET  /api/realtime/latest
+POST /api/realtime/reset
+```
+
+Example realtime step:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/realtime/step \
+  -H "Content-Type: application/json" \
+  -d '{
+    "values": {
+      "Q": 10000,
+      "COD": 420,
+      "NH4": 32,
+      "NO3": 0.5,
+      "TSS": 220,
+      "DO": 2
+    },
+    "stepHours": 0.5
+  }'
+```
+
+This MVP uses the current dynamic ASM1 engine and continues from the saved model state on each step. It is intended as a first online/digital-twin prototype, not yet a production historian or SCADA connector.
 
 ## Export And Configuration
 

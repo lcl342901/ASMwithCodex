@@ -305,7 +305,7 @@ h2 {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 8px;
   padding: 14px 14px 0;
 }
@@ -333,11 +333,22 @@ h2 {
   overflow: auto;
 }
 
-.data-tools {
+.data-tools,
+.realtime-tools {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 10px;
   padding: 14px 14px 0;
+}
+
+.realtime-tools {
+  grid-template-columns: 1fr;
+}
+
+.realtime-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .file-picker {
@@ -368,7 +379,8 @@ h2 {
   font-weight: 700;
 }
 
-.data-tools p {
+.data-tools p,
+.realtime-tools p {
   grid-column: 1 / -1;
   margin: 0;
   color: var(--muted);
@@ -376,8 +388,34 @@ h2 {
   line-height: 1.45;
 }
 
-.data-tools p.error {
+.data-tools p.error,
+.realtime-tools p.error {
   color: var(--red);
+}
+
+.realtime-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.realtime-summary div {
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdfb;
+  font-size: 12px;
+}
+
+.realtime-summary span {
+  display: block;
+  color: var(--muted);
+}
+
+.realtime-summary strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 15px;
 }
 
 .field {

@@ -55,6 +55,7 @@
           <button class="tab" data-tab="asm1">ASM1</button>
           <button class="tab" data-tab="clarifier">二沉池</button>
           <button class="tab" data-tab="data">数据</button>
+          <button class="tab" data-tab="realtime">实时</button>
         </div>
 
         <div id="dataTools" class="data-tools" hidden>
@@ -64,6 +65,17 @@
           </label>
           <button id="clearCsvData" class="secondary-button" type="button">清除数据</button>
           <p id="csvStatus">尚未加载历史数据。CSV 作为边界条件序列，仿真总时长和计算步长由“运行”页设置。可直接使用 sample-data.csv。</p>
+        </div>
+
+        <div id="realtimeTools" class="realtime-tools" hidden>
+          <div class="realtime-actions">
+            <button id="ingestRealtimeSample" class="secondary-button" type="button">推送当前边界</button>
+            <button id="stepRealtime" class="secondary-button" type="button">推进一步</button>
+            <button id="refreshRealtime" class="secondary-button" type="button">刷新最新</button>
+            <button id="resetRealtime" class="secondary-button" type="button">重置实时状态</button>
+          </div>
+          <p id="realtimeStatus">尚未接入实时数据。可先推送当前进水参数，再推进模型一步。</p>
+          <div id="realtimeSummary" class="realtime-summary"></div>
         </div>
 
         <form id="parameterForm" class="parameter-form"></form>
