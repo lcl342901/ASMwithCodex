@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import math
 import re
-from typing import Any
+from typing import Any, Callable
 
 
 DEFAULT_PARAMS: dict[str, float] = {
@@ -113,6 +113,9 @@ PARAM_LIMITS: dict[str, tuple[float, float]] = {
     "maxLayerTss": (100, 200000),
 }
 
+MAX_SOLVER_STEP_DAYS = 0.0005
+EPSILON_DAYS = 1e-12
+
 C = {
     "S_I": 0,
     "S_S": 1,
@@ -209,6 +212,7 @@ class SimulationContext:
     params: dict[str, float] = field(default_factory=lambda: DEFAULT_PARAMS.copy())
     source_name: str = ""
     mode: str = "manual"
+    progress_callback: Callable[[float, float], None] | None = None
     asm1: dict[str, float] = field(default_factory=lambda: ASM1_DEFAULTS.copy())
 
     def __post_init__(self) -> None:
@@ -632,25 +636,39 @@ class SimulationContext:
         return max(0.001 / 24, self.params["timeStepHours"] / 24)
 
     def solver_step_days(self) -> float:
-        return min(self.requested_step_days(), 0.0025)
+        return min(self.requested_step_days(), MAX_SOLVER_STEP_DAYS)
 
     def output_interval_days(self) -> float:
         return max(self.solver_step_days(), self.params["outputIntervalHours"] / 24)
 
+    def report_progress(self, current_time: float, total_time: float) -> None:
+        if self.progress_callback:
+            self.progress_callback(current_time, total_time)
+
     def run_asm1_simulation(self) -> dict[str, Any]:
         self.sync_asm1_params()
-        dt = self.solver_step_days()
-        steps = max(1, round(self.params["simulationDays"] / dt))
-        output_every = max(1, round(self.output_interval_days() / dt))
-
+        solver_dt = self.solver_step_days()
+        end_time = self.params["simulationDays"]
+        output_interval = self.output_interval_days()
         influent = self.influent_vector()
         state = self.create_simulation_state()
         series = self.create_result_series()
+        split = self.takacs_clarifier_step(state["clarifierLayers"], state["aerobic"], self.params["influentQ"] * (1 + self.params["rasRatio"]), self.params["influentQ"] * self.params["rasRatio"], min(self.params["wasQ"], self.params["influentQ"] * 0.8), 0, clamp(self.params["captureEfficiency"] / 100, 0.8, 0.9995))
+        self.push_snapshot(series, 0, influent, state["anaerobic"], state["anoxic"], state["aerobic"], split, state["ras"], state["clarifierLayers"])
+        self.report_progress(0, end_time)
 
-        for step in range(steps + 1):
+        current_time = 0.0
+        next_output = output_interval
+        while current_time < end_time - EPSILON_DAYS:
+            target_time = min(end_time, next_output)
+            dt = min(solver_dt, target_time - current_time)
             split = self.step_simulation_state(state, influent, dt)
-            if step % output_every == 0 or step == steps:
-                self.push_snapshot(series, step * dt, influent, state["anaerobic"], state["anoxic"], state["aerobic"], split, state["ras"], state["clarifierLayers"])
+            current_time += dt
+            if current_time >= next_output - EPSILON_DAYS or current_time >= end_time - EPSILON_DAYS:
+                self.push_snapshot(series, current_time, influent, state["anaerobic"], state["anoxic"], state["aerobic"], split, state["ras"], state["clarifierLayers"])
+                self.report_progress(current_time, end_time)
+                while next_output <= current_time + EPSILON_DAYS:
+                    next_output += output_interval
         return series
 
     def run_historical_simulation(self, records: list[dict[str, Any]]) -> dict[str, Any]:
@@ -662,20 +680,34 @@ class SimulationContext:
         self.mode = "csv"
         state = self.create_simulation_state()
         series = self.create_result_series()
-        dt = self.solver_step_days()
-        steps = max(1, round(self.params["simulationDays"] / dt))
-        output_every = max(1, round(self.output_interval_days() / dt))
+        solver_dt = self.solver_step_days()
+        end_time = self.params["simulationDays"]
+        output_interval = self.output_interval_days()
         cursor = {"index": 0}
 
         try:
-            for step in range(steps + 1):
-                current_time = step * dt
+            current_time = 0.0
+            self.params.update(csv_values_at(records, current_time, cursor))
+            self.sync_asm1_params()
+            influent = self.influent_vector()
+            split = self.takacs_clarifier_step(state["clarifierLayers"], state["aerobic"], self.params["influentQ"] * (1 + self.params["rasRatio"]), self.params["influentQ"] * self.params["rasRatio"], min(self.params["wasQ"], self.params["influentQ"] * 0.8), 0, clamp(self.params["captureEfficiency"] / 100, 0.8, 0.9995))
+            self.push_snapshot(series, current_time, influent, state["anaerobic"], state["anoxic"], state["aerobic"], split, state["ras"], state["clarifierLayers"])
+            self.report_progress(current_time, end_time)
+
+            next_output = output_interval
+            while current_time < end_time - EPSILON_DAYS:
                 self.params.update(csv_values_at(records, current_time, cursor))
                 self.sync_asm1_params()
                 influent = self.influent_vector()
+                target_time = min(end_time, next_output)
+                dt = min(solver_dt, target_time - current_time)
                 split = self.step_simulation_state(state, influent, dt)
-                if step % output_every == 0 or step == steps:
+                current_time += dt
+                if current_time >= next_output - EPSILON_DAYS or current_time >= end_time - EPSILON_DAYS:
                     self.push_snapshot(series, current_time, influent, state["anaerobic"], state["anoxic"], state["aerobic"], split, state["ras"], state["clarifierLayers"])
+                    self.report_progress(current_time, end_time)
+                    while next_output <= current_time + EPSILON_DAYS:
+                        next_output += output_interval
         finally:
             self.params = saved_params
             self.sync_asm1_params()
@@ -685,7 +717,7 @@ class SimulationContext:
         self.params.update(boundary_values)
         self.sync_asm1_params()
         total_dt = max(step_hours, 0.001) / 24
-        max_dt = 0.0025
+        max_dt = MAX_SOLVER_STEP_DAYS
         influent = self.influent_vector()
         elapsed = 0.0
         split = None
@@ -915,8 +947,8 @@ def validate_params(params: dict[str, float]) -> tuple[list[str], list[str]]:
         warnings.append(f"二沉池表面负荷偏高 ({surface_overflow:.1f} m/d)，固液分离结果可能不可靠。")
 
     requested_step = params["timeStepHours"] / 24
-    if requested_step > 0.0025:
-        warnings.append("设定计算步长大于内部求解器上限，后端会使用 0.0025 d 作为内部步长。")
+    if requested_step > MAX_SOLVER_STEP_DAYS:
+        warnings.append(f"设定计算步长大于内部求解器上限，后端会使用 {MAX_SOLVER_STEP_DAYS:g} d 作为内部步长。")
     if params["outputIntervalHours"] < params["timeStepHours"]:
         warnings.append("结果输出间隔短于设定计算步长，输出会跟随内部求解器步长。")
     if params["wasQ"] > params["influentQ"] * 0.8:
@@ -979,13 +1011,23 @@ def attach_validation(result: dict[str, Any], warnings: list[str]) -> dict[str, 
     return result
 
 
-def simulate(params: dict[str, Any] | None = None, csv_text: str = "", csv_file_name: str = "") -> dict[str, Any]:
+def simulate(
+    params: dict[str, Any] | None = None,
+    csv_text: str = "",
+    csv_file_name: str = "",
+    progress_callback: Callable[[float, float], None] | None = None,
+) -> dict[str, Any]:
     clean_params = sanitize_params(params)
     errors, warnings = validate_params(clean_params)
     if errors:
         raise ValueError("; ".join(errors))
 
-    ctx = SimulationContext(params=clean_params, source_name=csv_file_name or "", mode="csv" if csv_text.strip() else "manual")
+    ctx = SimulationContext(
+        params=clean_params,
+        source_name=csv_file_name or "",
+        mode="csv" if csv_text.strip() else "manual",
+        progress_callback=progress_callback,
+    )
     if csv_text.strip():
         records = normalize_csv_records(csv_text, ctx)
         warnings.extend(validate_csv_records(records, clean_params))

@@ -100,6 +100,16 @@ class ModelTest(unittest.TestCase):
         self.assertGreater(result["validation"]["warningCount"], 0)
         self.assertTrue(any("内部求解器上限" in warning for warning in result["warnings"]))
 
+    def test_large_requested_steps_use_same_internal_solver_step(self):
+        base = {**DEFAULT_PARAMS, "simulationDays": 2, "outputIntervalHours": 12}
+        coarse = simulate(params={**base, "timeStepHours": 0.5})
+        fine = simulate(params={**base, "timeStepHours": 0.04167})
+
+        self.assertAlmostEqual(coarse["time"][-1], 2, places=8)
+        self.assertAlmostEqual(fine["time"][-1], 2, places=8)
+        self.assertAlmostEqual(coarse["effNh4"][-1], fine["effNh4"][-1], places=8)
+        self.assertAlmostEqual(coarse["effCod"][-1], fine["effCod"][-1], places=8)
+
     def test_realtime_step_persists_latest_result(self):
         step = realtime.realtime_step(values={"Q": 10000, "COD": 420, "NH4": 32, "NO3": 0.5, "TSS": 220}, step_hours=0.5)
         latest = realtime.latest()
@@ -147,6 +157,56 @@ class ModelTest(unittest.TestCase):
 
         status = asyncio.run(realtime.stop_mock())
         self.assertFalse(status["running"])
+
+    def test_param_config_save_load_and_reset(self):
+        saved = realtime.save_params_config({**DEFAULT_PARAMS, "simulationDays": 33, "influentCod": 510})
+        loaded = realtime.get_saved_params()
+
+        self.assertEqual(saved["source"], "database")
+        self.assertEqual(loaded["source"], "database")
+        self.assertEqual(loaded["params"]["simulationDays"], 33)
+        self.assertEqual(loaded["params"]["influentCod"], 510)
+
+        reset = realtime.reset_params_config()
+        loaded_after_reset = realtime.get_saved_params()
+
+        self.assertEqual(reset["source"], "default")
+        self.assertEqual(loaded_after_reset["source"], "default")
+        self.assertEqual(loaded_after_reset["params"]["simulationDays"], DEFAULT_PARAMS["simulationDays"])
+
+    def test_calculation_logs_save_list_and_clear(self):
+        created = realtime.insert_calculation_log(
+            "simulate",
+            "failed",
+            "test failure",
+            {"reason": "unit-test"},
+            12.5,
+        )
+        listed = realtime.list_calculation_logs()
+
+        self.assertEqual(listed["logs"][0]["id"], created["id"])
+        self.assertEqual(listed["logs"][0]["status"], "failed")
+        self.assertEqual(listed["logs"][0]["detail"]["reason"], "unit-test")
+
+        cleared = realtime.clear_calculation_logs()
+        listed_after_clear = realtime.list_calculation_logs()
+
+        self.assertEqual(cleared["deleted"], 1)
+        self.assertEqual(listed_after_clear["logs"], [])
+
+    def test_simulation_reports_progress_callback(self):
+        progress = []
+
+        result = simulate(
+            params={**DEFAULT_PARAMS, "simulationDays": 1, "timeStepHours": 0.5, "outputIntervalHours": 12},
+            progress_callback=lambda current, total: progress.append((current, total)),
+        )
+
+        self.assertGreaterEqual(len(progress), 2)
+        self.assertEqual(progress[0], (0, 1))
+        self.assertAlmostEqual(progress[-1][0], 1)
+        self.assertAlmostEqual(progress[-1][1], 1)
+        self.assertAlmostEqual(result["time"][-1], 1)
 
 
 if __name__ == "__main__":

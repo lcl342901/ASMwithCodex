@@ -46,16 +46,28 @@
             <h2>边界条件与尺寸</h2>
             <p id="activeNodeLabel">全局参数</p>
           </div>
+          <div class="param-actions" aria-label="参数保存">
+            <div>
+              <button id="saveParams" class="secondary-button" type="button">保存参数</button>
+              <button id="resetParams" class="secondary-button danger-lite" type="button">重置默认</button>
+            </div>
+            <span id="paramStorageStatus">使用当前参数</span>
+          </div>
         </div>
 
-        <div class="tabs" role="tablist" aria-label="参数分组">
-          <button class="tab active" data-tab="influent">进水</button>
-          <button class="tab" data-tab="process">池体</button>
-          <button class="tab" data-tab="operation">运行</button>
-          <button class="tab" data-tab="asm1">ASM1</button>
-          <button class="tab" data-tab="clarifier">二沉池</button>
-          <button class="tab" data-tab="data">数据</button>
-          <button class="tab" data-tab="realtime">实时</button>
+        <div class="main-tabs" role="tablist" aria-label="工作区">
+          <button class="tab panel-tab active" data-panel="params">参数</button>
+          <button class="tab panel-tab" data-panel="data">数据</button>
+          <button class="tab panel-tab" data-panel="realtime">实时</button>
+          <button class="tab panel-tab" data-panel="logs">日志</button>
+        </div>
+
+        <div id="paramTabs" class="param-tabs" role="tablist" aria-label="参数分组">
+          <button class="tab param-tab active" data-tab="influent">进水</button>
+          <button class="tab param-tab" data-tab="process">池体</button>
+          <button class="tab param-tab" data-tab="operation">运行</button>
+          <button class="tab param-tab" data-tab="asm1">ASM1</button>
+          <button class="tab param-tab" data-tab="clarifier">二沉池</button>
         </div>
 
         <div id="dataTools" class="data-tools" hidden>
@@ -68,18 +80,55 @@
         </div>
 
         <div id="realtimeTools" class="realtime-tools" hidden>
-          <div class="realtime-actions">
-            <button id="ingestRealtimeSample" class="secondary-button" type="button">推送当前边界</button>
-            <button id="stepRealtime" class="secondary-button" type="button">推进一步</button>
-            <button id="refreshRealtime" class="secondary-button" type="button">刷新最新</button>
-            <button id="resetRealtime" class="secondary-button" type="button">重置实时状态</button>
-            <button id="startMockRealtime" class="secondary-button" type="button">启动 Mock</button>
-            <button id="stopMockRealtime" class="secondary-button" type="button">停止 Mock</button>
-            <button id="refreshMockRealtime" class="secondary-button" type="button">Mock 状态</button>
+          <div class="tool-section">
+            <div class="tool-section-heading">
+              <strong>实时输入</strong>
+              <span>边界数据写入</span>
+            </div>
+            <div class="realtime-actions">
+              <button id="ingestRealtimeSample" class="secondary-button" type="button">推送当前边界</button>
+              <button id="refreshRealtime" class="secondary-button" type="button">刷新最新</button>
+            </div>
+          </div>
+          <div class="tool-section">
+            <div class="tool-section-heading">
+              <strong>模型推进</strong>
+              <span>从保存状态继续计算</span>
+            </div>
+            <div class="realtime-actions">
+              <button id="stepRealtime" class="secondary-button" type="button">推进一步</button>
+              <button id="resetRealtime" class="secondary-button danger-lite" type="button">重置实时状态</button>
+            </div>
+          </div>
+          <div class="tool-section">
+            <div class="tool-section-heading">
+              <strong>Mock 数据源</strong>
+              <span>每 5 分钟自动推进</span>
+            </div>
+            <div class="realtime-actions">
+              <button id="startMockRealtime" class="secondary-button" type="button">启动 Mock</button>
+              <button id="stopMockRealtime" class="secondary-button" type="button">停止 Mock</button>
+              <button id="refreshMockRealtime" class="secondary-button" type="button">Mock 状态</button>
+            </div>
+            <div id="mockSummary" class="mock-summary"></div>
           </div>
           <p id="realtimeStatus">尚未接入实时数据。可先推送当前进水参数，再推进模型一步。</p>
-          <div id="mockSummary" class="mock-summary"></div>
           <div id="realtimeSummary" class="realtime-summary"></div>
+        </div>
+
+        <div id="logTools" class="log-tools" hidden>
+          <div class="tool-section">
+            <div class="tool-section-heading">
+              <strong>计算日志</strong>
+              <span>最近 100 条</span>
+            </div>
+            <div class="realtime-actions">
+              <button id="refreshLogs" class="secondary-button" type="button">刷新日志</button>
+              <button id="clearLogs" class="secondary-button danger-lite" type="button">清空日志</button>
+            </div>
+            <p id="logStatus">尚未加载日志。</p>
+          </div>
+          <div id="logList" class="log-list"></div>
         </div>
 
         <form id="parameterForm" class="parameter-form"></form>
@@ -108,24 +157,31 @@
         </div>
 
         <div class="chart-toolbar">
-          <button class="chart-toggle active" data-chart="effluent">出水水质</button>
-          <button class="chart-toggle" data-chart="boundaries">边界输入</button>
-          <button class="chart-toggle" data-chart="nitrogen">氮转化</button>
-          <button class="chart-toggle" data-chart="solids">污泥与 DO</button>
-          <button class="chart-toggle" data-chart="unit">单体过程</button>
-          <label class="metric-picker">
-            <span>指标</span>
-            <select id="unitMetricSelect"></select>
-          </label>
-          <div class="export-actions" aria-label="结果导出">
-            <button id="exportResultsCsv" class="secondary-button" type="button">导出结果 CSV</button>
-            <button id="exportBoundariesCsv" class="secondary-button" type="button">导出边界 CSV</button>
-            <button id="exportUnitsCsv" class="secondary-button" type="button">导出单体 CSV</button>
-            <button id="exportConfigJson" class="secondary-button" type="button">导出配置 JSON</button>
-            <label class="import-config">
-              <span>导入配置</span>
-              <input id="importConfigJson" type="file" accept=".json,application/json" />
+          <div class="chart-view-tabs" role="tablist" aria-label="结果视图">
+            <button class="chart-toggle active" data-chart="effluent">出水水质</button>
+            <button class="chart-toggle" data-chart="boundaries">边界输入</button>
+            <button class="chart-toggle" data-chart="nitrogen">氮转化</button>
+            <button class="chart-toggle" data-chart="solids">污泥与 DO</button>
+            <button class="chart-toggle" data-chart="unit">单体过程</button>
+          </div>
+          <div class="chart-actions">
+            <label id="metricPicker" class="metric-picker" hidden>
+              <span>指标</span>
+              <select id="unitMetricSelect"></select>
             </label>
+            <div class="export-menu">
+              <button id="exportMenuButton" class="secondary-button" type="button" aria-expanded="false">导出</button>
+              <div id="exportMenu" class="export-menu-panel" hidden>
+                <button id="exportResultsCsv" type="button">导出结果 CSV</button>
+                <button id="exportBoundariesCsv" type="button">导出边界 CSV</button>
+                <button id="exportUnitsCsv" type="button">导出单体 CSV</button>
+                <button id="exportConfigJson" type="button">导出配置 JSON</button>
+                <label class="import-config">
+                  <span>导入配置</span>
+                  <input id="importConfigJson" type="file" accept=".json,application/json" />
+                </label>
+              </div>
+            </div>
           </div>
         </div>
         <div id="warningPanel" class="warning-panel" hidden></div>

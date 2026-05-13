@@ -165,6 +165,39 @@ h2 {
   padding-bottom: 13px;
 }
 
+.param-actions {
+  flex: 0 0 auto;
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+
+.param-actions div {
+  display: flex;
+  gap: 7px;
+}
+
+.param-actions .secondary-button {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.param-actions span {
+  max-width: 190px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.2;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.param-actions span.error {
+  color: var(--red);
+}
+
 .status-badge {
   flex: 0 0 auto;
   padding: 6px 10px;
@@ -303,11 +336,28 @@ h2 {
   line-height: 1.25;
 }
 
-.tabs {
+.main-tabs {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   padding: 14px 14px 0;
+}
+
+.param-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  padding: 10px 14px 0;
+}
+
+.param-tabs[hidden],
+.parameter-form[hidden],
+.data-tools[hidden],
+.realtime-tools[hidden],
+.log-tools[hidden],
+.metric-picker[hidden],
+.export-menu-panel[hidden] {
+  display: none;
 }
 
 .tab {
@@ -316,6 +366,11 @@ h2 {
   padding: 0 6px;
   font-size: 13px;
   font-weight: 700;
+}
+
+.param-tab {
+  height: 32px;
+  font-size: 12px;
 }
 
 .tab.active,
@@ -329,26 +384,55 @@ h2 {
   display: grid;
   gap: 12px;
   padding: 14px;
-  max-height: calc(54vh - 124px);
+  max-height: calc(54vh - 170px);
   overflow: auto;
 }
 
 .data-tools,
-.realtime-tools {
+.realtime-tools,
+.log-tools {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 10px;
   padding: 14px 14px 0;
 }
 
-.realtime-tools {
+.realtime-tools,
+.log-tools {
   grid-template-columns: 1fr;
+  max-height: calc(54vh - 118px);
+  overflow: auto;
 }
 
 .realtime-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.tool-section {
+  display: grid;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdfb;
+}
+
+.tool-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tool-section-heading strong {
+  font-size: 13px;
+}
+
+.tool-section-heading span {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .file-picker {
@@ -372,15 +456,20 @@ h2 {
 
 .secondary-button {
   align-self: start;
-  height: 42px;
+  height: 34px;
   padding: 0 12px;
   border-radius: 7px;
   font-size: 13px;
   font-weight: 700;
 }
 
+.danger-lite {
+  color: var(--red);
+}
+
 .data-tools p,
-.realtime-tools p {
+.realtime-tools p,
+.log-tools p {
   grid-column: 1 / -1;
   margin: 0;
   color: var(--muted);
@@ -389,19 +478,104 @@ h2 {
 }
 
 .data-tools p.error,
-.realtime-tools p.error {
+.realtime-tools p.error,
+.log-tools p.error {
   color: var(--red);
 }
 
-.realtime-summary,
+.log-list {
+  display: grid;
+  gap: 8px;
+}
+
+.log-item {
+  display: grid;
+  gap: 7px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--green);
+  border-radius: 8px;
+  background: #fbfdfb;
+  font-size: 12px;
+}
+
+.log-item.failed {
+  border-left-color: var(--red);
+}
+
+.log-item-header {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 7px;
+}
+
+.log-status {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #e8f2ec;
+  color: var(--green-dark);
+  font-weight: 800;
+}
+
+.log-item.failed .log-status {
+  background: #faeeee;
+  color: var(--red);
+}
+
+.log-event {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.log-time {
+  overflow: hidden;
+  color: var(--muted);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.log-message {
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+.log-detail {
+  max-height: 92px;
+  margin: 0;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 7px;
+  background: #eef3ee;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .mock-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.realtime-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
-.realtime-summary div,
 .mock-summary div {
+  flex: 1 1 108px;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdfb;
+  font-size: 12px;
+}
+
+.realtime-summary div {
   padding: 9px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -419,7 +593,10 @@ h2 {
 .mock-summary strong {
   display: block;
   margin-top: 3px;
-  font-size: 15px;
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .field {
@@ -489,10 +666,18 @@ h2 {
 
 .chart-toolbar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 14px;
   padding: 14px 18px 8px;
+}
+
+.chart-view-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
 }
 
 .chart-toggle {
@@ -501,6 +686,14 @@ h2 {
   padding: 0 12px;
   font-size: 13px;
   font-weight: 700;
+}
+
+.chart-actions {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
 }
 
 .metric-picker {
@@ -525,32 +718,44 @@ h2 {
   font: inherit;
 }
 
-.export-actions {
-  flex: 1 1 100%;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding-top: 4px;
+.export-menu {
+  position: relative;
 }
 
-.export-actions .secondary-button,
-.import-config {
-  height: 32px;
-  font-size: 12px;
+.export-menu-panel {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  min-width: 172px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 12px 30px rgba(25, 47, 33, 0.16);
 }
 
+.export-menu-panel button,
 .import-config {
   position: relative;
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  padding: 0 12px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: var(--surface);
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
   color: var(--ink);
   cursor: pointer;
+  font-size: 12px;
   font-weight: 700;
+  text-align: left;
+}
+
+.export-menu-panel button:hover,
+.import-config:hover {
+  background: #e8f2ec;
 }
 
 .import-config input {

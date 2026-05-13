@@ -149,6 +149,16 @@ warnings, validation
 
 Invalid parameters return `400` with a clear message. Suspicious but runnable settings, such as very high clarifier overflow or a requested solver step above the internal cap, return as `warnings` in the normal response.
 
+The frontend uses asynchronous simulation jobs for real progress updates:
+
+```http
+POST /api/simulate/jobs
+GET  /api/simulate/jobs/{jobId}
+GET  /api/simulate/jobs/{jobId}/result
+```
+
+The job status includes `status`, `progressPercent`, `currentTime`, `totalTime`, `message`, and `error`. The original synchronous `POST /api/simulate` remains available for API callers that want a blocking request/response flow.
+
 ## Realtime MVP API
 
 The realtime layer stores inputs, model state, and latest step results in SQLite:
@@ -199,7 +209,29 @@ curl -X POST http://127.0.0.1:8000/api/realtime/mock/stop
 
 Mock data uses the current saved/default model parameters and generates `Q`, `COD`, `NH4`, `NO3`, `TSS`, and `DO` with small periodic variation plus noise. Each mock tick advances the dynamic model by 5 minutes.
 
+## Calculation Logs
+
+The right-side `日志` workspace reads calculation logs from SQLite. Logs include manual simulations, realtime steps, mock runner activity, parameter saves/resets, and failure messages.
+
+Log endpoints:
+
+```http
+GET    /api/logs?limit=100
+DELETE /api/logs
+```
+
 ## Export And Configuration
+
+The frontend parameter panel can save the current parameter set to the backend SQLite database and load it again on the next visit.
+This is currently a single global configuration, without user accounts.
+
+Configuration endpoints:
+
+```http
+GET    /api/config/params
+POST   /api/config/params
+DELETE /api/config/params
+```
 
 The results toolbar supports:
 
@@ -236,8 +268,8 @@ Between CSV rows, values are linearly interpolated.
 - `计算步长`: requested numerical calculation step in hours.
 - `结果输出间隔`: chart sampling interval in hours.
 
-For stability, the internal solver caps the actual calculation step. If the requested calculation step is too large,
-the simulator uses a smaller internal step while preserving the requested output interval.
+For stability, the internal solver caps the actual calculation step at `0.0005 d` (about 0.72 minutes). If the requested
+calculation step is larger, the simulator uses this smaller internal step while preserving the requested output interval.
 
 ## Model Notes
 
@@ -250,7 +282,8 @@ It is not yet a calibrated engineering-grade simulator.
 Important limitations:
 
 - The Python backend is intended to match the current JavaScript RK4/stepper behavior before deeper model refactoring.
-- No backend state persistence yet.
+- Backend persistence currently covers realtime inputs/state/results and one global saved parameter configuration.
+- No user accounts or per-user parameter sets yet.
 - No sensor quality checks beyond basic CSV parsing.
 - No formal unit conversion layer.
 - Initial conditions are currently fixed in code.

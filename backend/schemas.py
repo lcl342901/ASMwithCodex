@@ -21,3 +21,7 @@ class RealtimeStepRequest(BaseModel):
     quality: dict[str, Any] = Field(default_factory=dict)
     params: dict[str, Any] = Field(default_factory=dict)
     stepHours: Optional[float] = None
+
+
+class ParamConfigRequest(BaseModel):
+    params: dict[str, Any] = Field(default_factory=dict)

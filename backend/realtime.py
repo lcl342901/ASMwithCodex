@@ -15,6 +15,7 @@ from .model import DEFAULT_PARAMS, SimulationContext, sanitize_params, validate_
 DB_PATH = Path(__file__).resolve().parent / "realtime.db"
 MOCK_INTERVAL_SECONDS = 300
 MOCK_STEP_HOURS = 5 / 60
+PARAM_CONFIG_KEY = "global"
 MOCK_TASK: asyncio.Task | None = None
 MOCK_STATUS: dict[str, Any] = {
     "running": False,
@@ -82,6 +83,22 @@ def init_db() -> None:
               step_hours REAL NOT NULL,
               result_json TEXT NOT NULL,
               warnings_json TEXT NOT NULL,
+              created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS saved_param_configs (
+              key TEXT PRIMARY KEY,
+              params_json TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS calculation_logs (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              event TEXT NOT NULL,
+              status TEXT NOT NULL,
+              message TEXT NOT NULL,
+              detail_json TEXT NOT NULL,
+              duration_ms REAL,
               created_at TEXT NOT NULL
             );
             """
@@ -164,6 +181,112 @@ def save_state(timestamp: str, params: dict[str, float], state: dict[str, Any], 
             """,
             (timestamp, json.dumps(params), json.dumps(state), input_id, now_iso()),
         )
+
+
+def get_saved_params() -> dict[str, Any]:
+    init_db()
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM saved_param_configs WHERE key = ?", (PARAM_CONFIG_KEY,)).fetchone()
+    if not row:
+        return {"params": DEFAULT_PARAMS.copy(), "updatedAt": None, "source": "default"}
+    return {
+        "params": sanitize_params(json.loads(row["params_json"])),
+        "updatedAt": row["updated_at"],
+        "source": "database",
+    }
+
+
+def save_params_config(params: dict[str, Any]) -> dict[str, Any]:
+    init_db()
+    clean_params = sanitize_params(params)
+    errors, warnings = validate_params(clean_params)
+    if errors:
+        raise ValueError("; ".join(errors))
+    updated_at = now_iso()
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO saved_param_configs (key, params_json, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET
+              params_json = excluded.params_json,
+              updated_at = excluded.updated_at
+            """,
+            (PARAM_CONFIG_KEY, json.dumps(clean_params), updated_at),
+        )
+    return {
+        "params": clean_params,
+        "updatedAt": updated_at,
+        "source": "database",
+        "warnings": warnings,
+    }
+
+
+def reset_params_config() -> dict[str, Any]:
+    init_db()
+    with connect() as conn:
+        conn.execute("DELETE FROM saved_param_configs WHERE key = ?", (PARAM_CONFIG_KEY,))
+    return {"params": DEFAULT_PARAMS.copy(), "updatedAt": None, "source": "default"}
+
+
+def insert_calculation_log(
+    event: str,
+    status: str,
+    message: str,
+    detail: dict[str, Any] | None = None,
+    duration_ms: float | None = None,
+) -> dict[str, Any]:
+    init_db()
+    created_at = now_iso()
+    with connect() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO calculation_logs (event, status, message, detail_json, duration_ms, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (event, status, message, json.dumps(detail or {}), duration_ms, created_at),
+        )
+        row_id = int(cursor.lastrowid)
+    return {
+        "id": row_id,
+        "event": event,
+        "status": status,
+        "message": message,
+        "detail": detail or {},
+        "durationMs": duration_ms,
+        "createdAt": created_at,
+    }
+
+
+def list_calculation_logs(limit: int = 100) -> dict[str, Any]:
+    init_db()
+    safe_limit = max(1, min(int(limit), 500))
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM calculation_logs ORDER BY id DESC LIMIT ?",
+            (safe_limit,),
+        ).fetchall()
+    logs = [
+        {
+            "id": row["id"],
+            "event": row["event"],
+            "status": row["status"],
+            "message": row["message"],
+            "detail": json.loads(row["detail_json"]),
+            "durationMs": row["duration_ms"],
+            "createdAt": row["created_at"],
+        }
+        for row in rows
+    ]
+    return {"logs": logs, "limit": safe_limit}
+
+
+def clear_calculation_logs() -> dict[str, Any]:
+    init_db()
+    with connect() as conn:
+        cursor = conn.execute("DELETE FROM calculation_logs")
+        deleted = cursor.rowcount
+    return {"status": "cleared", "deleted": deleted}
 
 
 def insert_result(timestamp: str, input_id: int | None, step_hours: float, result: dict[str, Any], warnings: list[str]) -> int:
@@ -263,18 +386,32 @@ def generate_mock_values(run_count: int | None = None) -> dict[str, float]:
 
 
 def run_mock_once() -> dict[str, Any]:
-    values = generate_mock_values()
-    result = realtime_step(
-        timestamp=now_iso(),
-        values=values,
-        quality={"source": "mock"},
-        step_hours=MOCK_STEP_HOURS,
-    )
-    MOCK_STATUS["lastRunAt"] = now_iso()
-    MOCK_STATUS["lastResultId"] = result["resultId"]
-    MOCK_STATUS["lastError"] = None
-    MOCK_STATUS["runCount"] += 1
-    return result
+    started = datetime.now(timezone.utc)
+    try:
+        values = generate_mock_values()
+        result = realtime_step(
+            timestamp=now_iso(),
+            values=values,
+            quality={"source": "mock"},
+            step_hours=MOCK_STEP_HOURS,
+        )
+        MOCK_STATUS["lastRunAt"] = now_iso()
+        MOCK_STATUS["lastResultId"] = result["resultId"]
+        MOCK_STATUS["lastError"] = None
+        MOCK_STATUS["runCount"] += 1
+        duration_ms = (datetime.now(timezone.utc) - started).total_seconds() * 1000
+        insert_calculation_log(
+            "mock_run",
+            "success",
+            f"Mock 自动推进完成，结果 #{result['resultId']}。",
+            {"resultId": result["resultId"], "stepHours": MOCK_STEP_HOURS},
+            duration_ms,
+        )
+        return result
+    except Exception as exc:
+        duration_ms = (datetime.now(timezone.utc) - started).total_seconds() * 1000
+        insert_calculation_log("mock_run", "failed", str(exc), {"stepHours": MOCK_STEP_HOURS}, duration_ms)
+        raise
 
 
 async def mock_loop() -> None:

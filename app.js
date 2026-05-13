@@ -9,8 +9,10 @@ const resultChart = document.getElementById("resultChart");
 const legend = document.getElementById("legend");
 const unitMetricSelect = document.getElementById("unitMetricSelect");
 const chartTooltip = document.getElementById("chartTooltip");
+const paramTabs = document.getElementById("paramTabs");
 const dataTools = document.getElementById("dataTools");
 const realtimeTools = document.getElementById("realtimeTools");
+const logTools = document.getElementById("logTools");
 const csvFileInput = document.getElementById("csvFileInput");
 const clearCsvData = document.getElementById("clearCsvData");
 const csvStatus = document.getElementById("csvStatus");
@@ -30,8 +32,22 @@ const exportBoundariesCsv = document.getElementById("exportBoundariesCsv");
 const exportUnitsCsv = document.getElementById("exportUnitsCsv");
 const exportConfigJson = document.getElementById("exportConfigJson");
 const importConfigJson = document.getElementById("importConfigJson");
+const metricPicker = document.getElementById("metricPicker");
+const exportMenuButton = document.getElementById("exportMenuButton");
+const exportMenu = document.getElementById("exportMenu");
+const saveParams = document.getElementById("saveParams");
+const resetParams = document.getElementById("resetParams");
+const paramStorageStatus = document.getElementById("paramStorageStatus");
+const refreshLogs = document.getElementById("refreshLogs");
+const clearLogs = document.getElementById("clearLogs");
+const logStatus = document.getElementById("logStatus");
+const logList = document.getElementById("logList");
 const SIMULATION_API_URL = "http://127.0.0.1:8000/api/simulate";
 const REALTIME_API_URL = "http://127.0.0.1:8000/api/realtime";
+const PARAM_CONFIG_API_URL = "http://127.0.0.1:8000/api/config/params";
+const LOG_API_URL = "http://127.0.0.1:8000/api/logs";
+const MAX_SOLVER_STEP_DAYS = 0.0005;
+const EPSILON_DAYS = 1e-12;
 
 const nodes = [
   { id: "influent", title: "进水", subtitle: "Q, COD, NH4-N", icon: "IN", type: "source", x: 30, y: 150 },
@@ -109,6 +125,8 @@ const params = {
   maxLayerTss: 30000,
 };
 
+const defaultParams = Object.freeze({ ...params });
+
 const fields = {
   influent: [
     ["influentQ", "进水流量", "m3/d", 100, 100000],
@@ -172,6 +190,7 @@ const fields = {
   ],
 };
 
+let activePanel = "params";
 let activeTab = "influent";
 let selectedNode = null;
 let lastResult = null;
@@ -354,6 +373,7 @@ function selectNode(id) {
 
 function setActiveChart(chartName) {
   activeChart = chartName;
+  metricPicker.hidden = chartName !== "unit";
   document.querySelectorAll(".chart-toggle").forEach((item) => {
     item.classList.toggle("active", item.dataset.chart === chartName);
   });
@@ -366,11 +386,144 @@ function renderMetricOptions() {
   unitMetricSelect.value = selectedMetric;
 }
 
+function updateParamStorageStatus(message, isError = false) {
+  paramStorageStatus.textContent = message;
+  paramStorageStatus.classList.toggle("error", isError);
+}
+
+function updateLogStatus(message, isError = false) {
+  logStatus.textContent = message;
+  logStatus.classList.toggle("error", isError);
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function applyParamValues(values) {
+  Object.entries(values).forEach(([key, value]) => {
+    const parsed = Number(value);
+    if (key in params && Number.isFinite(parsed)) {
+      params[key] = key === "clarifierLayers" || key === "clarifierFeedLayer" ? Math.round(parsed) : parsed;
+    }
+  });
+  params.clarifierLayers = clamp(Math.round(params.clarifierLayers), 4, 20);
+  params.clarifierFeedLayer = clamp(Math.round(params.clarifierFeedLayer), 1, params.clarifierLayers);
+  syncAsm1Params();
+}
+
+async function paramConfigRequest(path = "", options = {}) {
+  const response = await fetch(`${PARAM_CONFIG_API_URL}${path}`, options);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.detail || response.statusText || "参数配置请求失败。");
+  }
+  return payload;
+}
+
+async function loadSavedParams() {
+  try {
+    const payload = await paramConfigRequest();
+    applyParamValues(payload.params || defaultParams);
+    updateParamStorageStatus(payload.source === "database" ? "已加载数据库参数" : "使用默认参数");
+  } catch (error) {
+    updateParamStorageStatus(`参数读取失败：${error.message}`, true);
+  }
+}
+
+async function saveCurrentParams() {
+  try {
+    const payload = await paramConfigRequest("", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ params }),
+    });
+    applyParamValues(payload.params || params);
+    renderForm();
+    updateParamStorageStatus(`已保存 ${new Date().toLocaleTimeString()}`);
+  } catch (error) {
+    updateParamStorageStatus(`保存失败：${error.message}`, true);
+  }
+}
+
+async function resetToDefaultParams() {
+  try {
+    const payload = await paramConfigRequest("", { method: "DELETE" });
+    applyParamValues(payload.params || defaultParams);
+    renderForm();
+    updateParamStorageStatus("已重置为默认参数");
+  } catch (error) {
+    updateParamStorageStatus(`重置失败：${error.message}`, true);
+  }
+}
+
+async function logRequest(path = "", options = {}) {
+  const response = await fetch(`${LOG_API_URL}${path}`, options);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.detail || response.statusText || "日志请求失败。");
+  }
+  return payload;
+}
+
+function renderLogs(logs) {
+  if (!logs.length) {
+    logList.innerHTML = `<div class="log-item"><div class="log-message">暂无计算日志。</div></div>`;
+    return;
+  }
+  logList.innerHTML = logs
+    .map((log) => {
+      const detail = log.detail && Object.keys(log.detail).length ? JSON.stringify(log.detail, null, 2) : "";
+      const duration = Number.isFinite(log.durationMs) ? ` · ${Math.round(log.durationMs)} ms` : "";
+      return `
+        <article class="log-item ${log.status === "failed" ? "failed" : ""}">
+          <div class="log-item-header">
+            <span class="log-status">${escapeHtml(log.status)}</span>
+            <span class="log-event">${escapeHtml(log.event)}</span>
+            <span class="log-time">#${log.id} · ${escapeHtml(log.createdAt)}${duration}</span>
+          </div>
+          <div class="log-message">${escapeHtml(log.message)}</div>
+          ${detail ? `<pre class="log-detail">${escapeHtml(detail)}</pre>` : ""}
+        </article>
+      `;
+    })
+    .join("");
+}
+
+async function refreshCalculationLogs() {
+  try {
+    const payload = await logRequest("?limit=100");
+    renderLogs(payload.logs || []);
+    updateLogStatus(`已加载 ${payload.logs?.length || 0} 条日志。`);
+  } catch (error) {
+    updateLogStatus(`日志加载失败：${error.message}`, true);
+  }
+}
+
+async function clearCalculationLogs() {
+  try {
+    const payload = await logRequest("", { method: "DELETE" });
+    renderLogs([]);
+    updateLogStatus(`已清空 ${payload.deleted || 0} 条日志。`);
+  } catch (error) {
+    updateLogStatus(`日志清空失败：${error.message}`, true);
+  }
+}
+
 function renderForm() {
-  dataTools.hidden = activeTab !== "data";
-  realtimeTools.hidden = activeTab !== "realtime";
+  const showingParams = activePanel === "params";
+  dataTools.hidden = activePanel !== "data";
+  realtimeTools.hidden = activePanel !== "realtime";
+  logTools.hidden = activePanel !== "logs";
+  paramTabs.hidden = !showingParams;
+  parameterForm.hidden = !showingParams;
   parameterForm.innerHTML = "";
-  if (activeTab === "data" || activeTab === "realtime") return;
+  if (!showingParams) return;
   if (activeTab === "clarifier") {
     params.clarifierLayers = clamp(Math.round(params.clarifierLayers), 4, 20);
     params.clarifierFeedLayer = clamp(Math.round(params.clarifierFeedLayer), 1, params.clarifierLayers);
@@ -396,6 +549,7 @@ function renderForm() {
           renderForm();
         }
         syncAsm1Params();
+        updateParamStorageStatus("有未保存修改");
       }
     });
     parameterForm.appendChild(field);
@@ -887,19 +1041,27 @@ function previewClarifierSplit(state) {
 
 function runAsm1Simulation() {
   syncAsm1Params();
-  const dt = solverStepDays();
-  const steps = Math.max(1, Math.round(params.simulationDays / dt));
-  const outputEvery = Math.max(1, Math.round(outputIntervalDays() / dt));
-
+  const solverDt = solverStepDays();
+  const endTime = params.simulationDays;
+  const outputInterval = outputIntervalDays();
   const influent = influentVector();
   const state = createSimulationState();
   const series = createResultSeries();
+  let split = getCurrentClarifierSplit(state);
+  pushSnapshot(series, 0, influent, state.anaerobic, state.anoxic, state.aerobic, split, state.ras, state.clarifierLayers);
 
-  for (let step = 0; step <= steps; step += 1) {
-    const split = stepSimulationState(state, influent, dt);
-
-    if (step % outputEvery === 0 || step === steps) {
-      pushSnapshot(series, step * dt, influent, state.anaerobic, state.anoxic, state.aerobic, split, state.ras, state.clarifierLayers);
+  let currentTime = 0;
+  let nextOutput = outputInterval;
+  while (currentTime < endTime - EPSILON_DAYS) {
+    const targetTime = Math.min(endTime, nextOutput);
+    const dt = Math.min(solverDt, targetTime - currentTime);
+    split = stepSimulationState(state, influent, dt);
+    currentTime += dt;
+    if (currentTime >= nextOutput - EPSILON_DAYS || currentTime >= endTime - EPSILON_DAYS) {
+      pushSnapshot(series, currentTime, influent, state.anaerobic, state.anoxic, state.aerobic, split, state.ras, state.clarifierLayers);
+      while (nextOutput <= currentTime + EPSILON_DAYS) {
+        nextOutput += outputInterval;
+      }
     }
   }
 
@@ -1053,20 +1215,33 @@ function runHistoricalSimulation(records) {
   const series = createResultSeries();
   series.mode = "csv";
   series.sourceName = csvFileName;
-  const dt = solverStepDays();
-  const steps = Math.max(1, Math.round(params.simulationDays / dt));
-  const outputEvery = Math.max(1, Math.round(outputIntervalDays() / dt));
+  const solverDt = solverStepDays();
+  const endTime = params.simulationDays;
+  const outputInterval = outputIntervalDays();
   const cursor = { index: 0 };
 
   try {
-    for (let step = 0; step <= steps; step += 1) {
-      const currentTime = step * dt;
+    let currentTime = 0;
+    Object.assign(params, csvValuesAt(records, currentTime, cursor));
+    syncAsm1Params();
+    let influent = influentVector();
+    let split = getCurrentClarifierSplit(state);
+    pushSnapshot(series, currentTime, influent, state.anaerobic, state.anoxic, state.aerobic, split, state.ras, state.clarifierLayers);
+
+    let nextOutput = outputInterval;
+    while (currentTime < endTime - EPSILON_DAYS) {
       Object.assign(params, csvValuesAt(records, currentTime, cursor));
       syncAsm1Params();
-      const influent = influentVector();
-      const split = stepSimulationState(state, influent, dt);
-      if (step % outputEvery === 0 || step === steps) {
+      influent = influentVector();
+      const targetTime = Math.min(endTime, nextOutput);
+      const dt = Math.min(solverDt, targetTime - currentTime);
+      split = stepSimulationState(state, influent, dt);
+      currentTime += dt;
+      if (currentTime >= nextOutput - EPSILON_DAYS || currentTime >= endTime - EPSILON_DAYS) {
         pushSnapshot(series, currentTime, influent, state.anaerobic, state.anoxic, state.aerobic, split, state.ras, state.clarifierLayers);
+        while (nextOutput <= currentTime + EPSILON_DAYS) {
+          nextOutput += outputInterval;
+        }
       }
     }
   } finally {
@@ -1087,7 +1262,7 @@ function requestedStepDays() {
 }
 
 function solverStepDays() {
-  return Math.min(requestedStepDays(), 0.0025);
+  return Math.min(requestedStepDays(), MAX_SOLVER_STEP_DAYS);
 }
 
 function outputIntervalDays() {
@@ -1103,16 +1278,8 @@ function setProgress(value, failed = false) {
 
 function startProgress() {
   if (progressTimer) window.clearInterval(progressTimer);
+  progressTimer = null;
   setProgress(0);
-  progressTimer = window.setInterval(() => {
-    const remaining = 90 - progressValue;
-    const increment = Math.max(0.6, remaining * 0.08);
-    setProgress(Math.min(90, progressValue + increment));
-    if (progressValue >= 90 && progressTimer) {
-      window.clearInterval(progressTimer);
-      progressTimer = null;
-    }
-  }, 180);
 }
 
 function finishProgress(failed = false) {
@@ -1124,9 +1291,35 @@ function finishProgress(failed = false) {
 }
 
 async function runBackendSimulation() {
+  const job = await createSimulationJob();
+  const jobId = job.jobId;
+  while (true) {
+    await delay(500);
+    const status = await getSimulationJob(jobId);
+    setProgress(status.progressPercent || 0);
+    if (Number.isFinite(status.currentTime) && Number.isFinite(status.totalTime)) {
+      statusBadge.textContent = `${status.currentTime.toFixed(2)} / ${status.totalTime.toFixed(2)} d`;
+    } else {
+      statusBadge.textContent = status.status === "queued" ? "排队中" : "计算中";
+    }
+    if (status.status === "success") {
+      setProgress(100);
+      return getSimulationJobResult(jobId);
+    }
+    if (status.status === "failed") {
+      throw new Error(status.error || status.message || "仿真任务失败。");
+    }
+  }
+}
+
+function delay(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function createSimulationJob() {
   let response;
   try {
-    response = await fetch(SIMULATION_API_URL, {
+    response = await fetch(`${SIMULATION_API_URL}/jobs`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1152,6 +1345,29 @@ async function runBackendSimulation() {
     throw new Error(message);
   }
 
+  return response.json();
+}
+
+async function getSimulationJob(jobId) {
+  const response = await fetch(`${SIMULATION_API_URL}/jobs/${jobId}`);
+  if (!response.ok) {
+    throw new Error(`任务状态读取失败：HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+async function getSimulationJobResult(jobId) {
+  const response = await fetch(`${SIMULATION_API_URL}/jobs/${jobId}/result`);
+  if (!response.ok) {
+    let message = `HTTP ${response.status}`;
+    try {
+      const error = await response.json();
+      message = error.detail || message;
+    } catch {
+      message = await response.text();
+    }
+    throw new Error(message);
+  }
   return response.json();
 }
 
@@ -1213,11 +1429,9 @@ function renderMockSummary(status) {
     return;
   }
   mockSummary.innerHTML = `
-    <div><span>Mock 状态</span><strong>${status.running ? "运行中" : "已停止"}</strong></div>
+    <div><span>状态</span><strong>${status.running ? "运行中" : "已停止"}</strong></div>
     <div><span>间隔</span><strong>${status.intervalSeconds || 300} s</strong></div>
-    <div><span>最近运行</span><strong>${status.lastRunAt || "--"}</strong></div>
     <div><span>最近结果</span><strong>${status.lastResultId ?? "--"}</strong></div>
-    <div><span>运行次数</span><strong>${status.runCount ?? 0}</strong></div>
     <div><span>最近错误</span><strong>${status.lastError || "无"}</strong></div>
   `;
 }
@@ -1376,12 +1590,7 @@ function applyImportedConfig(config) {
   if (!config || typeof config !== "object" || !config.params || typeof config.params !== "object") {
     throw new Error("配置文件缺少 params。");
   }
-  Object.entries(config.params).forEach(([key, value]) => {
-    const parsed = Number(value);
-    if (key in params && Number.isFinite(parsed)) {
-      params[key] = key === "clarifierLayers" || key === "clarifierFeedLayer" ? Math.round(parsed) : parsed;
-    }
-  });
+  applyParamValues(config.params);
   csvText = typeof config.csvText === "string" ? config.csvText : "";
   csvFileName = typeof config.csvFileName === "string" ? config.csvFileName : "";
   if (csvText) {
@@ -1392,8 +1601,8 @@ function applyImportedConfig(config) {
     updateCsvStatus("已导入配置。当前使用手动参数。");
   }
   csvFileInput.value = "";
-  syncAsm1Params();
   renderForm();
+  updateParamStorageStatus("配置已导入，尚未保存");
 }
 
 function renderWarnings(result) {
@@ -1727,9 +1936,21 @@ function updateMetrics(result) {
   renderWarnings(result);
 }
 
-document.querySelectorAll(".tab").forEach((tab) => {
+document.querySelectorAll(".panel-tab").forEach((tab) => {
   tab.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach((item) => item.classList.remove("active"));
+    document.querySelectorAll(".panel-tab").forEach((item) => item.classList.remove("active"));
+    tab.classList.add("active");
+    activePanel = tab.dataset.panel;
+    renderForm();
+    if (activePanel === "logs") {
+      refreshCalculationLogs();
+    }
+  });
+});
+
+document.querySelectorAll(".param-tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".param-tab").forEach((item) => item.classList.remove("active"));
     tab.classList.add("active");
     activeTab = tab.dataset.tab;
     renderForm();
@@ -1756,6 +1977,43 @@ exportBoundariesCsv.addEventListener("click", exportBoundaryCsv);
 exportUnitsCsv.addEventListener("click", exportUnitCsv);
 exportConfigJson.addEventListener("click", exportConfig);
 
+saveParams.addEventListener("click", async () => {
+  await saveCurrentParams();
+});
+resetParams.addEventListener("click", async () => {
+  await resetToDefaultParams();
+});
+refreshLogs.addEventListener("click", async () => {
+  await refreshCalculationLogs();
+});
+clearLogs.addEventListener("click", async () => {
+  await clearCalculationLogs();
+});
+
+function setExportMenu(open) {
+  exportMenu.hidden = !open;
+  exportMenuButton.setAttribute("aria-expanded", String(open));
+}
+
+exportMenuButton.addEventListener("click", (event) => {
+  event.stopPropagation();
+  setExportMenu(exportMenu.hidden);
+});
+
+[exportResultsCsv, exportBoundariesCsv, exportUnitsCsv, exportConfigJson].forEach((button) => {
+  button.addEventListener("click", () => setExportMenu(false));
+});
+
+document.addEventListener("click", (event) => {
+  if (!exportMenu.hidden && !event.target.closest(".export-menu")) {
+    setExportMenu(false);
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") setExportMenu(false);
+});
+
 importConfigJson.addEventListener("change", async () => {
   const file = importConfigJson.files?.[0];
   if (!file) return;
@@ -1766,6 +2024,7 @@ importConfigJson.addEventListener("change", async () => {
     updateCsvStatus(`配置导入失败：${error.message}`, true);
   } finally {
     importConfigJson.value = "";
+    setExportMenu(false);
   }
 });
 
@@ -1896,9 +2155,14 @@ window.addEventListener("resize", () => {
   if (lastResult) drawChart(lastResult, activeChart);
 });
 
-renderForm();
-renderMetricOptions();
-drawNodes();
-lastResult = runAsm1Simulation();
-updateMetrics(lastResult);
-drawChart(lastResult, activeChart);
+async function initializeApp() {
+  await loadSavedParams();
+  renderForm();
+  renderMetricOptions();
+  drawNodes();
+  lastResult = runAsm1Simulation();
+  updateMetrics(lastResult);
+  drawChart(lastResult, activeChart);
+}
+
+initializeApp();
