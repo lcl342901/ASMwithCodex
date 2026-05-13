@@ -80,6 +80,9 @@ Installed plist location:
 Useful commands:
 
 ```bash
+# Sync project backend code to the persistent service and restart it
+./scripts/sync-service.sh
+
 # Start or restart
 launchctl kickstart -k gui/501/com.asmwithcodex.backend
 
@@ -103,7 +106,7 @@ Logs:
 /private/tmp/aao-fastapi.err.log
 ```
 
-If backend code changes in the project directory, copy the updated `backend/` directory into `/Users/chenglin/aao-simulator-service/` and restart the service.
+If backend code changes in the project directory, run `./scripts/sync-service.sh`. It copies `backend/` into `/Users/chenglin/aao-simulator-service/`, updates dependencies, installs the LaunchAgent plist, restarts the service, and checks `/api/health`.
 
 ## API
 
