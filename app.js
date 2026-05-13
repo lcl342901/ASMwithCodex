@@ -13,6 +13,12 @@ const dataTools = document.getElementById("dataTools");
 const csvFileInput = document.getElementById("csvFileInput");
 const clearCsvData = document.getElementById("clearCsvData");
 const csvStatus = document.getElementById("csvStatus");
+const warningPanel = document.getElementById("warningPanel");
+const exportResultsCsv = document.getElementById("exportResultsCsv");
+const exportBoundariesCsv = document.getElementById("exportBoundariesCsv");
+const exportUnitsCsv = document.getElementById("exportUnitsCsv");
+const exportConfigJson = document.getElementById("exportConfigJson");
+const importConfigJson = document.getElementById("importConfigJson");
 const SIMULATION_API_URL = "http://127.0.0.1:8000/api/simulate";
 
 const nodes = [
@@ -1136,6 +1142,134 @@ async function runBackendSimulation() {
   return response.json();
 }
 
+function csvCell(value) {
+  if (value === undefined || value === null) return "";
+  const text = String(value);
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function toCsv(rows) {
+  return rows.map((row) => row.map(csvCell).join(",")).join("\n");
+}
+
+function downloadText(filename, text, mimeType) {
+  const blob = new Blob([text], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function timestampForFile() {
+  return new Date().toISOString().replace(/[:.]/g, "-");
+}
+
+function exportResultCsv() {
+  if (!lastResult) return;
+  const rows = [
+    ["time_d", "effCod", "effNh4", "effNo3", "effTn", "effTss", "anaerobicNo3", "anoxicNo3", "aerobicNo3", "aerobicDo", "aerobicMlss", "rasMlss"],
+  ];
+  lastResult.time.forEach((time, index) => {
+    rows.push([
+      time,
+      lastResult.effCod[index],
+      lastResult.effNh4[index],
+      lastResult.effNo3[index],
+      lastResult.effTn[index],
+      lastResult.effTss[index],
+      lastResult.anaerobicNo3[index],
+      lastResult.anoxicNo3[index],
+      lastResult.aerobicNo3[index],
+      lastResult.aerobicDo[index],
+      lastResult.aerobicMlss[index],
+      lastResult.rasMlss[index],
+    ]);
+  });
+  downloadText(`aao-results-${timestampForFile()}.csv`, toCsv(rows), "text/csv;charset=utf-8");
+}
+
+function exportBoundaryCsv() {
+  if (!lastResult) return;
+  const keys = Object.keys(lastResult.boundaries || {});
+  const rows = [["time_d", ...keys]];
+  lastResult.time.forEach((time, index) => {
+    rows.push([time, ...keys.map((key) => lastResult.boundaries[key]?.[index] ?? "")]);
+  });
+  downloadText(`aao-boundaries-${timestampForFile()}.csv`, toCsv(rows), "text/csv;charset=utf-8");
+}
+
+function exportUnitCsv() {
+  if (!lastResult) return;
+  const unitIds = Object.keys(lastResult.units || {});
+  const rows = [["time_d"]];
+  unitIds.forEach((unitId) => {
+    metricDefinitions.forEach(([metricId]) => rows[0].push(`${unitId}.${metricId}`));
+  });
+  lastResult.time.forEach((time, index) => {
+    const row = [time];
+    unitIds.forEach((unitId) => {
+      metricDefinitions.forEach(([metricId]) => {
+        row.push(lastResult.units[unitId]?.[metricId]?.[index] ?? "");
+      });
+    });
+    rows.push(row);
+  });
+  downloadText(`aao-units-${timestampForFile()}.csv`, toCsv(rows), "text/csv;charset=utf-8");
+}
+
+function exportConfig() {
+  const config = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    params,
+    csvFileName,
+    csvText,
+  };
+  downloadText(`aao-config-${timestampForFile()}.json`, JSON.stringify(config, null, 2), "application/json;charset=utf-8");
+}
+
+function applyImportedConfig(config) {
+  if (!config || typeof config !== "object" || !config.params || typeof config.params !== "object") {
+    throw new Error("配置文件缺少 params。");
+  }
+  Object.entries(config.params).forEach(([key, value]) => {
+    const parsed = Number(value);
+    if (key in params && Number.isFinite(parsed)) {
+      params[key] = key === "clarifierLayers" || key === "clarifierFeedLayer" ? Math.round(parsed) : parsed;
+    }
+  });
+  csvText = typeof config.csvText === "string" ? config.csvText : "";
+  csvFileName = typeof config.csvFileName === "string" ? config.csvFileName : "";
+  if (csvText) {
+    csvRecords = normalizeCsvRecords(csvText);
+    updateCsvStatus(`已导入配置与 ${csvRecords.length} 条 CSV 边界记录。`);
+  } else {
+    csvRecords = [];
+    updateCsvStatus("已导入配置。当前使用手动参数。");
+  }
+  csvFileInput.value = "";
+  syncAsm1Params();
+  renderForm();
+}
+
+function renderWarnings(result) {
+  const warnings = result?.warnings || result?.validation?.warnings || [];
+  if (!warnings.length) {
+    warningPanel.hidden = true;
+    warningPanel.innerHTML = "";
+    return;
+  }
+  warningPanel.hidden = false;
+  warningPanel.innerHTML = `
+    <strong>模型校验提示 (${warnings.length})</strong>
+    <ul>${warnings.map((warning) => `<li>${warning}</li>`).join("")}</ul>
+  `;
+}
+
 function niceMax(values) {
   const max = Math.max(...values, 1);
   const pow = 10 ** Math.floor(Math.log10(max));
@@ -1447,8 +1581,10 @@ function updateMetrics(result) {
   document.getElementById("metricTn").textContent = `${result.effTn[last].toFixed(1)} g/m3`;
   document.getElementById("metricTss").textContent = `${result.effTss[last].toFixed(1)} g/m3`;
   const sourceText = result.mode === "csv" ? `历史数据 ${result.sourceName}` : "手动参数";
+  const warningText = result.warnings?.length ? `，含 ${result.warnings.length} 条校验提示` : "";
   document.getElementById("resultSummary").textContent =
-    `已完成 ${sourceText} 仿真。可点击任一单体并在下拉框选择 WEST 风格指标查看过程浓度。`;
+    `已完成 ${sourceText} 仿真${warningText}。可点击任一单体并在下拉框选择 WEST 风格指标查看过程浓度。`;
+  renderWarnings(result);
 }
 
 document.querySelectorAll(".tab").forEach((tab) => {
@@ -1473,6 +1609,24 @@ unitMetricSelect.addEventListener("change", () => {
   selectedMetric = unitMetricSelect.value;
   setActiveChart("unit");
   if (lastResult) drawChart(lastResult, activeChart);
+});
+
+exportResultsCsv.addEventListener("click", exportResultCsv);
+exportBoundariesCsv.addEventListener("click", exportBoundaryCsv);
+exportUnitsCsv.addEventListener("click", exportUnitCsv);
+exportConfigJson.addEventListener("click", exportConfig);
+
+importConfigJson.addEventListener("change", async () => {
+  const file = importConfigJson.files?.[0];
+  if (!file) return;
+  try {
+    const config = JSON.parse(await file.text());
+    applyImportedConfig(config);
+  } catch (error) {
+    updateCsvStatus(`配置导入失败：${error.message}`, true);
+  } finally {
+    importConfigJson.value = "";
+  }
 });
 
 resultChart.addEventListener("mousemove", updateChartTooltip);

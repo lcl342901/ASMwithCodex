@@ -23,6 +23,9 @@ It is intended as a learning and experimentation platform for ASM1-based process
 - CSV historical data upload and replay.
 - Interactive charts with hover tooltips.
 - Unit-level process curves after clicking a process unit.
+- Backend parameter/model validation with returned warnings.
+- CSV export for effluent/process results, boundary inputs, and unit-level series.
+- JSON export/import for simulation configuration.
 
 ## Files
 
@@ -139,8 +142,21 @@ The response is compatible with the frontend `lastResult` structure, including:
 time, effCod, effNh4, effNo3, effTn, effTss,
 anaerobicNo3, anoxicNo3, aerobicNo3,
 aerobicDo, aerobicMlss, rasMlss,
-boundaries, units, clarifier, mode, sourceName
+boundaries, units, clarifier, mode, sourceName,
+warnings, validation
 ```
+
+Invalid parameters return `400` with a clear message. Suspicious but runnable settings, such as very high clarifier overflow or a requested solver step above the internal cap, return as `warnings` in the normal response.
+
+## Export And Configuration
+
+The results toolbar supports:
+
+- Export result CSV: effluent, nitrogen, solids, and key operating series.
+- Export boundary CSV: all boundary curves used for the run.
+- Export unit CSV: all WEST-style unit metrics for all process units.
+- Export configuration JSON: current parameters plus optional uploaded CSV text.
+- Import configuration JSON: restores parameters and any saved CSV boundary data.
 
 ## CSV Input
 

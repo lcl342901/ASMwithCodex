@@ -101,7 +101,18 @@
             <span>指标</span>
             <select id="unitMetricSelect"></select>
           </label>
+          <div class="export-actions" aria-label="结果导出">
+            <button id="exportResultsCsv" class="secondary-button" type="button">导出结果 CSV</button>
+            <button id="exportBoundariesCsv" class="secondary-button" type="button">导出边界 CSV</button>
+            <button id="exportUnitsCsv" class="secondary-button" type="button">导出单体 CSV</button>
+            <button id="exportConfigJson" class="secondary-button" type="button">导出配置 JSON</button>
+            <label class="import-config">
+              <span>导入配置</span>
+              <input id="importConfigJson" type="file" accept=".json,application/json" />
+            </label>
+          </div>
         </div>
+        <div id="warningPanel" class="warning-panel" hidden></div>
         <div class="chart-wrap">
           <canvas id="resultChart" width="1200" height="420"></canvas>
           <div id="chartTooltip" class="chart-tooltip" hidden></div>

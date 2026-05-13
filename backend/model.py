@@ -60,6 +60,59 @@ DEFAULT_PARAMS: dict[str, float] = {
     "maxLayerTss": 30000,
 }
 
+PARAM_LIMITS: dict[str, tuple[float, float]] = {
+    "influentQ": (1, 200000),
+    "influentCod": (0, 3000),
+    "influentNh4": (0, 300),
+    "influentNo3": (0, 200),
+    "influentTss": (0, 3000),
+    "solubleCodFraction": (1, 99),
+    "inertSolubleFraction": (0, 95),
+    "inertParticulateFraction": (0, 95),
+    "influentXbh": (0, 2000),
+    "influentXba": (0, 500),
+    "influentOrganicNFactor": (0, 2),
+    "influentAlkalinity": (0, 60),
+    "anaerobicVolume": (1, 200000),
+    "anoxicVolume": (1, 200000),
+    "aerobicVolume": (1, 300000),
+    "clarifierArea": (1, 100000),
+    "rasRatio": (0, 10),
+    "internalRecycleRatio": (0, 20),
+    "wasQ": (0, 20000),
+    "aerobicDo": (0, 10),
+    "simulationDays": (0.01, 3650),
+    "timeStepHours": (0.001, 24),
+    "outputIntervalHours": (0.001, 168),
+    "muH": (0.001, 50),
+    "muA": (0.001, 20),
+    "bH": (0, 10),
+    "bA": (0, 10),
+    "kH": (0, 100),
+    "kA": (0, 5),
+    "kS": (0.001, 1000),
+    "kX": (0.000001, 10),
+    "kOH": (0.000001, 20),
+    "kOA": (0.000001, 20),
+    "kNO": (0.000001, 20),
+    "kNH": (0.000001, 50),
+    "yH": (0.001, 2),
+    "yA": (0.001, 2),
+    "etaG": (0, 1),
+    "etaH": (0, 1),
+    "fp": (0, 1),
+    "temp": (0, 45),
+    "clarifierHeight": (0.1, 20),
+    "clarifierLayers": (4, 20),
+    "clarifierFeedLayer": (1, 20),
+    "captureEfficiency": (50, 99.99),
+    "takacsRH": (0.000001, 0.1),
+    "takacsRP": (0.000001, 0.1),
+    "takacsV0": (0.001, 5000),
+    "takacsV0Max": (0.001, 5000),
+    "maxLayerTss": (100, 200000),
+}
+
 C = {
     "S_I": 0,
     "S_S": 1,
@@ -802,9 +855,108 @@ def sanitize_params(params: dict[str, Any] | None) -> dict[str, float]:
     return merged
 
 
+def validate_params(params: dict[str, float]) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    for key, value in params.items():
+        if not math.isfinite(value):
+            errors.append(f"{key} 必须是有限数值。")
+            continue
+        limits = PARAM_LIMITS.get(key)
+        if not limits:
+            continue
+        minimum, maximum = limits
+        if value < minimum or value > maximum:
+            errors.append(f"{key}={value:g} 超出允许范围 [{minimum:g}, {maximum:g}]。")
+
+    if params["clarifierFeedLayer"] > params["clarifierLayers"]:
+        errors.append("clarifierFeedLayer 不能大于 clarifierLayers。")
+
+    total_volume = params["anaerobicVolume"] + params["anoxicVolume"] + params["aerobicVolume"]
+    hrt_hours = total_volume / max(params["influentQ"], 1e-9) * 24
+    if hrt_hours < 2:
+        warnings.append(f"总反应池 HRT 偏低 ({hrt_hours:.2f} h)，水力停留时间可能不合理。")
+    if hrt_hours > 72:
+        warnings.append(f"总反应池 HRT 偏高 ({hrt_hours:.1f} h)，请检查池容和进水流量。")
+
+    surface_overflow = params["influentQ"] * (1 + params["rasRatio"]) / max(params["clarifierArea"], 1e-9)
+    if surface_overflow > 50:
+        warnings.append(f"二沉池表面负荷偏高 ({surface_overflow:.1f} m/d)，固液分离结果可能不可靠。")
+
+    requested_step = params["timeStepHours"] / 24
+    if requested_step > 0.0025:
+        warnings.append("设定计算步长大于内部求解器上限，后端会使用 0.0025 d 作为内部步长。")
+    if params["outputIntervalHours"] < params["timeStepHours"]:
+        warnings.append("结果输出间隔短于设定计算步长，输出会跟随内部求解器步长。")
+    if params["wasQ"] > params["influentQ"] * 0.8:
+        warnings.append("WAS 排泥量超过进水量的 80%，计算中会被内部截断。")
+    if params["takacsV0Max"] < params["takacsV0"]:
+        warnings.append("takacsV0Max 小于 takacsV0，沉降速度会被 takacsV0Max 限制。")
+
+    return errors, warnings
+
+
+def validate_csv_records(records: list[dict[str, Any]], params: dict[str, float]) -> list[str]:
+    warnings: list[str] = []
+    if not records:
+        warnings.append("已提供 CSV 文本，但没有找到有效记录。")
+        return warnings
+    if len(records) == 1:
+        warnings.append("CSV 只有一行有效记录，该边界条件会保持到仿真结束。")
+    if records[0]["time"] > 0:
+        warnings.append(f"CSV 第一条时间为 {records[0]['time']:.2f} d，在此之前会使用第一条边界条件。")
+    if records[-1]["time"] < params["simulationDays"]:
+        warnings.append(f"CSV 数据到 {records[-1]['time']:.2f} d 结束，最后一条边界条件会保持到 {params['simulationDays']:.2f} d。")
+
+    empty_value_rows = sum(1 for record in records if not record["values"])
+    if empty_value_rows:
+        warnings.append(f"CSV 有 {empty_value_rows} 行没有识别到可用边界字段。")
+
+    duplicate_times = sum(1 for index in range(1, len(records)) if records[index]["time"] == records[index - 1]["time"])
+    if duplicate_times:
+        warnings.append(f"CSV 有 {duplicate_times} 行重复时间戳，插值时可能优先使用较早记录。")
+
+    return warnings
+
+
+def find_non_finite(value: Any, path: str = "result") -> str | None:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            found = find_non_finite(child, f"{path}.{key}")
+            if found:
+                return found
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            found = find_non_finite(child, f"{path}[{index}]")
+            if found:
+                return found
+    elif isinstance(value, (int, float)) and not math.isfinite(value):
+        return path
+    return None
+
+
+def attach_validation(result: dict[str, Any], warnings: list[str]) -> dict[str, Any]:
+    found = find_non_finite(result)
+    if found:
+        raise ValueError(f"仿真结果在 {found} 出现非有限数值。")
+    result["warnings"] = warnings
+    result["validation"] = {
+        "ok": True,
+        "warningCount": len(warnings),
+        "warnings": warnings,
+    }
+    return result
+
+
 def simulate(params: dict[str, Any] | None = None, csv_text: str = "", csv_file_name: str = "") -> dict[str, Any]:
-    ctx = SimulationContext(params=sanitize_params(params), source_name=csv_file_name or "", mode="csv" if csv_text.strip() else "manual")
+    clean_params = sanitize_params(params)
+    errors, warnings = validate_params(clean_params)
+    if errors:
+        raise ValueError("; ".join(errors))
+
+    ctx = SimulationContext(params=clean_params, source_name=csv_file_name or "", mode="csv" if csv_text.strip() else "manual")
     if csv_text.strip():
         records = normalize_csv_records(csv_text, ctx)
-        return ctx.run_historical_simulation(records)
-    return ctx.run_asm1_simulation()
+        warnings.extend(validate_csv_records(records, clean_params))
+        return attach_validation(ctx.run_historical_simulation(records), warnings)
+    return attach_validation(ctx.run_asm1_simulation(), warnings)

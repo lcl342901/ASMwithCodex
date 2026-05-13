@@ -483,6 +483,63 @@ h2 {
   font: inherit;
 }
 
+.export-actions {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.export-actions .secondary-button,
+.import-config {
+  height: 32px;
+  font-size: 12px;
+}
+
+.import-config {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.import-config input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.warning-panel {
+  margin: 4px 18px 8px;
+  padding: 10px 12px;
+  border: 1px solid #e7c98e;
+  border-radius: 8px;
+  background: #fff8e8;
+  color: #745015;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.warning-panel strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #5d3e0f;
+}
+
+.warning-panel ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
 .chart-wrap {
   position: relative;
   width: calc(100% - 36px);

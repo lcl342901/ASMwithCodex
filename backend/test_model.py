@@ -23,6 +23,8 @@ REQUIRED_KEYS = {
     "clarifier",
     "mode",
     "sourceName",
+    "warnings",
+    "validation",
 }
 
 
@@ -45,6 +47,7 @@ class ModelTest(unittest.TestCase):
         self.assertTrue(REQUIRED_KEYS.issubset(result.keys()))
         self.assertEqual(result["mode"], "manual")
         self.assertGreater(len(result["time"]), 1)
+        self.assertIn("warningCount", result["validation"])
         assert_finite_tree(self, result)
 
     def test_csv_simulation_uses_requested_simulation_horizon(self):
@@ -56,6 +59,7 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(result["mode"], "csv")
         self.assertEqual(result["sourceName"], "sample-data.csv")
         self.assertAlmostEqual(result["time"][-1], 50, places=4)
+        self.assertTrue(any("CSV 数据到" in warning for warning in result["warnings"]))
 
     def test_csv_holds_last_boundary_after_range(self):
         ctx = SimulationContext(params={**DEFAULT_PARAMS, "timeStepHours": 1})
@@ -66,6 +70,20 @@ class ModelTest(unittest.TestCase):
 
         self.assertEqual(values["influentQ"], 200)
         self.assertEqual(values["influentCod"], 500)
+
+    def test_invalid_parameter_raises_clear_error(self):
+        params = {**DEFAULT_PARAMS, "influentQ": 0}
+
+        with self.assertRaisesRegex(ValueError, "influentQ"):
+            simulate(params=params)
+
+    def test_unusual_but_runnable_parameter_returns_warning(self):
+        params = {**DEFAULT_PARAMS, "simulationDays": 1, "timeStepHours": 2}
+
+        result = simulate(params=params)
+
+        self.assertGreater(result["validation"]["warningCount"], 0)
+        self.assertTrue(any("内部求解器上限" in warning for warning in result["warnings"]))
 
 
 if __name__ == "__main__":
