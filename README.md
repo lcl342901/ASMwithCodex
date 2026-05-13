@@ -55,6 +55,56 @@ http://127.0.0.1:8000/api/simulate
 
 The page still contains the original JavaScript model as a reference path, but the `Run Simulation` button now uses the Python/FastAPI backend.
 
+## Persistent Backend Service
+
+On this Mac, the backend can also run as a user-level `launchd` service. This keeps the API running after the terminal window is closed and starts it again after login.
+
+The service runtime copy is located at:
+
+```text
+/Users/chenglin/aao-simulator-service
+```
+
+The tracked LaunchAgent template is:
+
+```text
+deploy/com.asmwithcodex.backend.plist
+```
+
+Installed plist location:
+
+```text
+/Users/chenglin/Library/LaunchAgents/com.asmwithcodex.backend.plist
+```
+
+Useful commands:
+
+```bash
+# Start or restart
+launchctl kickstart -k gui/501/com.asmwithcodex.backend
+
+# Stop and unload
+launchctl bootout gui/501/com.asmwithcodex.backend
+
+# Load again after unloading
+launchctl bootstrap gui/501 /Users/chenglin/Library/LaunchAgents/com.asmwithcodex.backend.plist
+
+# Inspect status
+launchctl print gui/501/com.asmwithcodex.backend
+
+# Check API health
+curl http://127.0.0.1:8000/api/health
+```
+
+Logs:
+
+```text
+/private/tmp/aao-fastapi.log
+/private/tmp/aao-fastapi.err.log
+```
+
+If backend code changes in the project directory, copy the updated `backend/` directory into `/Users/chenglin/aao-simulator-service/` and restart the service.
+
 ## API
 
 ### `POST /api/simulate`
