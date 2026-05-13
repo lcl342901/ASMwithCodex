@@ -1,15 +1,29 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 import json
+import math
+import random
 import sqlite3
 from pathlib import Path
 from typing import Any
 
-from .model import SimulationContext, sanitize_params, validate_params
+from .model import DEFAULT_PARAMS, SimulationContext, sanitize_params, validate_params
 
 
 DB_PATH = Path(__file__).resolve().parent / "realtime.db"
+MOCK_INTERVAL_SECONDS = 300
+MOCK_STEP_HOURS = 5 / 60
+MOCK_TASK: asyncio.Task | None = None
+MOCK_STATUS: dict[str, Any] = {
+    "running": False,
+    "intervalSeconds": MOCK_INTERVAL_SECONDS,
+    "lastRunAt": None,
+    "lastResultId": None,
+    "lastError": None,
+    "runCount": 0,
+}
 BOUNDARY_ALIASES = {
     "Q": "influentQ",
     "q": "influentQ",
@@ -219,6 +233,97 @@ def realtime_step(
     save_state(input_record["timestamp"], ctx.params, stepped["state"], input_record["id"])
     result_id = insert_result(input_record["timestamp"], input_record["id"], step, result, warnings)
     return {"resultId": result_id, "input": input_record, "result": result, "state": load_state()}
+
+
+def mock_base_params() -> dict[str, float]:
+    saved = load_state()
+    if saved and saved.get("params"):
+        return sanitize_params(saved["params"])
+    return DEFAULT_PARAMS.copy()
+
+
+def generate_mock_values(run_count: int | None = None) -> dict[str, float]:
+    params = mock_base_params()
+    index = MOCK_STATUS["runCount"] if run_count is None else run_count
+    phase = (index % 288) / 288 * math.tau
+
+    def vary(base: float, amplitude: float, noise: float, floor: float = 0.0) -> float:
+        periodic = 1 + amplitude * math.sin(phase)
+        jitter = 1 + random.uniform(-noise, noise)
+        return max(floor, base * periodic * jitter)
+
+    return {
+        "Q": vary(params["influentQ"], 0.08, 0.02, 1),
+        "COD": vary(params["influentCod"], 0.12, 0.04),
+        "NH4": vary(params["influentNh4"], 0.1, 0.03),
+        "NO3": vary(params["influentNo3"], 0.08, 0.02),
+        "TSS": vary(params["influentTss"], 0.15, 0.05),
+        "DO": max(0.2, min(5.0, params["aerobicDo"] + 0.25 * math.sin(phase + math.pi / 4) + random.uniform(-0.08, 0.08))),
+    }
+
+
+def run_mock_once() -> dict[str, Any]:
+    values = generate_mock_values()
+    result = realtime_step(
+        timestamp=now_iso(),
+        values=values,
+        quality={"source": "mock"},
+        step_hours=MOCK_STEP_HOURS,
+    )
+    MOCK_STATUS["lastRunAt"] = now_iso()
+    MOCK_STATUS["lastResultId"] = result["resultId"]
+    MOCK_STATUS["lastError"] = None
+    MOCK_STATUS["runCount"] += 1
+    return result
+
+
+async def mock_loop() -> None:
+    try:
+        while True:
+            await asyncio.sleep(MOCK_STATUS["intervalSeconds"])
+            try:
+                run_mock_once()
+            except Exception as exc:  # pragma: no cover - defensive background guard
+                MOCK_STATUS["lastError"] = str(exc)
+    except asyncio.CancelledError:
+        raise
+
+
+async def start_mock(interval_seconds: int = MOCK_INTERVAL_SECONDS) -> dict[str, Any]:
+    global MOCK_TASK
+    if interval_seconds <= 0:
+        raise ValueError("interval_seconds must be positive.")
+    MOCK_STATUS["intervalSeconds"] = interval_seconds
+    if MOCK_TASK and not MOCK_TASK.done():
+        MOCK_STATUS["running"] = True
+        return mock_status()
+    MOCK_STATUS["running"] = True
+    MOCK_STATUS["lastError"] = None
+    try:
+        run_mock_once()
+    except Exception as exc:
+        MOCK_STATUS["lastError"] = str(exc)
+    MOCK_TASK = asyncio.create_task(mock_loop())
+    return mock_status()
+
+
+async def stop_mock() -> dict[str, Any]:
+    global MOCK_TASK
+    if MOCK_TASK and not MOCK_TASK.done():
+        MOCK_TASK.cancel()
+        try:
+            await MOCK_TASK
+        except asyncio.CancelledError:
+            pass
+    MOCK_TASK = None
+    MOCK_STATUS["running"] = False
+    return mock_status()
+
+
+def mock_status() -> dict[str, Any]:
+    running = bool(MOCK_TASK and not MOCK_TASK.done())
+    MOCK_STATUS["running"] = running
+    return dict(MOCK_STATUS)
 
 
 def latest() -> dict[str, Any]:

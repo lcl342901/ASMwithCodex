@@ -164,6 +164,9 @@ POST /api/realtime/ingest
 POST /api/realtime/step
 GET  /api/realtime/latest
 POST /api/realtime/reset
+POST /api/realtime/mock/start
+POST /api/realtime/mock/stop
+GET  /api/realtime/mock/status
 ```
 
 Example realtime step:
@@ -185,6 +188,16 @@ curl -X POST http://127.0.0.1:8000/api/realtime/step \
 ```
 
 This MVP uses the current dynamic ASM1 engine and continues from the saved model state on each step. It is intended as a first online/digital-twin prototype, not yet a production historian or SCADA connector.
+
+Mock realtime mode can generate development data every 5 minutes:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/realtime/mock/start
+curl http://127.0.0.1:8000/api/realtime/mock/status
+curl -X POST http://127.0.0.1:8000/api/realtime/mock/stop
+```
+
+Mock data uses the current saved/default model parameters and generates `Q`, `COD`, `NH4`, `NO3`, `TSS`, and `DO` with small periodic variation plus noise. Each mock tick advances the dynamic model by 5 minutes.
 
 ## Export And Configuration
 

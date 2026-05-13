@@ -1,4 +1,5 @@
 import math
+import asyncio
 import unittest
 from pathlib import Path
 
@@ -47,6 +48,10 @@ class ModelTest(unittest.TestCase):
             realtime.DB_PATH.unlink()
 
     def tearDown(self):
+        try:
+            asyncio.run(realtime.stop_mock())
+        except RuntimeError:
+            pass
         if realtime.DB_PATH.exists():
             realtime.DB_PATH.unlink()
 
@@ -104,6 +109,12 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(latest["result"]["id"], step["resultId"])
         self.assertIn("effCod", latest["result"]["result"])
 
+    def test_realtime_step_records_full_requested_step_hours(self):
+        realtime.realtime_step(values={"Q": 10000}, step_hours=5 / 60)
+        latest = realtime.latest()
+
+        self.assertAlmostEqual(latest["result"]["stepHours"], 5 / 60)
+
     def test_realtime_reset_clears_state(self):
         realtime.realtime_step(values={"Q": 10000}, step_hours=0.5)
         realtime.reset()
@@ -113,6 +124,29 @@ class ModelTest(unittest.TestCase):
         self.assertIsNone(latest["input"])
         self.assertIsNone(latest["state"])
         self.assertIsNone(latest["result"])
+
+    def test_mock_values_are_complete_and_finite(self):
+        values = realtime.generate_mock_values(run_count=0)
+
+        self.assertEqual(set(values.keys()), {"Q", "COD", "NH4", "NO3", "TSS", "DO"})
+        for value in values.values():
+            self.assertTrue(math.isfinite(value))
+
+    def test_mock_run_writes_input_result_and_state(self):
+        result = realtime.run_mock_once()
+        latest = realtime.latest()
+
+        self.assertEqual(result["resultId"], latest["result"]["id"])
+        self.assertEqual(latest["input"]["quality"]["source"], "mock")
+        self.assertIsNotNone(latest["state"])
+
+    def test_mock_start_stop_status(self):
+        status = asyncio.run(realtime.start_mock(interval_seconds=300))
+        self.assertTrue(status["running"])
+        self.assertEqual(status["intervalSeconds"], 300)
+
+        status = asyncio.run(realtime.stop_mock())
+        self.assertFalse(status["running"])
 
 
 if __name__ == "__main__":

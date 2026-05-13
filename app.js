@@ -16,10 +16,14 @@ const clearCsvData = document.getElementById("clearCsvData");
 const csvStatus = document.getElementById("csvStatus");
 const realtimeStatus = document.getElementById("realtimeStatus");
 const realtimeSummary = document.getElementById("realtimeSummary");
+const mockSummary = document.getElementById("mockSummary");
 const ingestRealtimeSample = document.getElementById("ingestRealtimeSample");
 const stepRealtime = document.getElementById("stepRealtime");
 const refreshRealtime = document.getElementById("refreshRealtime");
 const resetRealtime = document.getElementById("resetRealtime");
+const startMockRealtime = document.getElementById("startMockRealtime");
+const stopMockRealtime = document.getElementById("stopMockRealtime");
+const refreshMockRealtime = document.getElementById("refreshMockRealtime");
 const warningPanel = document.getElementById("warningPanel");
 const exportResultsCsv = document.getElementById("exportResultsCsv");
 const exportBoundariesCsv = document.getElementById("exportBoundariesCsv");
@@ -1203,6 +1207,21 @@ function renderRealtimeSummary(payload) {
   `;
 }
 
+function renderMockSummary(status) {
+  if (!status) {
+    mockSummary.innerHTML = "";
+    return;
+  }
+  mockSummary.innerHTML = `
+    <div><span>Mock 状态</span><strong>${status.running ? "运行中" : "已停止"}</strong></div>
+    <div><span>间隔</span><strong>${status.intervalSeconds || 300} s</strong></div>
+    <div><span>最近运行</span><strong>${status.lastRunAt || "--"}</strong></div>
+    <div><span>最近结果</span><strong>${status.lastResultId ?? "--"}</strong></div>
+    <div><span>运行次数</span><strong>${status.runCount ?? 0}</strong></div>
+    <div><span>最近错误</span><strong>${status.lastError || "无"}</strong></div>
+  `;
+}
+
 async function ingestCurrentRealtimeBoundary() {
   const payload = await realtimeRequest("/ingest", {
     method: "POST",
@@ -1243,6 +1262,24 @@ async function resetRealtimeState() {
   await realtimeRequest("/reset", { method: "POST" });
   updateRealtimeStatus("已重置实时输入、状态和结果。");
   renderRealtimeSummary(null);
+}
+
+async function startRealtimeMock() {
+  const status = await realtimeRequest("/mock/start", { method: "POST" });
+  updateRealtimeStatus("Mock 实时数据已启动，每 5 分钟自动推进一次。");
+  renderMockSummary(status);
+}
+
+async function stopRealtimeMock() {
+  const status = await realtimeRequest("/mock/stop", { method: "POST" });
+  updateRealtimeStatus("Mock 实时数据已停止。");
+  renderMockSummary(status);
+}
+
+async function refreshRealtimeMockStatus() {
+  const status = await realtimeRequest("/mock/status");
+  renderMockSummary(status);
+  updateRealtimeStatus(status.running ? "Mock 正在运行。" : "Mock 未运行。");
 }
 
 function csvCell(value) {
@@ -1761,6 +1798,30 @@ resetRealtime.addEventListener("click", async () => {
     await resetRealtimeState();
   } catch (error) {
     updateRealtimeStatus(`重置实时状态失败：${error.message}`, true);
+  }
+});
+
+startMockRealtime.addEventListener("click", async () => {
+  try {
+    await startRealtimeMock();
+  } catch (error) {
+    updateRealtimeStatus(`启动 Mock 失败：${error.message}`, true);
+  }
+});
+
+stopMockRealtime.addEventListener("click", async () => {
+  try {
+    await stopRealtimeMock();
+  } catch (error) {
+    updateRealtimeStatus(`停止 Mock 失败：${error.message}`, true);
+  }
+});
+
+refreshMockRealtime.addEventListener("click", async () => {
+  try {
+    await refreshRealtimeMockStatus();
+  } catch (error) {
+    updateRealtimeStatus(`刷新 Mock 状态失败：${error.message}`, true);
   }
 });
 

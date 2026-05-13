@@ -684,9 +684,15 @@ class SimulationContext:
     def step_realtime_state(self, state: dict[str, Any], boundary_values: dict[str, float], step_hours: float) -> dict[str, Any]:
         self.params.update(boundary_values)
         self.sync_asm1_params()
-        dt = min(max(step_hours, 0.001) / 24, 0.0025)
+        total_dt = max(step_hours, 0.001) / 24
+        max_dt = 0.0025
         influent = self.influent_vector()
-        split = self.step_simulation_state(state, influent, dt)
+        elapsed = 0.0
+        split = None
+        while elapsed < total_dt:
+            dt = min(max_dt, total_dt - elapsed)
+            split = self.step_simulation_state(state, influent, dt)
+            elapsed += dt
         series = self.create_result_series()
         self.push_snapshot(series, 0, influent, state["anaerobic"], state["anoxic"], state["aerobic"], split, state["ras"], state["clarifierLayers"])
         return {
