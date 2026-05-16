@@ -10,12 +10,14 @@ class SimulationRequest(BaseModel):
 
 
 class RealtimeIngestRequest(BaseModel):
+    projectId: Optional[str] = "default"
     timestamp: Optional[str] = None
     values: dict[str, Any] = Field(default_factory=dict)
     quality: dict[str, Any] = Field(default_factory=dict)
 
 
 class RealtimeStepRequest(BaseModel):
+    projectId: Optional[str] = "default"
     timestamp: Optional[str] = None
     values: Optional[dict[str, Any]] = None
     quality: dict[str, Any] = Field(default_factory=dict)
@@ -36,6 +38,11 @@ class ProjectRequest(BaseModel):
 class ProjectUpdateRequest(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+
+
+class ProjectCsvRequest(BaseModel):
+    csvText: str = ""
+    csvFileName: str = ""
 
 
 class ModelCredibilityRequest(BaseModel):

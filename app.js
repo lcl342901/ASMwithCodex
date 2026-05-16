@@ -38,6 +38,8 @@ const exportMenu = document.getElementById("exportMenu");
 const saveParams = document.getElementById("saveParams");
 const resetParams = document.getElementById("resetParams");
 const paramStorageStatus = document.getElementById("paramStorageStatus");
+const projectSelect = document.getElementById("projectSelect");
+const newProject = document.getElementById("newProject");
 const refreshLogs = document.getElementById("refreshLogs");
 const clearLogs = document.getElementById("clearLogs");
 const logStatus = document.getElementById("logStatus");
@@ -45,6 +47,7 @@ const logList = document.getElementById("logList");
 const SIMULATION_API_URL = "http://127.0.0.1:8000/api/simulate";
 const REALTIME_API_URL = "http://127.0.0.1:8000/api/realtime";
 const PARAM_CONFIG_API_URL = "http://127.0.0.1:8000/api/config/params";
+const PROJECT_API_URL = "http://127.0.0.1:8000/api/projects";
 const LOG_API_URL = "http://127.0.0.1:8000/api/logs";
 const MAX_SOLVER_STEP_DAYS = 0.0005;
 const EPSILON_DAYS = 1e-12;
@@ -213,6 +216,8 @@ let csvFileName = "";
 let csvText = "";
 let progressTimer = null;
 let progressValue = 0;
+let projects = [];
+let activeProjectId = "default";
 const hiddenDatasets = new Set();
 
 const C = {
@@ -440,26 +445,100 @@ async function paramConfigRequest(path = "", options = {}) {
   return payload;
 }
 
+async function projectRequest(path = "", options = {}) {
+  const response = await fetch(`${PROJECT_API_URL}${path}`, options);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.detail || response.statusText || "项目请求失败。");
+  }
+  return payload;
+}
+
+function renderProjectOptions() {
+  projectSelect.innerHTML = projects
+    .map((project) => `<option value="${project.id}"${project.id === activeProjectId ? " selected" : ""}>${escapeHtml(project.name)}</option>`)
+    .join("");
+  projectSelect.disabled = projects.length === 0;
+}
+
+async function loadProjects() {
+  const payload = await projectRequest();
+  projects = payload.projects || [];
+  if (!projects.some((project) => project.id === activeProjectId)) {
+    activeProjectId = projects[0]?.id || "default";
+  }
+  renderProjectOptions();
+}
+
+async function loadProjectParams(projectId = activeProjectId) {
+  const payload = await projectRequest(`/${encodeURIComponent(projectId)}/params`);
+  activeProjectId = payload.project?.id || projectId;
+  applyParamValues(payload.params || defaultParams);
+  renderProjectOptions();
+  updateParamStorageStatus(`${payload.project?.name || "当前项目"}：${payload.source === "database" ? "已加载项目参数" : "使用默认参数"}`);
+}
+
+async function loadProjectCsv(projectId = activeProjectId) {
+  try {
+    const payload = await projectRequest(`/${encodeURIComponent(projectId)}/csv`);
+    csvText = payload.csvText || "";
+    csvFileName = payload.csvFileName || "";
+    csvFileInput.value = "";
+    if (csvText) {
+      csvRecords = normalizeCsvRecords(csvText);
+      updateCsvStatus(`${payload.project?.name || "当前项目"}：已加载 ${csvFileName || "CSV"}，${csvRecords.length} 条边界记录。`);
+    } else {
+      csvRecords = [];
+      updateCsvStatus(`${payload.project?.name || "当前项目"}：尚未保存 CSV 边界数据。`);
+    }
+  } catch (error) {
+    csvRecords = [];
+    csvText = "";
+    csvFileName = "";
+    updateCsvStatus(`项目 CSV 读取失败：${error.message}`, true);
+  }
+}
+
+async function saveProjectCsv() {
+  if (!csvText.trim()) return;
+  await projectRequest(`/${encodeURIComponent(activeProjectId)}/csv`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ csvText, csvFileName }),
+  });
+}
+
+async function clearProjectCsv() {
+  await projectRequest(`/${encodeURIComponent(activeProjectId)}/csv`, { method: "DELETE" });
+}
+
 async function loadSavedParams() {
   try {
-    const payload = await paramConfigRequest();
-    applyParamValues(payload.params || defaultParams);
-    updateParamStorageStatus(payload.source === "database" ? "已加载数据库参数" : "使用默认参数");
+    await loadProjects();
+    await loadProjectParams(activeProjectId);
+    await loadProjectCsv(activeProjectId);
   } catch (error) {
-    updateParamStorageStatus(`参数读取失败：${error.message}`, true);
+    try {
+      const payload = await paramConfigRequest();
+      applyParamValues(payload.params || defaultParams);
+      updateParamStorageStatus(payload.source === "database" ? "已加载全局数据库参数" : "使用默认参数");
+    } catch (fallbackError) {
+      updateParamStorageStatus(`参数读取失败：${fallbackError.message || error.message}`, true);
+    }
   }
 }
 
 async function saveCurrentParams() {
   try {
-    const payload = await paramConfigRequest("", {
+    const payload = await projectRequest(`/${encodeURIComponent(activeProjectId)}/params`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ params }),
     });
     applyParamValues(payload.params || params);
+    await loadProjects();
     renderForm();
-    updateParamStorageStatus(`已保存 ${new Date().toLocaleTimeString()}`);
+    updateParamStorageStatus(`${payload.project?.name || "当前项目"}：已保存 ${new Date().toLocaleTimeString()}`);
   } catch (error) {
     updateParamStorageStatus(`保存失败：${error.message}`, true);
   }
@@ -467,12 +546,32 @@ async function saveCurrentParams() {
 
 async function resetToDefaultParams() {
   try {
-    const payload = await paramConfigRequest("", { method: "DELETE" });
+    const payload = await projectRequest(`/${encodeURIComponent(activeProjectId)}/params`, { method: "DELETE" });
     applyParamValues(payload.params || defaultParams);
     renderForm();
-    updateParamStorageStatus("已重置为默认参数");
+    updateParamStorageStatus(`${payload.project?.name || "当前项目"}：已重置为默认参数`);
   } catch (error) {
     updateParamStorageStatus(`重置失败：${error.message}`, true);
+  }
+}
+
+async function createNewProject() {
+  const name = window.prompt("项目名称", `AAO 项目 ${projects.length + 1}`);
+  if (!name || !name.trim()) return;
+  try {
+    const project = await projectRequest("", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim(), description: "" }),
+    });
+    activeProjectId = project.id;
+    await loadProjects();
+    await loadProjectParams(activeProjectId);
+    await loadProjectCsv(activeProjectId);
+    renderForm();
+    updateParamStorageStatus(`${project.name}：已创建并切换`);
+  } catch (error) {
+    updateParamStorageStatus(`新建项目失败：${error.message}`, true);
   }
 }
 
@@ -483,6 +582,11 @@ async function logRequest(path = "", options = {}) {
     throw new Error(payload.detail || response.statusText || "日志请求失败。");
   }
   return payload;
+}
+
+function withProjectQuery(path = "") {
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}projectId=${encodeURIComponent(activeProjectId)}`;
 }
 
 function renderLogs(logs) {
@@ -511,7 +615,7 @@ function renderLogs(logs) {
 
 async function refreshCalculationLogs() {
   try {
-    const payload = await logRequest("?limit=100");
+    const payload = await logRequest(withProjectQuery("?limit=100"));
     renderLogs(payload.logs || []);
     updateLogStatus(`已加载 ${payload.logs?.length || 0} 条日志。`);
   } catch (error) {
@@ -521,7 +625,7 @@ async function refreshCalculationLogs() {
 
 async function clearCalculationLogs() {
   try {
-    const payload = await logRequest("", { method: "DELETE" });
+    const payload = await logRequest(withProjectQuery(""), { method: "DELETE" });
     renderLogs([]);
     updateLogStatus(`已清空 ${payload.deleted || 0} 条日志。`);
   } catch (error) {
@@ -1517,7 +1621,7 @@ async function ingestCurrentRealtimeBoundary() {
   const payload = await realtimeRequest("/ingest", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ timestamp: new Date().toISOString(), values: realtimeBoundaryValues() }),
+    body: JSON.stringify({ projectId: activeProjectId, timestamp: new Date().toISOString(), values: realtimeBoundaryValues() }),
   });
   updateRealtimeStatus(`已推送实时边界输入 #${payload.id}。`);
   await refreshRealtimeLatest();
@@ -1528,6 +1632,7 @@ async function stepRealtimeModel() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      projectId: activeProjectId,
       timestamp: new Date().toISOString(),
       values: realtimeBoundaryValues(),
       params,
@@ -1539,7 +1644,7 @@ async function stepRealtimeModel() {
 }
 
 async function refreshRealtimeLatest() {
-  const payload = await realtimeRequest("/latest");
+  const payload = await realtimeRequest(withProjectQuery("/latest"));
   if (!payload.result) {
     updateRealtimeStatus("暂无实时计算结果。");
     renderRealtimeSummary(payload);
@@ -1550,7 +1655,7 @@ async function refreshRealtimeLatest() {
 }
 
 async function resetRealtimeState() {
-  await realtimeRequest("/reset", { method: "POST" });
+  await realtimeRequest(withProjectQuery("/reset"), { method: "POST" });
   updateRealtimeStatus("已重置实时输入、状态和结果。");
   renderRealtimeSummary(null);
 }
@@ -2071,6 +2176,18 @@ saveParams.addEventListener("click", async () => {
 resetParams.addEventListener("click", async () => {
   await resetToDefaultParams();
 });
+projectSelect.addEventListener("change", async () => {
+  activeProjectId = projectSelect.value || "default";
+  await loadProjectParams(activeProjectId);
+  await loadProjectCsv(activeProjectId);
+  renderForm();
+  showDefaultBoundaryPreview();
+  if (activePanel === "realtime") await refreshRealtimeLatest();
+  if (activePanel === "logs") await refreshCalculationLogs();
+});
+newProject.addEventListener("click", async () => {
+  await createNewProject();
+});
 refreshLogs.addEventListener("click", async () => {
   await refreshCalculationLogs();
 });
@@ -2185,9 +2302,10 @@ csvFileInput.addEventListener("change", async () => {
     csvRecords = records;
     csvFileName = file.name;
     csvText = text;
+    await saveProjectCsv();
     const start = records[0].time.toFixed(2);
     const end = records[records.length - 1].time.toFixed(2);
-    updateCsvStatus(`已加载 ${file.name}：${records.length} 条记录，数据范围 ${start} - ${end} d。仿真会按“运行”页的仿真天数和计算步长推进，超出数据范围后保持最后一条边界条件。`);
+    updateCsvStatus(`已加载并保存到当前项目 ${file.name}：${records.length} 条记录，数据范围 ${start} - ${end} d。仿真会按“运行”页的仿真天数和计算步长推进，超出数据范围后保持最后一条边界条件。`);
   } catch (error) {
     csvRecords = [];
     csvFileName = "";
@@ -2196,12 +2314,17 @@ csvFileInput.addEventListener("change", async () => {
   }
 });
 
-clearCsvData.addEventListener("click", () => {
+clearCsvData.addEventListener("click", async () => {
   csvRecords = [];
   csvFileName = "";
   csvText = "";
   csvFileInput.value = "";
-  updateCsvStatus("已清除历史数据。再次运行将使用手动参数。");
+  try {
+    await clearProjectCsv();
+    updateCsvStatus("已清除当前项目历史数据。再次运行将使用手动参数。");
+  } catch (error) {
+    updateCsvStatus(`已清除本地历史数据，但项目 CSV 删除失败：${error.message}`, true);
+  }
 });
 
 document.getElementById("runSimulation").addEventListener("click", async () => {

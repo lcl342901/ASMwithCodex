@@ -32,6 +32,14 @@ def init_platform_db() -> None:
               updated_at TEXT NOT NULL,
               FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
             );
+
+            CREATE TABLE IF NOT EXISTS project_csv_inputs (
+              project_id TEXT PRIMARY KEY,
+              file_name TEXT NOT NULL,
+              csv_text TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
+            );
             """
         )
 
@@ -73,6 +81,8 @@ def list_projects() -> dict[str, Any]:
 
 def get_project(project_id: str) -> dict[str, Any]:
     init_platform_db()
+    if project_id == DEFAULT_PROJECT_ID:
+        ensure_default_project()
     with realtime.connect() as conn:
         row = conn.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
     if not row:
@@ -121,8 +131,11 @@ def delete_project(project_id: str) -> dict[str, Any]:
     if project_id == DEFAULT_PROJECT_ID:
         raise ValueError("默认项目不能删除。")
     get_project(project_id)
+    realtime.reset(project_id)
+    realtime.clear_calculation_logs(project_id)
     with realtime.connect() as conn:
         conn.execute("DELETE FROM project_param_configs WHERE project_id = ?", (project_id,))
+        conn.execute("DELETE FROM project_csv_inputs WHERE project_id = ?", (project_id,))
         cursor = conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
     return {"status": "deleted", "projectId": project_id, "deleted": cursor.rowcount}
 
@@ -181,3 +194,54 @@ def reset_project_params(project_id: str) -> dict[str, Any]:
         "updatedAt": None,
         "source": "default",
     }
+
+
+def get_project_csv(project_id: str) -> dict[str, Any]:
+    project = get_project(project_id)
+    with realtime.connect() as conn:
+        row = conn.execute("SELECT * FROM project_csv_inputs WHERE project_id = ?", (project_id,)).fetchone()
+    if not row:
+        return {"project": project, "csvText": "", "csvFileName": "", "updatedAt": None, "source": "none"}
+    return {
+        "project": project,
+        "csvText": row["csv_text"],
+        "csvFileName": row["file_name"],
+        "updatedAt": row["updated_at"],
+        "source": "database",
+    }
+
+
+def save_project_csv(project_id: str, csv_text: str, csv_file_name: str = "") -> dict[str, Any]:
+    project = get_project(project_id)
+    if not csv_text.strip():
+        raise ValueError("CSV 文本不能为空。")
+    timestamp = realtime.now_iso()
+    with realtime.connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO project_csv_inputs (project_id, file_name, csv_text, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(project_id) DO UPDATE SET
+              file_name = excluded.file_name,
+              csv_text = excluded.csv_text,
+              updated_at = excluded.updated_at
+            """,
+            (project_id, csv_file_name or "boundary-data.csv", csv_text, timestamp),
+        )
+        conn.execute("UPDATE projects SET updated_at = ? WHERE id = ?", (timestamp, project_id))
+    return {
+        "project": {**project, "updatedAt": timestamp},
+        "csvText": csv_text,
+        "csvFileName": csv_file_name or "boundary-data.csv",
+        "updatedAt": timestamp,
+        "source": "database",
+    }
+
+
+def clear_project_csv(project_id: str) -> dict[str, Any]:
+    project = get_project(project_id)
+    timestamp = realtime.now_iso()
+    with realtime.connect() as conn:
+        cursor = conn.execute("DELETE FROM project_csv_inputs WHERE project_id = ?", (project_id,))
+        conn.execute("UPDATE projects SET updated_at = ? WHERE id = ?", (timestamp, project_id))
+    return {"project": {**project, "updatedAt": timestamp}, "status": "cleared", "deleted": cursor.rowcount}

@@ -6,9 +6,9 @@ from pathlib import Path
 
 from backend.engine_compare import compare_engines
 from backend.engine_runner import normalize_engine_version, simulate_with_engine
-from backend.main import calibration_bsm1_mapping_endpoint, calibration_optimize_endpoint, calibration_preview_endpoint, create_project_endpoint, default_project_endpoint, get_project_params_endpoint, create_simulation_job_endpoint, get_simulation_job_endpoint, get_simulation_job_result_endpoint, list_projects_endpoint, model_credibility_endpoint, model_initial_conditions_endpoint, model_metadata_endpoint, model_reference_case_compare_endpoint, model_reference_case_endpoint, model_reference_cases_endpoint, realtime_sources_endpoint, realtime_status_endpoint, reset_project_params_endpoint, save_project_params_endpoint, simulate_endpoint
+from backend.main import calibration_bsm1_mapping_endpoint, calibration_optimize_endpoint, calibration_preview_endpoint, clear_project_csv_endpoint, create_project_endpoint, default_project_endpoint, get_project_csv_endpoint, get_project_params_endpoint, create_simulation_job_endpoint, get_simulation_job_endpoint, get_simulation_job_result_endpoint, list_projects_endpoint, model_credibility_endpoint, model_initial_conditions_endpoint, model_metadata_endpoint, model_reference_case_compare_endpoint, model_reference_case_endpoint, model_reference_cases_endpoint, realtime_sources_endpoint, realtime_status_endpoint, reset_project_params_endpoint, save_project_csv_endpoint, save_project_params_endpoint, simulate_endpoint
 from backend.model import DEFAULT_PARAMS, csv_values_at, normalize_csv_records, simulate, SimulationContext, sanitize_params
-from backend.schemas import Bsm1MappingRequest, CalibrationOptimizeRequest, CalibrationPreviewRequest, InitialConditionRequest, ModelCredibilityRequest, ParamConfigRequest, ProjectRequest, ReferenceComparisonRequest, SimulationRequest
+from backend.schemas import Bsm1MappingRequest, CalibrationOptimizeRequest, CalibrationPreviewRequest, InitialConditionRequest, ModelCredibilityRequest, ParamConfigRequest, ProjectCsvRequest, ProjectRequest, ReferenceComparisonRequest, SimulationRequest
 from backend.solver_benchmark import benchmark_v2_solvers, project_long_horizon_durations, step_consistency_report
 from backend.engine_v2 import clarifier_layer_rhs, continuous_step, hybrid_step, initial_vector_state, pack_state, run_vector_simulation_v2, unpack_state, vector_snapshot
 from backend import realtime
@@ -308,6 +308,32 @@ class ModelTest(unittest.TestCase):
         self.assertGreaterEqual(status["scheduler"]["lastInputAgeSeconds"], 0)
         self.assertEqual(status["latestInput"]["quality"]["sourceInfo"]["kind"], "external")
 
+    def test_realtime_records_are_project_scoped(self):
+        project = create_project_endpoint(ProjectRequest(name="Realtime scope"))
+        default_step = realtime.realtime_step(values={"Q": 10000, "COD": 420}, step_hours=5 / 60)
+        project_step = realtime.realtime_step(
+            values={"Q": 12000, "COD": 500},
+            quality={"source": "unit-test"},
+            step_hours=5 / 60,
+            project_id=project["id"],
+        )
+
+        default_latest = realtime.latest()
+        project_latest = realtime.latest(project["id"])
+
+        self.assertEqual(default_latest["projectId"], "default")
+        self.assertEqual(project_latest["projectId"], project["id"])
+        self.assertEqual(default_latest["result"]["id"], default_step["resultId"])
+        self.assertEqual(project_latest["result"]["id"], project_step["resultId"])
+        self.assertEqual(realtime.realtime_counts()["results"], 1)
+        self.assertEqual(realtime.realtime_counts(project["id"])["results"], 1)
+
+        realtime.clear_calculation_logs()
+        log = realtime.insert_calculation_log("unit", "success", "project log", project_id=project["id"])
+        self.assertEqual(log["projectId"], project["id"])
+        self.assertEqual(realtime.list_calculation_logs(project_id=project["id"])["logs"][0]["id"], log["id"])
+        self.assertEqual(realtime.list_calculation_logs()["logs"], [])
+
     def test_realtime_reset_clears_state(self):
         realtime.realtime_step(values={"Q": 10000}, step_hours=0.5)
         realtime.reset()
@@ -382,6 +408,24 @@ class ModelTest(unittest.TestCase):
         reset = reset_project_params_endpoint(project["id"])
         self.assertEqual(reset["source"], "default")
         self.assertEqual(get_project_params_endpoint(project["id"])["params"]["simulationDays"], DEFAULT_PARAMS["simulationDays"])
+
+    def test_project_csv_is_scoped_and_clearable(self):
+        project = create_project_endpoint(ProjectRequest(name="CSV scope"))
+        saved = save_project_csv_endpoint(
+            project["id"],
+            ProjectCsvRequest(csvFileName="unit.csv", csvText="time,Q,COD\n0,10000,420\n"),
+        )
+        default_csv = get_project_csv_endpoint("default")
+        loaded = get_project_csv_endpoint(project["id"])
+
+        self.assertEqual(saved["csvFileName"], "unit.csv")
+        self.assertEqual(default_csv["source"], "none")
+        self.assertEqual(loaded["source"], "database")
+        self.assertIn("COD", loaded["csvText"])
+
+        cleared = clear_project_csv_endpoint(project["id"])
+        self.assertEqual(cleared["status"], "cleared")
+        self.assertEqual(get_project_csv_endpoint(project["id"])["source"], "none")
 
     def test_default_solver_is_rk4(self):
         result = simulate(params={**DEFAULT_PARAMS, "simulationDays": 0.1, "outputIntervalHours": 6, "timeStepHours": 0.5})

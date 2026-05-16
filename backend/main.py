@@ -19,12 +19,15 @@ from .model_trust import (
 )
 from .platform import (
     create_project,
+    clear_project_csv,
     delete_project,
     ensure_default_project,
     get_project,
+    get_project_csv,
     get_project_params,
     list_projects,
     reset_project_params,
+    save_project_csv,
     save_project_params,
     update_project,
 )
@@ -52,6 +55,7 @@ from .schemas import (
     InitialConditionRequest,
     ModelCredibilityRequest,
     ParamConfigRequest,
+    ProjectCsvRequest,
     ProjectRequest,
     ProjectUpdateRequest,
     ReferenceComparisonRequest,
@@ -249,13 +253,13 @@ def get_simulation_job_result_endpoint(job_id: str) -> dict:
 
 
 @app.get("/api/logs")
-def list_logs_endpoint(limit: int = 100) -> dict:
-    return list_calculation_logs(limit)
+def list_logs_endpoint(limit: int = 100, projectId: str = "default") -> dict:
+    return list_calculation_logs(limit, projectId)
 
 
 @app.delete("/api/logs")
-def clear_logs_endpoint() -> dict:
-    return clear_calculation_logs()
+def clear_logs_endpoint(projectId: str = "default") -> dict:
+    return clear_calculation_logs(projectId)
 
 
 @app.get("/api/model/metadata")
@@ -429,6 +433,30 @@ def reset_project_params_endpoint(project_id: str) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.get("/api/projects/{project_id}/csv")
+def get_project_csv_endpoint(project_id: str) -> dict:
+    try:
+        return get_project_csv(project_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/projects/{project_id}/csv")
+def save_project_csv_endpoint(project_id: str, request: ProjectCsvRequest) -> dict:
+    try:
+        return save_project_csv(project_id, request.csvText, request.csvFileName)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/projects/{project_id}/csv")
+def clear_project_csv_endpoint(project_id: str) -> dict:
+    try:
+        return clear_project_csv(project_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/api/config/params")
 def save_param_config_endpoint(request: ParamConfigRequest) -> dict:
     started = perf_counter()
@@ -462,7 +490,7 @@ def reset_param_config_endpoint() -> dict:
 
 @app.post("/api/realtime/ingest")
 def realtime_ingest_endpoint(request: RealtimeIngestRequest) -> dict:
-    return ingest_input(request.timestamp, request.values, request.quality)
+    return ingest_input(request.timestamp, request.values, request.quality, request.projectId)
 
 
 @app.post("/api/realtime/step")
@@ -475,13 +503,15 @@ def realtime_step_endpoint(request: RealtimeStepRequest) -> dict:
             quality=request.quality,
             params=request.params,
             step_hours=request.stepHours,
+            project_id=request.projectId,
         )
         insert_calculation_log(
             "realtime_step",
             "success",
             f"Realtime step completed, result #{result['resultId']}.",
-            {"resultId": result["resultId"], "stepHours": request.stepHours},
+            {"resultId": result["resultId"], "stepHours": request.stepHours, "projectId": request.projectId},
             (perf_counter() - started) * 1000,
+            request.projectId,
         )
         return result
     except ValueError as exc:
@@ -489,8 +519,9 @@ def realtime_step_endpoint(request: RealtimeStepRequest) -> dict:
             "realtime_step",
             "failed",
             str(exc),
-            {"stepHours": request.stepHours},
+            {"stepHours": request.stepHours, "projectId": request.projectId},
             (perf_counter() - started) * 1000,
+            request.projectId,
         )
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
@@ -498,15 +529,16 @@ def realtime_step_endpoint(request: RealtimeStepRequest) -> dict:
             "realtime_step",
             "failed",
             str(exc),
-            {"stepHours": request.stepHours},
+            {"stepHours": request.stepHours, "projectId": request.projectId},
             (perf_counter() - started) * 1000,
+            request.projectId,
         )
         raise HTTPException(status_code=500, detail="Realtime step failed unexpectedly.") from exc
 
 
 @app.get("/api/realtime/latest")
-def realtime_latest_endpoint() -> dict:
-    return latest()
+def realtime_latest_endpoint(projectId: str = "default") -> dict:
+    return latest(projectId)
 
 
 @app.get("/api/realtime/sources")
@@ -515,14 +547,14 @@ def realtime_sources_endpoint() -> dict:
 
 
 @app.get("/api/realtime/status")
-def realtime_status_endpoint() -> dict:
-    return realtime_status()
+def realtime_status_endpoint(projectId: str = "default") -> dict:
+    return realtime_status(projectId)
 
 
 @app.post("/api/realtime/reset")
-def realtime_reset_endpoint() -> dict:
-    result = reset()
-    insert_calculation_log("realtime_reset", "success", "Realtime state, inputs, and results were reset.")
+def realtime_reset_endpoint(projectId: str = "default") -> dict:
+    result = reset(projectId)
+    insert_calculation_log("realtime_reset", "success", "Realtime state, inputs, and results were reset.", {"projectId": projectId}, None, projectId)
     return result
 
 

@@ -329,9 +329,47 @@ DELETE /api/projects/{projectId}
 GET    /api/projects/{projectId}/params
 POST   /api/projects/{projectId}/params
 DELETE /api/projects/{projectId}/params
+GET    /api/projects/{projectId}/csv
+POST   /api/projects/{projectId}/csv
+DELETE /api/projects/{projectId}/csv
 ```
 
 The `default` project is created automatically. The older global config endpoints remain available for the current frontend.
+
+The frontend now includes a compact project selector in the parameter panel. Creating or switching a project loads that project's saved parameter set; `保存参数` and `重置默认` operate on the active project.
+
+Project scope now also covers saved CSV boundary data, realtime inputs, realtime model state, realtime results, and calculation logs. Existing endpoints remain backward compatible by using the `default` project when no `projectId` is supplied.
+
+### Ownership And Permissions Plan
+
+The current implementation is still local single-user, but the project model is designed to become multi-user:
+
+- `ownerId` is already stored on each project.
+- Anonymous/local mode uses `ownerId = "local"`.
+- Future authenticated users should only read and write projects where they are owner or collaborator.
+- Project-scoped resources should include parameters, CSV boundary data, realtime inputs, realtime state, realtime results, calculation logs, simulation jobs, simulation result archives, and calibration runs.
+- A future `project_members` table should hold `owner`, `editor`, and `viewer` roles.
+
+### Database Migration Plan
+
+SQLite remains the local MVP database. For online deployment, the intended path is PostgreSQL:
+
+- Keep SQLite for local learning/demo mode.
+- Introduce schema migrations before production, preferably with Alembic.
+- Move the current tables into migration-managed schemas: projects, project parameter configs, project CSV inputs, realtime inputs, realtime state, realtime results, calculation logs, simulation jobs/results, and calibration runs.
+- Preserve a one-command export/import path from local SQLite to PostgreSQL for demos that later become hosted projects.
+- Add indexes on `project_id`, `created_at`, `timestamp`, and job/status fields before multi-user load.
+
+### Deployment Plan
+
+Recommended online deployment shape:
+
+- Static frontend hosted separately, for example object storage/CDN or a small web server.
+- FastAPI backend behind HTTPS, served by Uvicorn/Gunicorn or a container platform.
+- PostgreSQL for persistent multi-user data.
+- A background worker for long simulation jobs, realtime scheduled ingestion, mock data, and calibration runs.
+- Environment variables for database URL, CORS origins, auth provider settings, and runtime limits.
+- Centralized logs and health checks for `/api/health`, job failures, realtime ingestion delay, and database connectivity.
 
 The results toolbar supports:
 
@@ -416,6 +454,9 @@ Main milestones:
 - Added BSM1 three-zone AAO mapping and first-pass coordinate-search calibration optimizer.
 - Added experimental BSM1 five-tank simulation layout via `engineVersion: "bsm1"`.
 - Added local Projects API with per-project parameter configurations.
+- Connected the frontend parameter panel to project selection and per-project parameter save/reset.
+- Extended project scope to CSV boundary data, realtime records, realtime state/results, and calculation logs.
+- Added ownership, permission, database migration, and deployment plans for the future online platform.
 
 ## Suggested Next Steps
 
@@ -425,4 +466,5 @@ Main milestones:
 - Add richer calibration UI and observation CSV upload.
 - Add export of simulation results as CSV.
 - Align the BSM1 five-tank layout against official dynamic input files and evaluation windows so the built-in BSM1 targets can become a comparable validation case instead of `reference_only`.
-- Connect project selection to the frontend and prepare user/account ownership fields.
+- Implement authentication and project membership enforcement.
+- Add project-scoped simulation job/result archive and calibration result storage.

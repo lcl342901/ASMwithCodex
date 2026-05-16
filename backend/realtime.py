@@ -16,6 +16,7 @@ DB_PATH = Path(__file__).resolve().parent / "realtime.db"
 MOCK_INTERVAL_SECONDS = 300
 MOCK_STEP_HOURS = 5 / 60
 PARAM_CONFIG_KEY = "global"
+DEFAULT_PROJECT_ID = "default"
 MOCK_TASK: asyncio.Task | None = None
 MOCK_STATUS: dict[str, Any] = {
     "running": False,
@@ -117,6 +118,17 @@ def connect() -> sqlite3.Connection:
     return conn
 
 
+def normalize_project_id(project_id: str | None = None) -> str:
+    value = (project_id or DEFAULT_PROJECT_ID).strip()
+    return value or DEFAULT_PROJECT_ID
+
+
+def ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
 def init_db() -> None:
     with connect() as conn:
         conn.executescript(
@@ -163,8 +175,20 @@ def init_db() -> None:
               duration_ms REAL,
               created_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS project_realtime_state (
+              project_id TEXT PRIMARY KEY,
+              timestamp TEXT NOT NULL,
+              params_json TEXT NOT NULL,
+              state_json TEXT NOT NULL,
+              last_input_id INTEGER,
+              updated_at TEXT NOT NULL
+            );
             """
         )
+        ensure_column(conn, "realtime_inputs", "project_id", f"TEXT NOT NULL DEFAULT '{DEFAULT_PROJECT_ID}'")
+        ensure_column(conn, "realtime_results", "project_id", f"TEXT NOT NULL DEFAULT '{DEFAULT_PROJECT_ID}'")
+        ensure_column(conn, "calculation_logs", "project_id", f"TEXT NOT NULL DEFAULT '{DEFAULT_PROJECT_ID}'")
 
 
 def normalize_values(values: dict[str, Any], base_params: dict[str, float]) -> tuple[dict[str, float], list[str]]:
@@ -266,46 +290,52 @@ def update_input_quality(input_id: int, quality: dict[str, Any]) -> None:
         conn.execute("UPDATE realtime_inputs SET quality_json = ? WHERE id = ?", (json.dumps(quality), input_id))
 
 
-def ingest_input(timestamp: str | None, values: dict[str, Any], quality: dict[str, Any] | None = None) -> dict[str, Any]:
-    saved = load_state()
+def ingest_input(timestamp: str | None, values: dict[str, Any], quality: dict[str, Any] | None = None, project_id: str | None = None) -> dict[str, Any]:
+    resolved_project_id = normalize_project_id(project_id)
+    saved = load_state(resolved_project_id)
     base_params = sanitize_params(saved["params"] if saved else get_saved_params()["params"])
     enriched_quality = assess_realtime_values(values, base_params, quality)
-    return insert_input(timestamp, values, enriched_quality)
+    return insert_input(timestamp, values, enriched_quality, resolved_project_id)
 
 
-def insert_input(timestamp: str | None, values: dict[str, Any], quality: dict[str, Any] | None = None) -> dict[str, Any]:
+def insert_input(timestamp: str | None, values: dict[str, Any], quality: dict[str, Any] | None = None, project_id: str | None = None) -> dict[str, Any]:
     init_db()
     ts = timestamp or now_iso()
+    resolved_project_id = normalize_project_id(project_id)
     with connect() as conn:
         cursor = conn.execute(
-            "INSERT INTO realtime_inputs (timestamp, values_json, quality_json, created_at) VALUES (?, ?, ?, ?)",
-            (ts, json.dumps(values), json.dumps(quality or {}), now_iso()),
+            "INSERT INTO realtime_inputs (project_id, timestamp, values_json, quality_json, created_at) VALUES (?, ?, ?, ?, ?)",
+            (resolved_project_id, ts, json.dumps(values), json.dumps(quality or {}), now_iso()),
         )
         row_id = cursor.lastrowid
-    return {"id": row_id, "timestamp": ts, "values": values, "quality": quality or {}}
+    return {"id": row_id, "projectId": resolved_project_id, "timestamp": ts, "values": values, "quality": quality or {}}
 
 
-def get_latest_input() -> dict[str, Any] | None:
+def get_latest_input(project_id: str | None = None) -> dict[str, Any] | None:
     init_db()
+    resolved_project_id = normalize_project_id(project_id)
     with connect() as conn:
-        row = conn.execute("SELECT * FROM realtime_inputs ORDER BY id DESC LIMIT 1").fetchone()
+        row = conn.execute("SELECT * FROM realtime_inputs WHERE project_id = ? ORDER BY id DESC LIMIT 1", (resolved_project_id,)).fetchone()
     if not row:
         return None
     return {
         "id": row["id"],
+        "projectId": row["project_id"],
         "timestamp": row["timestamp"],
         "values": json.loads(row["values_json"]),
         "quality": json.loads(row["quality_json"]),
     }
 
 
-def load_state() -> dict[str, Any] | None:
+def load_state(project_id: str | None = None) -> dict[str, Any] | None:
     init_db()
+    resolved_project_id = normalize_project_id(project_id)
     with connect() as conn:
-        row = conn.execute("SELECT * FROM realtime_state WHERE id = 1").fetchone()
+        row = conn.execute("SELECT * FROM project_realtime_state WHERE project_id = ?", (resolved_project_id,)).fetchone()
     if not row:
         return None
     return {
+        "projectId": row["project_id"],
         "timestamp": row["timestamp"],
         "params": json.loads(row["params_json"]),
         "state": json.loads(row["state_json"]),
@@ -314,21 +344,22 @@ def load_state() -> dict[str, Any] | None:
     }
 
 
-def save_state(timestamp: str, params: dict[str, float], state: dict[str, Any], input_id: int | None) -> None:
+def save_state(timestamp: str, params: dict[str, float], state: dict[str, Any], input_id: int | None, project_id: str | None = None) -> None:
     init_db()
+    resolved_project_id = normalize_project_id(project_id)
     with connect() as conn:
         conn.execute(
             """
-            INSERT INTO realtime_state (id, timestamp, params_json, state_json, last_input_id, updated_at)
-            VALUES (1, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
+            INSERT INTO project_realtime_state (project_id, timestamp, params_json, state_json, last_input_id, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(project_id) DO UPDATE SET
               timestamp = excluded.timestamp,
               params_json = excluded.params_json,
               state_json = excluded.state_json,
               last_input_id = excluded.last_input_id,
               updated_at = excluded.updated_at
             """,
-            (timestamp, json.dumps(params), json.dumps(state), input_id, now_iso()),
+            (resolved_project_id, timestamp, json.dumps(params), json.dumps(state), input_id, now_iso()),
         )
 
 
@@ -384,20 +415,23 @@ def insert_calculation_log(
     message: str,
     detail: dict[str, Any] | None = None,
     duration_ms: float | None = None,
+    project_id: str | None = None,
 ) -> dict[str, Any]:
     init_db()
     created_at = now_iso()
+    resolved_project_id = normalize_project_id(project_id)
     with connect() as conn:
         cursor = conn.execute(
             """
-            INSERT INTO calculation_logs (event, status, message, detail_json, duration_ms, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO calculation_logs (project_id, event, status, message, detail_json, duration_ms, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (event, status, message, json.dumps(detail or {}), duration_ms, created_at),
+            (resolved_project_id, event, status, message, json.dumps(detail or {}), duration_ms, created_at),
         )
         row_id = int(cursor.lastrowid)
     return {
         "id": row_id,
+        "projectId": resolved_project_id,
         "event": event,
         "status": status,
         "message": message,
@@ -407,17 +441,19 @@ def insert_calculation_log(
     }
 
 
-def list_calculation_logs(limit: int = 100) -> dict[str, Any]:
+def list_calculation_logs(limit: int = 100, project_id: str | None = None) -> dict[str, Any]:
     init_db()
     safe_limit = max(1, min(int(limit), 500))
+    resolved_project_id = normalize_project_id(project_id)
     with connect() as conn:
         rows = conn.execute(
-            "SELECT * FROM calculation_logs ORDER BY id DESC LIMIT ?",
-            (safe_limit,),
+            "SELECT * FROM calculation_logs WHERE project_id = ? ORDER BY id DESC LIMIT ?",
+            (resolved_project_id, safe_limit),
         ).fetchall()
     logs = [
         {
             "id": row["id"],
+            "projectId": row["project_id"],
             "event": row["event"],
             "status": row["status"],
             "message": row["message"],
@@ -427,35 +463,39 @@ def list_calculation_logs(limit: int = 100) -> dict[str, Any]:
         }
         for row in rows
     ]
-    return {"logs": logs, "limit": safe_limit}
+    return {"logs": logs, "limit": safe_limit, "projectId": resolved_project_id}
 
 
-def clear_calculation_logs() -> dict[str, Any]:
+def clear_calculation_logs(project_id: str | None = None) -> dict[str, Any]:
     init_db()
+    resolved_project_id = normalize_project_id(project_id)
     with connect() as conn:
-        cursor = conn.execute("DELETE FROM calculation_logs")
+        cursor = conn.execute("DELETE FROM calculation_logs WHERE project_id = ?", (resolved_project_id,))
         deleted = cursor.rowcount
-    return {"status": "cleared", "deleted": deleted}
+    return {"status": "cleared", "deleted": deleted, "projectId": resolved_project_id}
 
 
-def insert_result(timestamp: str, input_id: int | None, step_hours: float, result: dict[str, Any], warnings: list[str]) -> int:
+def insert_result(timestamp: str, input_id: int | None, step_hours: float, result: dict[str, Any], warnings: list[str], project_id: str | None = None) -> int:
     init_db()
+    resolved_project_id = normalize_project_id(project_id)
     with connect() as conn:
         cursor = conn.execute(
-            "INSERT INTO realtime_results (timestamp, input_id, step_hours, result_json, warnings_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (timestamp, input_id, step_hours, json.dumps(result), json.dumps(warnings), now_iso()),
+            "INSERT INTO realtime_results (project_id, timestamp, input_id, step_hours, result_json, warnings_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (resolved_project_id, timestamp, input_id, step_hours, json.dumps(result), json.dumps(warnings), now_iso()),
         )
         return int(cursor.lastrowid)
 
 
-def get_latest_result() -> dict[str, Any] | None:
+def get_latest_result(project_id: str | None = None) -> dict[str, Any] | None:
     init_db()
+    resolved_project_id = normalize_project_id(project_id)
     with connect() as conn:
-        row = conn.execute("SELECT * FROM realtime_results ORDER BY id DESC LIMIT 1").fetchone()
+        row = conn.execute("SELECT * FROM realtime_results WHERE project_id = ? ORDER BY id DESC LIMIT 1", (resolved_project_id,)).fetchone()
     if not row:
         return None
     return {
         "id": row["id"],
+        "projectId": row["project_id"],
         "timestamp": row["timestamp"],
         "inputId": row["input_id"],
         "stepHours": row["step_hours"],
@@ -471,9 +511,11 @@ def realtime_step(
     quality: dict[str, Any] | None = None,
     params: dict[str, Any] | None = None,
     step_hours: float | None = None,
+    project_id: str | None = None,
 ) -> dict[str, Any]:
     init_db()
-    saved = load_state()
+    resolved_project_id = normalize_project_id(project_id)
+    saved = load_state(resolved_project_id)
     clean_params = sanitize_params(saved["params"] if saved else params)
     if params:
         clean_params.update(sanitize_params(params))
@@ -483,11 +525,11 @@ def realtime_step(
 
     input_record = None
     if values is not None:
-        input_record = insert_input(timestamp, values, quality)
+        input_record = insert_input(timestamp, values, quality, resolved_project_id)
     else:
-        input_record = get_latest_input()
+        input_record = get_latest_input(resolved_project_id)
     if not input_record:
-        input_record = insert_input(timestamp, {}, quality)
+        input_record = insert_input(timestamp, {}, quality, resolved_project_id)
 
     quality_report = assess_realtime_values(input_record["values"], clean_params, input_record["quality"])
     if input_record.get("id"):
@@ -501,19 +543,20 @@ def realtime_step(
     stepped = ctx.step_realtime_state(state, boundary_values, step)
     result = stepped["snapshot"]
     result["mode"] = "realtime"
+    result["projectId"] = resolved_project_id
     result["timestamp"] = input_record["timestamp"]
     result["inputId"] = input_record["id"]
     result["warnings"] = warnings
     result["quality"] = quality_report
     result["validation"] = {"ok": True, "warningCount": len(warnings), "warnings": warnings}
 
-    save_state(input_record["timestamp"], ctx.params, stepped["state"], input_record["id"])
-    result_id = insert_result(input_record["timestamp"], input_record["id"], step, result, warnings)
-    return {"resultId": result_id, "input": input_record, "result": result, "state": load_state()}
+    save_state(input_record["timestamp"], ctx.params, stepped["state"], input_record["id"], resolved_project_id)
+    result_id = insert_result(input_record["timestamp"], input_record["id"], step, result, warnings, resolved_project_id)
+    return {"resultId": result_id, "projectId": resolved_project_id, "input": input_record, "result": result, "state": load_state(resolved_project_id)}
 
 
-def mock_base_params() -> dict[str, float]:
-    saved = load_state()
+def mock_base_params(project_id: str | None = None) -> dict[str, float]:
+    saved = load_state(project_id)
     if saved and saved.get("params"):
         return sanitize_params(saved["params"])
     return DEFAULT_PARAMS.copy()
@@ -539,7 +582,8 @@ def generate_mock_values(run_count: int | None = None) -> dict[str, float]:
     }
 
 
-def run_mock_once() -> dict[str, Any]:
+def run_mock_once(project_id: str | None = None) -> dict[str, Any]:
+    resolved_project_id = normalize_project_id(project_id)
     started = datetime.now(timezone.utc)
     try:
         values = generate_mock_values()
@@ -548,6 +592,7 @@ def run_mock_once() -> dict[str, Any]:
             values=values,
             quality={"source": "mock"},
             step_hours=MOCK_STEP_HOURS,
+            project_id=resolved_project_id,
         )
         MOCK_STATUS["lastRunAt"] = now_iso()
         MOCK_STATUS["lastResultId"] = result["resultId"]
@@ -560,11 +605,12 @@ def run_mock_once() -> dict[str, Any]:
             f"Mock 自动推进完成，结果 #{result['resultId']}。",
             {"resultId": result["resultId"], "stepHours": MOCK_STEP_HOURS},
             duration_ms,
+            resolved_project_id,
         )
         return result
     except Exception as exc:
         duration_ms = (datetime.now(timezone.utc) - started).total_seconds() * 1000
-        insert_calculation_log("mock_run", "failed", str(exc), {"stepHours": MOCK_STEP_HOURS}, duration_ms)
+        insert_calculation_log("mock_run", "failed", str(exc), {"stepHours": MOCK_STEP_HOURS}, duration_ms, resolved_project_id)
         raise
 
 
@@ -617,14 +663,16 @@ def mock_status() -> dict[str, Any]:
     return dict(MOCK_STATUS)
 
 
-def latest() -> dict[str, Any]:
-    return {"input": get_latest_input(), "state": load_state(), "result": get_latest_result()}
+def latest(project_id: str | None = None) -> dict[str, Any]:
+    resolved_project_id = normalize_project_id(project_id)
+    return {"projectId": resolved_project_id, "input": get_latest_input(resolved_project_id), "state": load_state(resolved_project_id), "result": get_latest_result(resolved_project_id)}
 
 
-def realtime_status() -> dict[str, Any]:
-    latest_input = get_latest_input()
-    latest_state = load_state()
-    latest_result = get_latest_result()
+def realtime_status(project_id: str | None = None) -> dict[str, Any]:
+    resolved_project_id = normalize_project_id(project_id)
+    latest_input = get_latest_input(resolved_project_id)
+    latest_state = load_state(resolved_project_id)
+    latest_result = get_latest_result(resolved_project_id)
     input_quality = (latest_input or {}).get("quality") or {}
     quality_status = input_quality.get("status", "unknown") if latest_input else "none"
     input_age = age_seconds((latest_input or {}).get("timestamp"))
@@ -646,29 +694,32 @@ def realtime_status() -> dict[str, Any]:
 
     return {
         "status": scheduler["status"],
+        "projectId": resolved_project_id,
         "dataSources": list(DATA_SOURCES.values()),
         "latestInput": latest_input,
         "latestResult": latest_result,
         "latestState": latest_state,
         "qualityStatus": quality_status,
         "scheduler": scheduler,
-        "counts": realtime_counts(),
+        "counts": realtime_counts(resolved_project_id),
     }
 
 
-def realtime_counts() -> dict[str, int]:
+def realtime_counts(project_id: str | None = None) -> dict[str, int]:
     init_db()
+    resolved_project_id = normalize_project_id(project_id)
     with connect() as conn:
-        inputs = conn.execute("SELECT COUNT(*) AS count FROM realtime_inputs").fetchone()["count"]
-        results = conn.execute("SELECT COUNT(*) AS count FROM realtime_results").fetchone()["count"]
-        states = conn.execute("SELECT COUNT(*) AS count FROM realtime_state").fetchone()["count"]
+        inputs = conn.execute("SELECT COUNT(*) AS count FROM realtime_inputs WHERE project_id = ?", (resolved_project_id,)).fetchone()["count"]
+        results = conn.execute("SELECT COUNT(*) AS count FROM realtime_results WHERE project_id = ?", (resolved_project_id,)).fetchone()["count"]
+        states = conn.execute("SELECT COUNT(*) AS count FROM project_realtime_state WHERE project_id = ?", (resolved_project_id,)).fetchone()["count"]
     return {"inputs": int(inputs), "results": int(results), "states": int(states)}
 
 
-def reset() -> dict[str, str]:
+def reset(project_id: str | None = None) -> dict[str, str]:
     init_db()
+    resolved_project_id = normalize_project_id(project_id)
     with connect() as conn:
-        conn.execute("DELETE FROM realtime_inputs")
-        conn.execute("DELETE FROM realtime_state")
-        conn.execute("DELETE FROM realtime_results")
-    return {"status": "reset"}
+        conn.execute("DELETE FROM realtime_inputs WHERE project_id = ?", (resolved_project_id,))
+        conn.execute("DELETE FROM project_realtime_state WHERE project_id = ?", (resolved_project_id,))
+        conn.execute("DELETE FROM realtime_results WHERE project_id = ?", (resolved_project_id,))
+    return {"status": "reset", "projectId": resolved_project_id}
