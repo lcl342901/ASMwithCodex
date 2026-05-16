@@ -6,23 +6,59 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from .model import simulate
+from .calibration import bsm1_mapping_report, calibration_optimize
+from .engine_runner import normalize_engine_version, simulate_with_engine
+from .model_trust import (
+    assess_result_credibility,
+    calibration_preview,
+    compare_to_reference_case,
+    get_reference_case,
+    initial_condition_snapshot,
+    model_metadata,
+    reference_cases,
+)
+from .platform import (
+    create_project,
+    delete_project,
+    ensure_default_project,
+    get_project,
+    get_project_params,
+    list_projects,
+    reset_project_params,
+    save_project_params,
+    update_project,
+)
 from .realtime import (
     clear_calculation_logs,
     get_saved_params,
-    insert_input,
+    ingest_input,
     insert_calculation_log,
     latest,
+    list_data_sources,
     list_calculation_logs,
     mock_status,
     realtime_step,
+    realtime_status,
     reset,
     reset_params_config,
     save_params_config,
     start_mock,
     stop_mock,
 )
-from .schemas import ParamConfigRequest, RealtimeIngestRequest, RealtimeStepRequest, SimulationRequest
+from .schemas import (
+    CalibrationPreviewRequest,
+    Bsm1MappingRequest,
+    CalibrationOptimizeRequest,
+    InitialConditionRequest,
+    ModelCredibilityRequest,
+    ParamConfigRequest,
+    ProjectRequest,
+    ProjectUpdateRequest,
+    ReferenceComparisonRequest,
+    RealtimeIngestRequest,
+    RealtimeStepRequest,
+    SimulationRequest,
+)
 
 
 app = FastAPI(title="ASMwithCodex Simulation API")
@@ -59,6 +95,7 @@ def update_job(job_id: str, **values: Any) -> None:
 
 def run_simulation_job(job_id: str, request: SimulationRequest) -> None:
     started = perf_counter()
+    engine_version = "unknown"
 
     def report_progress(current_time: float, total_time: float) -> None:
         percent = 0 if total_time <= 0 else min(99, max(0, current_time / total_time * 100))
@@ -73,7 +110,8 @@ def run_simulation_job(job_id: str, request: SimulationRequest) -> None:
 
     update_job(job_id, status="running", message="仿真已开始。", progressPercent=0)
     try:
-        result = simulate(
+        engine_version = normalize_engine_version(request.params)
+        result = simulate_with_engine(
             params=request.params,
             csv_text=request.csvText or "",
             csv_file_name=request.csvFileName or "",
@@ -103,24 +141,28 @@ def run_simulation_job(job_id: str, request: SimulationRequest) -> None:
                 "points": len(result["time"]),
                 "lastTime": result["time"][-1] if result["time"] else None,
                 "warningCount": result.get("validation", {}).get("warningCount", 0),
+                "solverMethod": request.params.get("solverMethod", "RK4"),
+                "engineVersion": result.get("engineVersion", engine_version),
             },
             duration_ms,
         )
     except ValueError as exc:
         duration_ms = (perf_counter() - started) * 1000
         update_job(job_id, status="failed", message=str(exc), error=str(exc), durationMs=duration_ms)
-        insert_calculation_log("simulate_job", "failed", str(exc), {"jobId": job_id}, duration_ms)
+        insert_calculation_log("simulate_job", "failed", str(exc), {"jobId": job_id, "solverMethod": request.params.get("solverMethod", "RK4"), "engineVersion": engine_version}, duration_ms)
     except Exception as exc:
         duration_ms = (perf_counter() - started) * 1000
         update_job(job_id, status="failed", message="仿真任务失败。", error=str(exc), durationMs=duration_ms)
-        insert_calculation_log("simulate_job", "failed", str(exc), {"jobId": job_id}, duration_ms)
+        insert_calculation_log("simulate_job", "failed", str(exc), {"jobId": job_id, "solverMethod": request.params.get("solverMethod", "RK4"), "engineVersion": engine_version}, duration_ms)
 
 
 @app.post("/api/simulate")
 def simulate_endpoint(request: SimulationRequest) -> dict:
     started = perf_counter()
+    engine_version = "unknown"
     try:
-        result = simulate(
+        engine_version = normalize_engine_version(request.params)
+        result = simulate_with_engine(
             params=request.params,
             csv_text=request.csvText or "",
             csv_file_name=request.csvFileName or "",
@@ -135,6 +177,8 @@ def simulate_endpoint(request: SimulationRequest) -> dict:
                 "points": len(result["time"]),
                 "lastTime": result["time"][-1] if result["time"] else None,
                 "warningCount": result.get("validation", {}).get("warningCount", 0),
+                "solverMethod": request.params.get("solverMethod", "RK4"),
+                "engineVersion": result.get("engineVersion", engine_version),
             },
             (perf_counter() - started) * 1000,
         )
@@ -144,7 +188,7 @@ def simulate_endpoint(request: SimulationRequest) -> dict:
             "simulate",
             "failed",
             str(exc),
-            {"csvFileName": request.csvFileName or "", "hasCsv": bool((request.csvText or "").strip())},
+            {"csvFileName": request.csvFileName or "", "hasCsv": bool((request.csvText or "").strip()), "solverMethod": request.params.get("solverMethod", "RK4"), "engineVersion": engine_version},
             (perf_counter() - started) * 1000,
         )
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -153,7 +197,7 @@ def simulate_endpoint(request: SimulationRequest) -> dict:
             "simulate",
             "failed",
             str(exc),
-            {"csvFileName": request.csvFileName or "", "hasCsv": bool((request.csvText or "").strip())},
+            {"csvFileName": request.csvFileName or "", "hasCsv": bool((request.csvText or "").strip()), "solverMethod": request.params.get("solverMethod", "RK4"), "engineVersion": engine_version},
             (perf_counter() - started) * 1000,
         )
         raise HTTPException(status_code=500, detail="Simulation failed unexpectedly.") from exc
@@ -162,6 +206,10 @@ def simulate_endpoint(request: SimulationRequest) -> dict:
 @app.post("/api/simulate/jobs")
 def create_simulation_job_endpoint(request: SimulationRequest) -> dict:
     job_id = uuid4().hex
+    try:
+        engine_version = normalize_engine_version(request.params)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     with SIMULATION_JOBS_LOCK:
         SIMULATION_JOBS[job_id] = {
             "jobId": job_id,
@@ -172,6 +220,8 @@ def create_simulation_job_endpoint(request: SimulationRequest) -> dict:
             "message": "仿真任务已创建。",
             "error": None,
             "durationMs": None,
+            "solverMethod": request.params.get("solverMethod", "RK4"),
+            "engineVersion": engine_version,
         }
     Thread(target=run_simulation_job, args=(job_id, request), daemon=True).start()
     return job_public(job_id)
@@ -208,9 +258,175 @@ def clear_logs_endpoint() -> dict:
     return clear_calculation_logs()
 
 
+@app.get("/api/model/metadata")
+def model_metadata_endpoint() -> dict:
+    return model_metadata()
+
+
+@app.get("/api/model/reference-cases")
+def model_reference_cases_endpoint() -> dict:
+    return reference_cases()
+
+
+@app.get("/api/model/reference-cases/{case_id}")
+def model_reference_case_endpoint(case_id: str) -> dict:
+    try:
+        return get_reference_case(case_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/model/reference-cases/{case_id}/compare")
+def model_reference_case_compare_endpoint(case_id: str, request: ReferenceComparisonRequest) -> dict:
+    try:
+        return compare_to_reference_case(case_id, request.result)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/model/initial-conditions")
+def model_initial_conditions_endpoint(request: InitialConditionRequest) -> dict:
+    try:
+        return initial_condition_snapshot(request.params)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/model/credibility")
+def model_credibility_endpoint(request: ModelCredibilityRequest) -> dict:
+    try:
+        return assess_result_credibility(request.result, request.params)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/calibration/preview")
+def calibration_preview_endpoint(request: CalibrationPreviewRequest) -> dict:
+    try:
+        return calibration_preview(
+            params=request.params,
+            observations=request.observations,
+            tunable_params=request.tunableParams,
+            targets=request.targets,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/calibration/bsm1/mapping")
+def calibration_bsm1_mapping_endpoint(request: Bsm1MappingRequest) -> dict:
+    try:
+        return bsm1_mapping_report(request.params)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/calibration/optimize")
+def calibration_optimize_endpoint(request: CalibrationOptimizeRequest) -> dict:
+    started = perf_counter()
+    try:
+        result = calibration_optimize(
+            params=request.params,
+            observations=request.observations,
+            tunable_params=request.tunableParams,
+            targets=request.targets,
+            csv_text=request.csvText or "",
+            csv_file_name=request.csvFileName or "",
+            max_iterations=request.maxIterations,
+            step_fraction=request.stepFraction,
+            use_bsm1_mapping=request.useBsm1Mapping,
+            use_bsm1_layout=request.useBsm1Layout,
+        )
+        insert_calculation_log(
+            "calibration_optimize",
+            "success",
+            "Calibration optimization completed.",
+            {
+                "method": result["method"],
+                "mapping": result["mapping"],
+                "bestObjective": result["bestObjective"],
+                "targetCount": len(result["targets"]),
+                "tunableCount": len(result["tunableParams"]),
+            },
+            (perf_counter() - started) * 1000,
+        )
+        return result
+    except ValueError as exc:
+        insert_calculation_log("calibration_optimize", "failed", str(exc), {}, (perf_counter() - started) * 1000)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.get("/api/config/params")
 def get_param_config_endpoint() -> dict:
     return get_saved_params()
+
+
+@app.get("/api/projects")
+def list_projects_endpoint() -> dict:
+    return list_projects()
+
+
+@app.post("/api/projects")
+def create_project_endpoint(request: ProjectRequest) -> dict:
+    try:
+        project = create_project(request.name, request.description, request.ownerId)
+        insert_calculation_log("project_create", "success", f"Project {project['id']} created.", {"projectId": project["id"]})
+        return project
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/projects/default")
+def default_project_endpoint() -> dict:
+    return ensure_default_project()
+
+
+@app.get("/api/projects/{project_id}")
+def get_project_endpoint(project_id: str) -> dict:
+    try:
+        return get_project(project_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.patch("/api/projects/{project_id}")
+def update_project_endpoint(project_id: str, request: ProjectUpdateRequest) -> dict:
+    try:
+        return update_project(project_id, request.name, request.description)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/projects/{project_id}")
+def delete_project_endpoint(project_id: str) -> dict:
+    try:
+        return delete_project(project_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/projects/{project_id}/params")
+def get_project_params_endpoint(project_id: str) -> dict:
+    try:
+        return get_project_params(project_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/projects/{project_id}/params")
+def save_project_params_endpoint(project_id: str, request: ParamConfigRequest) -> dict:
+    try:
+        return save_project_params(project_id, request.params)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/projects/{project_id}/params")
+def reset_project_params_endpoint(project_id: str) -> dict:
+    try:
+        return reset_project_params(project_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/config/params")
@@ -246,7 +462,7 @@ def reset_param_config_endpoint() -> dict:
 
 @app.post("/api/realtime/ingest")
 def realtime_ingest_endpoint(request: RealtimeIngestRequest) -> dict:
-    return insert_input(request.timestamp, request.values, request.quality)
+    return ingest_input(request.timestamp, request.values, request.quality)
 
 
 @app.post("/api/realtime/step")
@@ -291,6 +507,16 @@ def realtime_step_endpoint(request: RealtimeStepRequest) -> dict:
 @app.get("/api/realtime/latest")
 def realtime_latest_endpoint() -> dict:
     return latest()
+
+
+@app.get("/api/realtime/sources")
+def realtime_sources_endpoint() -> dict:
+    return list_data_sources()
+
+
+@app.get("/api/realtime/status")
+def realtime_status_endpoint() -> dict:
+    return realtime_status()
 
 
 @app.post("/api/realtime/reset")

@@ -24,6 +24,7 @@ It is intended as a learning and experimentation platform for ASM1-based process
 - Interactive charts with hover tooltips.
 - Unit-level process curves after clicking a process unit.
 - Backend parameter/model validation with returned warnings.
+- Model metadata, unit-system, initial-condition, credibility screening, and calibration-preview APIs.
 - CSV export for effluent/process results, boundary inputs, and unit-level series.
 - JSON export/import for simulation configuration.
 - Realtime MVP API with SQLite-backed input, model state, and latest result storage.
@@ -36,6 +37,7 @@ It is intended as a learning and experimentation platform for ASM1-based process
 - `sample-data.csv`: example CSV that can be uploaded directly.
 - `backend/main.py`: FastAPI app and `/api/simulate` route.
 - `backend/model.py`: Python ASM1, AAO, RAS/WAS, Takacs clarifier, and CSV replay engine.
+- `backend/model_trust.py`: model metadata, unit notes, initial-condition snapshots, credibility screening, and calibration preview helpers.
 - `backend/schemas.py`: API request schema.
 - `backend/requirements.txt`: backend Python dependencies.
 
@@ -128,14 +130,19 @@ Request body:
     "influentTss": 220,
     "simulationDays": 20,
     "timeStepHours": 0.5,
-    "outputIntervalHours": 6
+    "outputIntervalHours": 6,
+    "engineVersion": "v1",
+    "solverMethod": "RK4",
+    "solverRtol": 0.0001,
+    "solverAtol": 0.000001,
+    "maxSolverStepHours": 0.05
   },
   "csvText": "time,Q,COD,NH4,...",
   "csvFileName": "sample-data.csv"
 }
 ```
 
-`params` may include any current frontend parameter. `csvText` is optional. When `csvText` is provided, it is used as a boundary-condition time series, while `params.simulationDays` still controls the total simulation horizon.
+`params` may include any current frontend parameter. `engineVersion` defaults to `v1`; `v2` is available as an experimental API-only path for comparing the new state-vector engine. `csvText` is optional. When `csvText` is provided, it is used as a boundary-condition time series, while `params.simulationDays` still controls the total simulation horizon.
 
 The response is compatible with the frontend `lastResult` structure, including:
 
@@ -143,9 +150,11 @@ The response is compatible with the frontend `lastResult` structure, including:
 time, effCod, effNh4, effNo3, effTn, effTss,
 anaerobicNo3, anoxicNo3, aerobicNo3,
 aerobicDo, aerobicMlss, rasMlss,
-boundaries, units, clarifier, mode, sourceName,
-warnings, validation
+boundaries, units, clarifier, mode, sourceName, engineVersion,
+solverMethod, warnings, validation
 ```
+
+Simulation responses from the engine runner also include `credibility`, a heuristic screening report with `status`, `score`, and review issues. This is not a calibrated compliance check; it is meant to highlight obvious interpretation risks.
 
 Invalid parameters return `400` with a clear message. Suspicious but runnable settings, such as very high clarifier overflow or a requested solver step above the internal cap, return as `warnings` in the normal response.
 
@@ -158,6 +167,69 @@ GET  /api/simulate/jobs/{jobId}/result
 ```
 
 The job status includes `status`, `progressPercent`, `currentTime`, `totalTime`, `message`, and `error`. The original synchronous `POST /api/simulate` remains available for API callers that want a blocking request/response flow.
+
+## Model Trust And Calibration APIs
+
+The current model is still a teaching MVP, so the backend exposes a small trust layer to make assumptions and readiness visible:
+
+```http
+GET  /api/model/metadata
+GET  /api/model/reference-cases
+GET  /api/model/reference-cases/{caseId}
+POST /api/model/reference-cases/{caseId}/compare
+POST /api/model/initial-conditions
+POST /api/model/credibility
+POST /api/calibration/preview
+POST /api/calibration/bsm1/mapping
+POST /api/calibration/optimize
+```
+
+- `/api/model/metadata` returns the unit system, ASM1 component list, available metrics, initial-condition keys, recommended calibration parameters, and current assumptions.
+- `/api/model/reference-cases` returns the internal default AAO regression case and a BSM1 reference target set from the Lund University/IWA Task Group report.
+- `/api/model/reference-cases/{caseId}/compare` compares supplied simulation results against a reference target table. The BSM1 comparison is marked `reference_only` because BSM1 uses two anoxic and three aerobic reactors, while this platform currently uses a three-zone AAO layout.
+- `/api/model/initial-conditions` returns the reactor and clarifier initial state generated from the supplied parameters.
+- `/api/model/credibility` screens a result object and returns heuristic issues such as missing metrics, horizon mismatch, high effluent TSS, or experimental-engine use.
+- `/api/calibration/preview` validates calibration targets, observations, and tunable parameters, and returns the weighted-RMSE setup that a later optimizer will use.
+- `/api/calibration/bsm1/mapping` returns a BSM1-to-current-AAO parameter mapping. It approximates BSM1's two anoxic and three aerobic tanks by using a minimal anaerobic selector, `2000 m3` anoxic volume, and `4000 m3` aerobic volume in the current three-zone model.
+- `/api/calibration/optimize` runs a first-pass coordinate-search calibration against supplied observations or, when `useBsm1Mapping` is enabled, the BSM1 reference targets.
+
+Initial conditions can now be supplied as parameters, for example `initialAerobicNh4`, `initialAerobicNo3`, `initialXbh`, `initialXi`, and related `initial*` keys. If `aerobicDo` is provided but `initialAerobicDo` is omitted, the backend keeps the previous behavior by using the aerobic DO setting as the initial aerobic DO.
+
+The built-in BSM1 target set currently stores the 2008 closed-loop dynamic effluent averages: COD 48.2201 gCOD/m3, NH4-N 2.5392 gN/m3, NO3-N 12.4199 gN/m3, TN 16.9245 gN/m3, TSS 13.0038 g/m3, and BOD5 2.7568 g/m3. Source: [Benchmark Simulation Model no. 1 (BSM1), Lund University report LTH-IEA-7229](https://www.iea.lth.se/publications/Reports/LTH-IEA-7229.pdf).
+
+Example calibration request:
+
+```json
+{
+  "params": {
+    "simulationDays": 2,
+    "outputIntervalHours": 1
+  },
+  "observations": [
+    { "time": 2, "effNh4": 2.5, "effTss": 13.0 }
+  ],
+  "tunableParams": ["muA", "kNH"],
+  "targets": ["effNh4", "effTss"],
+  "maxIterations": 2,
+  "stepFraction": 0.1
+}
+```
+
+The optimizer currently uses a bounded coordinate search. It is intentionally conservative and deterministic so calibration experiments are easy to inspect before introducing heavier optimizers.
+
+For a closer BSM1 structural experiment, `POST /api/simulate` also accepts:
+
+```json
+{
+  "params": {
+    "engineVersion": "bsm1",
+    "simulationDays": 2,
+    "outputIntervalHours": 1
+  }
+}
+```
+
+`engineVersion: "bsm1"` runs a dedicated five-tank layout: two anoxic tanks followed by three aerobic tanks and the existing 10-layer clarifier. It is still experimental, but it avoids collapsing BSM1 into the ordinary three-zone AAO structure.
 
 ## Realtime MVP API
 
@@ -173,6 +245,8 @@ Available endpoints:
 POST /api/realtime/ingest
 POST /api/realtime/step
 GET  /api/realtime/latest
+GET  /api/realtime/sources
+GET  /api/realtime/status
 POST /api/realtime/reset
 POST /api/realtime/mock/start
 POST /api/realtime/mock/stop
@@ -198,6 +272,14 @@ curl -X POST http://127.0.0.1:8000/api/realtime/step \
 ```
 
 This MVP uses the current dynamic ASM1 engine and continues from the saved model state on each step. It is intended as a first online/digital-twin prototype, not yet a production historian or SCADA connector.
+
+Realtime inputs now carry a normalized quality report. The backend stores the raw payload, then derives `quality.status`,
+per-field `fieldQuality`, `issues`, and `acceptedValues`. Missing boundaries fall back to current model parameters, and
+out-of-range values are clipped to configured parameter limits before the realtime model advances.
+
+`GET /api/realtime/sources` returns the current realtime source registry (`manual`, `mock`, and a disabled external
+historian placeholder). `GET /api/realtime/status` returns the latest input/result/state, quality status, record counts,
+mock runner state, and simple age/latency fields for operational monitoring.
 
 Mock realtime mode can generate development data every 5 minutes:
 
@@ -233,6 +315,24 @@ POST   /api/config/params
 DELETE /api/config/params
 ```
 
+## Projects API
+
+The platform layer now has a local multi-project API. This is still single-user SQLite, but it gives each project its own saved parameter configuration and prepares the backend for future user accounts.
+
+```http
+GET    /api/projects
+POST   /api/projects
+GET    /api/projects/default
+GET    /api/projects/{projectId}
+PATCH  /api/projects/{projectId}
+DELETE /api/projects/{projectId}
+GET    /api/projects/{projectId}/params
+POST   /api/projects/{projectId}/params
+DELETE /api/projects/{projectId}/params
+```
+
+The `default` project is created automatically. The older global config endpoints remain available for the current frontend.
+
 The results toolbar supports:
 
 - Export result CSV: effluent, nitrogen, solids, and key operating series.
@@ -267,9 +367,13 @@ Between CSV rows, values are linearly interpolated.
 - `仿真天数`: total simulation horizon.
 - `计算步长`: requested numerical calculation step in hours.
 - `结果输出间隔`: chart sampling interval in hours.
+- `解算器方法`: `RK4` is the default for current routine runs. In `engineVersion=v2`, `LSODA`, `BDF`, and `Radau` are also available for API-only comparison.
+- `最大耦合步长`: maximum outer coupling step for adaptive solver segments.
 
-For stability, the internal solver caps the actual calculation step at `0.0005 d` (about 0.72 minutes). If the requested
-calculation step is larger, the simulator uses this smaller internal step while preserving the requested output interval.
+For RK4, the internal solver caps the actual calculation step at `0.0005 d` (about 0.72 minutes). In the stable v1 engine,
+adaptive solvers are retained mainly for comparison. In the experimental v2 state-vector engine, `LSODA`, `BDF`, and
+`Radau` can integrate the full v2 state vector. Early short-horizon benchmarks show close results versus v2-RK4, but
+adaptive solvers are still slower for the current small Python model, so RK4 remains the default strategy.
 
 ## Model Notes
 
@@ -282,11 +386,14 @@ It is not yet a calibrated engineering-grade simulator.
 Important limitations:
 
 - The Python backend is intended to match the current JavaScript RK4/stepper behavior before deeper model refactoring.
+- `backend/engine_v2.py` contains the first state-vector scaffold for a future unified solver engine, including an
+  experimental continuous RHS for clarifier TSS layers. It is not wired into the public API yet; the production path
+  still uses `backend/model.py`.
 - Backend persistence currently covers realtime inputs/state/results and one global saved parameter configuration.
 - No user accounts or per-user parameter sets yet.
-- No sensor quality checks beyond basic CSV parsing.
+- Realtime input quality checks cover missing values, parse errors, source metadata, and out-of-range clipping, but not full sensor diagnostics.
 - No formal unit conversion layer.
-- Initial conditions are currently fixed in code.
+- Initial conditions are configurable through backend parameters, but the normal UI does not yet expose them.
 - Clarifier solids behavior is simplified and should be validated before engineering use.
 - The current ASM1 implementation should be checked against public ASM1/BSM references before open publication or commercial use.
 
@@ -303,12 +410,19 @@ Main milestones:
 - Changed CSV replay so the UI simulation horizon controls total runtime.
 - Added `sample-data.csv`.
 - Added FastAPI backend calculation API and migrated the runtime simulation call to Python.
+- Added an experimental `engine_v2` state-vector scaffold for future unified ODE solving.
+- Added model-trust APIs for metadata, reference-case tracking, initial-condition snapshots, credibility screening, and calibration preview.
+- Added BSM1 closed-loop dynamic effluent target set as a reference-only comparison case.
+- Added BSM1 three-zone AAO mapping and first-pass coordinate-search calibration optimizer.
+- Added experimental BSM1 five-tank simulation layout via `engineVersion: "bsm1"`.
+- Added local Projects API with per-project parameter configurations.
 
 ## Suggested Next Steps
 
 - Add CSV template download and stricter input validation.
 - Add model-state persistence for real-time data.
-- Add sensor quality flags and missing-data handling.
-- Add calibration/parameter fitting workflow.
+- Expose initial-condition controls in the frontend advanced settings.
+- Add richer calibration UI and observation CSV upload.
 - Add export of simulation results as CSV.
-- Add benchmark validation against public ASM1/BSM examples.
+- Align the BSM1 five-tank layout against official dynamic input files and evaluation windows so the built-in BSM1 targets can become a comparable validation case instead of `reference_only`.
+- Connect project selection to the frontend and prepare user/account ownership fields.

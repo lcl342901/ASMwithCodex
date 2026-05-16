@@ -96,6 +96,10 @@ const params = {
   simulationDays: 20,
   timeStepHours: 0.5,
   outputIntervalHours: 6,
+  solverMethod: "RK4",
+  solverRtol: 1e-4,
+  solverAtol: 1e-6,
+  maxSolverStepHours: 0.05,
   muH: 6,
   muA: 0.8,
   bH: 0.62,
@@ -157,6 +161,12 @@ const fields = {
     ["timeStepHours", "计算步长", "h", 0.05, 6],
     ["outputIntervalHours", "结果输出间隔", "h", 0.1, 24],
   ],
+  solver: [
+    ["solverMethod", "解算器方法", "LSODA / RK4", null, null, ["LSODA", "RK4"]],
+    ["solverRtol", "相对误差 rtol", "-", 1e-8, 1e-2],
+    ["solverAtol", "绝对误差 atol", "-", 1e-10, 1e-2],
+    ["maxSolverStepHours", "最大耦合步长", "h", 0.001, 24],
+  ],
   asm1: [
     ["muH", "mu_H 异养菌最大生长速率", "1/d", 0.1, 20],
     ["muA", "mu_A 自养菌最大生长速率", "1/d", 0.05, 5],
@@ -194,7 +204,7 @@ let activePanel = "params";
 let activeTab = "influent";
 let selectedNode = null;
 let lastResult = null;
-let activeChart = "effluent";
+let activeChart = "boundaries";
 let selectedMetric = "COD";
 let currentChartState = null;
 let hoverPoint = null;
@@ -407,6 +417,10 @@ function escapeHtml(value) {
 
 function applyParamValues(values) {
   Object.entries(values).forEach(([key, value]) => {
+    if (key === "solverMethod" && key in params) {
+      params[key] = String(value).toUpperCase() === "RK4" ? "RK4" : "LSODA";
+      return;
+    }
     const parsed = Number(value);
     if (key in params && Number.isFinite(parsed)) {
       params[key] = key === "clarifierLayers" || key === "clarifierFeedLayer" ? Math.round(parsed) : parsed;
@@ -528,7 +542,7 @@ function renderForm() {
     params.clarifierLayers = clamp(Math.round(params.clarifierLayers), 4, 20);
     params.clarifierFeedLayer = clamp(Math.round(params.clarifierFeedLayer), 1, params.clarifierLayers);
   }
-  fields[activeTab].forEach(([key, label, unit, min, max]) => {
+  fields[activeTab].forEach(([key, label, unit, min, max, options]) => {
     const fieldMax = key === "clarifierFeedLayer" ? params.clarifierLayers : max;
     const field = document.createElement("div");
     field.className = "field";
@@ -537,10 +551,22 @@ function renderForm() {
         <span>${label}</span>
         <small>${unit}</small>
       </label>
-      <input id="${key}" type="number" value="${params[key]}" min="${min}" max="${fieldMax}" step="any" />
+      ${
+        options
+          ? `<select id="${key}">${options.map((option) => `<option value="${option}"${params[key] === option ? " selected" : ""}>${option}</option>`).join("")}</select>`
+          : `<input id="${key}" type="number" value="${params[key]}" min="${min}" max="${fieldMax}" step="any" />`
+      }
     `;
-    const input = field.querySelector("input");
+    const input = field.querySelector("input, select");
     input.addEventListener("input", () => {
+      if (options) {
+        params[key] = input.value;
+        updateParamStorageStatus("有未保存修改");
+        if (lastResult?.mode === "boundaryPreview") {
+          showDefaultBoundaryPreview();
+        }
+        return;
+      }
       const parsed = Number(input.value);
       if (Number.isFinite(parsed)) {
         params[key] = key === "clarifierLayers" || key === "clarifierFeedLayer" ? Math.round(parsed) : parsed;
@@ -550,6 +576,9 @@ function renderForm() {
         }
         syncAsm1Params();
         updateParamStorageStatus("有未保存修改");
+        if (lastResult?.mode === "boundaryPreview") {
+          showDefaultBoundaryPreview();
+        }
       }
     });
     parameterForm.appendChild(field);
@@ -1269,6 +1298,52 @@ function outputIntervalDays() {
   return Math.max(solverStepDays(), params.outputIntervalHours / 24);
 }
 
+function createDefaultBoundaryPreview() {
+  const stepDays = 5 / 60 / 24;
+  const totalDays = 2;
+  const points = Math.round(totalDays / stepDays) + 1;
+  const time = Array.from({ length: points }, (_, index) => Number((index * stepDays).toFixed(8)));
+  const base = boundarySnapshot(influentVector());
+  const boundaries = Object.fromEntries(Object.keys(base).map((key) => [key, []]));
+
+  time.forEach((day) => {
+    const phase = (day / 1) * Math.PI * 2;
+    const halfDayPhase = (day / 0.5) * Math.PI * 2;
+    boundaries.q.push(base.q * (1 + 0.08 * Math.sin(phase)));
+    boundaries.cod.push(base.cod * (1 + 0.12 * Math.sin(phase - 0.5)));
+    boundaries.nh4.push(base.nh4 * (1 + 0.1 * Math.sin(phase - 0.2)));
+    boundaries.no3.push(Math.max(0, base.no3 * (1 + 0.08 * Math.sin(halfDayPhase))));
+    boundaries.tss.push(base.tss * (1 + 0.15 * Math.sin(phase - 0.9)));
+    boundaries.do.push(Math.max(0.2, base.do + 0.2 * Math.sin(phase + 0.8)));
+    boundaries.rasQ.push(base.rasQ);
+    boundaries.irQ.push(base.irQ);
+    boundaries.wasQ.push(base.wasQ);
+  });
+
+  return {
+    time,
+    mode: "boundaryPreview",
+    sourceName: "default-48h-boundaries",
+    boundaries,
+    units: {},
+    clarifier: {},
+    warnings: [],
+    validation: { ok: true, warningCount: 0, warnings: [] },
+  };
+}
+
+function showDefaultBoundaryPreview() {
+  lastResult = createDefaultBoundaryPreview();
+  setActiveChart("boundaries");
+  document.getElementById("metricNh4").textContent = "--";
+  document.getElementById("metricTn").textContent = "--";
+  document.getElementById("metricTss").textContent = "--";
+  document.getElementById("resultSummary").textContent =
+    "默认展示最近 48 h 边界输入预览，频率 5 分钟。点击运行后替换为真实仿真结果。";
+  renderWarnings(lastResult);
+  drawChart(lastResult, activeChart);
+}
+
 function setProgress(value, failed = false) {
   progressValue = clamp(value, 0, 100);
   progressBar.style.width = `${progressValue.toFixed(0)}%`;
@@ -1304,7 +1379,9 @@ async function runBackendSimulation() {
     }
     if (status.status === "success") {
       setProgress(100);
-      return getSimulationJobResult(jobId);
+      const result = await getSimulationJobResult(jobId);
+      result.durationMs = status.durationMs;
+      return result;
     }
     if (status.status === "failed") {
       throw new Error(status.error || status.message || "仿真任务失败。");
@@ -1751,7 +1828,7 @@ function drawChart(result, chartName) {
       key,
       name,
       color,
-      values: key.includes(".") ? key.split(".").reduce((target, part) => target?.[part], result) : result[key],
+      values: key.includes(".") ? key.split(".").reduce((target, part) => target?.[part], result) || [] : result[key] || [],
     }));
   }
   const activeDatasets = visibleDatasets(chartName, datasets);
@@ -1802,20 +1879,26 @@ function drawChart(result, chartName) {
   for (let i = 0; i <= 4; i += 1) {
     const x = pad.left + (plotW * i) / 4;
     const value = xMin + ((xMax - xMin) * i) / 4;
-    ctx.fillText(`${value.toFixed(0)} d`, x, height - pad.bottom + 14);
+    const label = xMax - xMin <= 3 ? `${(value * 24).toFixed(0)} h` : `${value.toFixed(0)} d`;
+    ctx.fillText(label, x, height - pad.bottom + 14);
   }
 
   activeDatasets.forEach((dataset) => {
     ctx.strokeStyle = dataset.color;
     ctx.lineWidth = 2.6;
     ctx.beginPath();
+    let started = false;
     dataset.values.forEach((value, index) => {
+      if (!Number.isFinite(value)) return;
       const x = pad.left + ((result.time[index] - xMin) / Math.max(xMax - xMin, 0.001)) * plotW;
       const y = yToPixel(value, yMin, yMax, pad, plotH);
-      if (index === 0) ctx.moveTo(x, y);
+      if (!started) {
+        ctx.moveTo(x, y);
+        started = true;
+      }
       else ctx.lineTo(x, y);
     });
-    ctx.stroke();
+    if (started) ctx.stroke();
   });
 
   if (hoverPoint) {
@@ -1859,6 +1942,7 @@ function drawHoverOverlay(ctx, index) {
 
   datasets.forEach((dataset) => {
     const value = dataset.values[index];
+    if (!Number.isFinite(value)) return;
     const y = yToPixel(value, yMin, yMax, pad, plotH);
     ctx.fillStyle = "#ffffff";
     ctx.strokeStyle = dataset.color;
@@ -1895,6 +1979,7 @@ function updateChartTooltip(event) {
   drawChart(lastResult, activeChart);
 
   const rows = datasets
+    .filter((dataset) => Number.isFinite(dataset.values[index]))
     .map((dataset) => {
       const value = dataset.values[index];
       return `
@@ -1906,7 +1991,8 @@ function updateChartTooltip(event) {
       `;
     })
     .join("");
-  chartTooltip.innerHTML = `<strong>${time[index].toFixed(2)} d</strong>${rows}`;
+  const timeLabel = xMax - xMin <= 3 ? `${(time[index] * 24).toFixed(2)} h` : `${time[index].toFixed(2)} d`;
+  chartTooltip.innerHTML = `<strong>${timeLabel}</strong>${rows}`;
   chartTooltip.hidden = false;
 
   const tooltipRect = chartTooltip.getBoundingClientRect();
@@ -1931,8 +2017,10 @@ function updateMetrics(result) {
   document.getElementById("metricTss").textContent = `${result.effTss[last].toFixed(1)} g/m3`;
   const sourceText = result.mode === "csv" ? `历史数据 ${result.sourceName}` : "手动参数";
   const warningText = result.warnings?.length ? `，含 ${result.warnings.length} 条校验提示` : "";
+  const solverText = result.solverMethod ? `，解算器 ${result.solverMethod}` : "";
+  const durationText = Number.isFinite(result.durationMs) ? `，耗时 ${(result.durationMs / 1000).toFixed(2)} s` : "";
   document.getElementById("resultSummary").textContent =
-    `已完成 ${sourceText} 仿真${warningText}。可点击任一单体并在下拉框选择 WEST 风格指标查看过程浓度。`;
+    `已完成 ${sourceText} 仿真${solverText}${durationText}${warningText}。可点击任一单体并在下拉框选择 WEST 风格指标查看过程浓度。`;
   renderWarnings(result);
 }
 
@@ -2160,9 +2248,7 @@ async function initializeApp() {
   renderForm();
   renderMetricOptions();
   drawNodes();
-  lastResult = runAsm1Simulation();
-  updateMetrics(lastResult);
-  drawChart(lastResult, activeChart);
+  showDefaultBoundaryPreview();
 }
 
 initializeApp();

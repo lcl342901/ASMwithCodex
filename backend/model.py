@@ -6,8 +6,10 @@ import math
 import re
 from typing import Any, Callable
 
+from scipy.integrate import solve_ivp
 
-DEFAULT_PARAMS: dict[str, float] = {
+
+DEFAULT_PARAMS: dict[str, Any] = {
     "influentQ": 10000,
     "influentCod": 420,
     "influentNh4": 32,
@@ -31,6 +33,10 @@ DEFAULT_PARAMS: dict[str, float] = {
     "simulationDays": 20,
     "timeStepHours": 0.5,
     "outputIntervalHours": 6,
+    "solverMethod": "RK4",
+    "solverRtol": 1e-4,
+    "solverAtol": 1e-6,
+    "maxSolverStepHours": 0.05,
     "muH": 6,
     "muA": 0.8,
     "bH": 0.62,
@@ -58,6 +64,27 @@ DEFAULT_PARAMS: dict[str, float] = {
     "takacsV0": 474,
     "takacsV0Max": 250,
     "maxLayerTss": 30000,
+    "initialSi": 30,
+    "initialAnaerobicSs": 75,
+    "initialAnoxicSs": 45,
+    "initialAerobicSs": 20,
+    "initialAnaerobicDo": 0.05,
+    "initialAnoxicDo": 0.05,
+    "initialAerobicDo": 2.0,
+    "initialAnaerobicNo3": 0.2,
+    "initialAnoxicNo3": 4,
+    "initialAerobicNo3": 10,
+    "initialAnaerobicNh4": 24,
+    "initialAnoxicNh4": 24,
+    "initialAerobicNh4": 8,
+    "initialSnd": 2,
+    "initialAlkalinity": 7,
+    "initialXi": 120,
+    "initialXs": 160,
+    "initialXbh": 2600,
+    "initialXba": 180,
+    "initialXp": 80,
+    "initialXnd": 15,
 }
 
 PARAM_LIMITS: dict[str, tuple[float, float]] = {
@@ -84,6 +111,9 @@ PARAM_LIMITS: dict[str, tuple[float, float]] = {
     "simulationDays": (0.01, 3650),
     "timeStepHours": (0.001, 24),
     "outputIntervalHours": (0.001, 168),
+    "solverRtol": (1e-8, 1e-2),
+    "solverAtol": (1e-10, 1e-2),
+    "maxSolverStepHours": (0.001, 24),
     "muH": (0.001, 50),
     "muA": (0.001, 20),
     "bH": (0, 10),
@@ -111,6 +141,27 @@ PARAM_LIMITS: dict[str, tuple[float, float]] = {
     "takacsV0": (0.001, 5000),
     "takacsV0Max": (0.001, 5000),
     "maxLayerTss": (100, 200000),
+    "initialSi": (0, 1000),
+    "initialAnaerobicSs": (0, 3000),
+    "initialAnoxicSs": (0, 3000),
+    "initialAerobicSs": (0, 3000),
+    "initialAnaerobicDo": (0, 20),
+    "initialAnoxicDo": (0, 20),
+    "initialAerobicDo": (0, 20),
+    "initialAnaerobicNo3": (0, 500),
+    "initialAnoxicNo3": (0, 500),
+    "initialAerobicNo3": (0, 500),
+    "initialAnaerobicNh4": (0, 500),
+    "initialAnoxicNh4": (0, 500),
+    "initialAerobicNh4": (0, 500),
+    "initialSnd": (0, 500),
+    "initialAlkalinity": (0, 100),
+    "initialXi": (0, 20000),
+    "initialXs": (0, 20000),
+    "initialXbh": (0, 30000),
+    "initialXba": (0, 10000),
+    "initialXp": (0, 20000),
+    "initialXnd": (0, 5000),
 }
 
 MAX_SOLVER_STEP_DAYS = 0.0005
@@ -209,7 +260,7 @@ def as_number(value: Any, fallback: float | None = None) -> float | None:
 
 @dataclass
 class SimulationContext:
-    params: dict[str, float] = field(default_factory=lambda: DEFAULT_PARAMS.copy())
+    params: dict[str, Any] = field(default_factory=lambda: DEFAULT_PARAMS.copy())
     source_name: str = ""
     mode: str = "manual"
     progress_callback: Callable[[float, float], None] | None = None
@@ -387,6 +438,68 @@ class SimulationContext:
         k4 = self.reactor_derivative(self.add_scaled(state, k3, dt), input_vector, q_in, volume, kla)
         return [max(0.0, value + (dt / 6) * (k1[index] + 2 * k2[index] + 2 * k3[index] + k4[index])) for index, value in enumerate(state)]
 
+    def lsoda_reactor(self, state: list[float], input_vector: list[float], q_in: float, volume: float, kla: float, dt: float) -> list[float]:
+        if dt <= 0:
+            return state.copy()
+
+        def derivative(_time: float, values: list[float]) -> list[float]:
+            nonnegative = [max(0.0, float(value)) for value in values]
+            return self.reactor_derivative(nonnegative, input_vector, q_in, volume, kla)
+
+        solution = solve_ivp(
+            derivative,
+            (0.0, dt),
+            state,
+            method="LSODA",
+            rtol=self.params["solverRtol"],
+            atol=self.params["solverAtol"],
+            max_step=max(min(self.params["maxSolverStepHours"] / 24, dt), 1e-12),
+        )
+        if not solution.success:
+            raise ValueError(f"LSODA 解算失败：{solution.message}")
+        return [max(0.0, float(value)) for value in solution.y[:, -1]]
+
+    def solve_reactor(self, state: list[float], input_vector: list[float], q_in: float, volume: float, kla: float, dt: float) -> list[float]:
+        if self.solver_method() == "RK4":
+            return self.rk4_reactor(state, input_vector, q_in, volume, kla, dt)
+        return self.lsoda_reactor(state, input_vector, q_in, volume, kla, dt)
+
+    def lsoda_reactor_system(self, state: dict[str, Any], influent: list[float], dt: float) -> None:
+        q = self.params["influentQ"]
+        ras_q = q * self.params["rasRatio"]
+        ir_q = q * self.params["internalRecycleRatio"]
+        ras = state["ras"].copy()
+
+        initial = state["anaerobic"] + state["anoxic"] + state["aerobic"]
+
+        def derivative(_time: float, values: list[float]) -> list[float]:
+            anaerobic = [max(0.0, float(value)) for value in values[0:13]]
+            anoxic = [max(0.0, float(value)) for value in values[13:26]]
+            aerobic = [max(0.0, float(value)) for value in values[26:39]]
+
+            anaerobic_in = self.mix_vectors([{"q": q, "c": influent}, {"q": ras_q, "c": ras}])
+            anoxic_in = self.mix_vectors([{"q": q + ras_q, "c": anaerobic}, {"q": ir_q, "c": aerobic}])
+            anaerobic_d = self.reactor_derivative(anaerobic, anaerobic_in, q + ras_q, self.params["anaerobicVolume"], 0)
+            anoxic_d = self.reactor_derivative(anoxic, anoxic_in, q + ras_q + ir_q, self.params["anoxicVolume"], 0)
+            aerobic_d = self.reactor_derivative(aerobic, anoxic, q + ras_q + ir_q, self.params["aerobicVolume"], 60 * self.params["aerobicDo"])
+            return anaerobic_d + anoxic_d + aerobic_d
+
+        solution = solve_ivp(
+            derivative,
+            (0.0, dt),
+            initial,
+            method="LSODA",
+            rtol=self.params["solverRtol"],
+            atol=self.params["solverAtol"],
+            max_step=max(min(self.params["maxSolverStepHours"] / 24, dt), 1e-12),
+        )
+        if not solution.success:
+            raise ValueError(f"LSODA 解算失败：{solution.message}")
+        final = [max(0.0, float(value)) for value in solution.y[:, -1]]
+        state["anaerobic"] = final[0:13]
+        state["anoxic"] = final[13:26]
+        state["aerobic"] = final[26:39]
+
     def cod(self, c: list[float]) -> float:
         return c[C["S_I"]] + c[C["S_S"]] + c[C["X_I"]] + c[C["X_S"]] + c[C["X_BH"]] + c[C["X_BA"]] + c[C["X_P"]]
 
@@ -453,6 +566,7 @@ class SimulationContext:
             "rasMlss": [],
             "mode": self.mode,
             "sourceName": self.source_name,
+            "solverMethod": self.solver_method(),
             "boundaries": {"q": [], "cod": [], "nh4": [], "no3": [], "tss": [], "do": [], "rasQ": [], "irQ": [], "wasQ": []},
             "units": self.create_unit_series(),
             "clarifier": {"topTss": [], "middleTss": [], "bottomTss": [], "effluentTss": [], "underflowTss": []},
@@ -585,19 +699,20 @@ class SimulationContext:
 
     def initial_reactor_state(self, kind: str) -> list[float]:
         c = zeros()
-        c[C["S_I"]] = 30
-        c[C["S_S"]] = 75 if kind == "anaerobic" else 45 if kind == "anoxic" else 20
-        c[C["S_O"]] = self.params["aerobicDo"] if kind == "aerobic" else 0.05
-        c[C["S_NO"]] = 0.2 if kind == "anaerobic" else 4 if kind == "anoxic" else 10
-        c[C["S_NH"]] = 8 if kind == "aerobic" else 24
-        c[C["S_ND"]] = 2
-        c[C["S_ALK"]] = 7
-        c[C["X_I"]] = 120
-        c[C["X_S"]] = 160
-        c[C["X_BH"]] = 2600
-        c[C["X_BA"]] = 180
-        c[C["X_P"]] = 80
-        c[C["X_ND"]] = 15
+        prefix = f"initial{kind.capitalize()}"
+        c[C["S_I"]] = self.params["initialSi"]
+        c[C["S_S"]] = self.params[f"{prefix}Ss"]
+        c[C["S_O"]] = self.params[f"{prefix}Do"]
+        c[C["S_NO"]] = self.params[f"{prefix}No3"]
+        c[C["S_NH"]] = self.params[f"{prefix}Nh4"]
+        c[C["S_ND"]] = self.params["initialSnd"]
+        c[C["S_ALK"]] = self.params["initialAlkalinity"]
+        c[C["X_I"]] = self.params["initialXi"]
+        c[C["X_S"]] = self.params["initialXs"]
+        c[C["X_BH"]] = self.params["initialXbh"]
+        c[C["X_BA"]] = self.params["initialXba"]
+        c[C["X_P"]] = self.params["initialXp"]
+        c[C["X_ND"]] = self.params["initialXnd"]
         return c
 
     def create_simulation_state(self) -> dict[str, Any]:
@@ -619,13 +734,16 @@ class SimulationContext:
         was_q = min(self.params["wasQ"], q * 0.8)
         capture = clamp(self.params["captureEfficiency"] / 100, 0.8, 0.9995)
 
-        anaerobic_in = self.mix_vectors([{"q": q, "c": influent}, {"q": ras_q, "c": state["ras"]}])
-        state["anaerobic"] = self.rk4_reactor(state["anaerobic"], anaerobic_in, q + ras_q, self.params["anaerobicVolume"], 0, dt)
+        if self.solver_method() == "LSODA":
+            self.lsoda_reactor_system(state, influent, dt)
+        else:
+            anaerobic_in = self.mix_vectors([{"q": q, "c": influent}, {"q": ras_q, "c": state["ras"]}])
+            state["anaerobic"] = self.rk4_reactor(state["anaerobic"], anaerobic_in, q + ras_q, self.params["anaerobicVolume"], 0, dt)
 
-        anoxic_in = self.mix_vectors([{"q": q + ras_q, "c": state["anaerobic"]}, {"q": ir_q, "c": state["aerobic"]}])
-        state["anoxic"] = self.rk4_reactor(state["anoxic"], anoxic_in, q + ras_q + ir_q, self.params["anoxicVolume"], 0, dt)
+            anoxic_in = self.mix_vectors([{"q": q + ras_q, "c": state["anaerobic"]}, {"q": ir_q, "c": state["aerobic"]}])
+            state["anoxic"] = self.rk4_reactor(state["anoxic"], anoxic_in, q + ras_q + ir_q, self.params["anoxicVolume"], 0, dt)
 
-        state["aerobic"] = self.rk4_reactor(state["aerobic"], state["anoxic"], q + ras_q + ir_q, self.params["aerobicVolume"], 60 * self.params["aerobicDo"], dt)
+            state["aerobic"] = self.rk4_reactor(state["aerobic"], state["anoxic"], q + ras_q + ir_q, self.params["aerobicVolume"], 60 * self.params["aerobicDo"], dt)
 
         split = self.takacs_clarifier_step(state["clarifierLayers"], state["aerobic"], q + ras_q, ras_q, was_q, dt, capture)
         state["clarifierLayers"] = split["layers"]
@@ -635,7 +753,12 @@ class SimulationContext:
     def requested_step_days(self) -> float:
         return max(0.001 / 24, self.params["timeStepHours"] / 24)
 
+    def solver_method(self) -> str:
+        return str(self.params.get("solverMethod", "LSODA")).upper()
+
     def solver_step_days(self) -> float:
+        if self.solver_method() == "LSODA":
+            return min(self.requested_step_days(), self.params["maxSolverStepHours"] / 24)
         return min(self.requested_step_days(), MAX_SOLVER_STEP_DAYS)
 
     def output_interval_days(self) -> float:
@@ -717,7 +840,7 @@ class SimulationContext:
         self.params.update(boundary_values)
         self.sync_asm1_params()
         total_dt = max(step_hours, 0.001) / 24
-        max_dt = MAX_SOLVER_STEP_DAYS
+        max_dt = self.solver_step_days()
         influent = self.influent_vector()
         elapsed = 0.0
         split = None
@@ -905,23 +1028,33 @@ def csv_values_at(records: list[dict[str, Any]], time: float, cursor: dict[str, 
     return interpolate_values(previous, next_record, time)
 
 
-def sanitize_params(params: dict[str, Any] | None) -> dict[str, float]:
+def sanitize_params(params: dict[str, Any] | None) -> dict[str, Any]:
     merged = DEFAULT_PARAMS.copy()
     if not params:
         return merged
+    provided_keys = set(params.keys())
     for key, value in params.items():
         if key not in merged:
+            continue
+        if key == "solverMethod":
+            merged[key] = str(value).upper()
             continue
         parsed = as_number(value)
         if parsed is not None:
             merged[key] = parsed
+    if "aerobicDo" in provided_keys and "initialAerobicDo" not in provided_keys:
+        merged["initialAerobicDo"] = merged["aerobicDo"]
     return merged
 
 
-def validate_params(params: dict[str, float]) -> tuple[list[str], list[str]]:
+def validate_params(params: dict[str, Any]) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
+    if params.get("solverMethod") not in {"LSODA", "RK4"}:
+        errors.append("solverMethod 必须是 LSODA 或 RK4。")
     for key, value in params.items():
+        if key == "solverMethod":
+            continue
         if not math.isfinite(value):
             errors.append(f"{key} 必须是有限数值。")
             continue
@@ -947,8 +1080,14 @@ def validate_params(params: dict[str, float]) -> tuple[list[str], list[str]]:
         warnings.append(f"二沉池表面负荷偏高 ({surface_overflow:.1f} m/d)，固液分离结果可能不可靠。")
 
     requested_step = params["timeStepHours"] / 24
-    if requested_step > MAX_SOLVER_STEP_DAYS:
+    if params.get("solverMethod") == "RK4" and requested_step > MAX_SOLVER_STEP_DAYS:
         warnings.append(f"设定计算步长大于内部求解器上限，后端会使用 {MAX_SOLVER_STEP_DAYS:g} d 作为内部步长。")
+    if params.get("solverMethod") == "LSODA" and requested_step > params["maxSolverStepHours"] / 24:
+        warnings.append("设定计算步长大于 LSODA 最大耦合步长，后端会按 maxSolverStepHours 分段推进。")
+    if params.get("solverMethod") == "LSODA":
+        warnings.append("当前 LSODA 会按二沉池耦合步长多次调用 SciPy，主要用于对照验证；常规运行建议使用 RK4。")
+    if params.get("solverMethod") == "LSODA" and params["maxSolverStepHours"] > 0.05:
+        warnings.append("LSODA 最大耦合步长较大，二沉池离散耦合可能偏离 RK4 基准；需要更高一致性时可降到 0.05 h 或更小。")
     if params["outputIntervalHours"] < params["timeStepHours"]:
         warnings.append("结果输出间隔短于设定计算步长，输出会跟随内部求解器步长。")
     if params["wasQ"] > params["influentQ"] * 0.8:
