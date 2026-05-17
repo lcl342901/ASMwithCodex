@@ -212,6 +212,34 @@ def observation_objective(result: dict[str, Any], observations: list[dict[str, A
     }
 
 
+def objective_comparison_rows(initial_objective: dict[str, Any], best_objective: dict[str, Any]) -> list[dict[str, Any]]:
+    best_lookup = {
+        (error["time"], error["metric"]): error
+        for error in best_objective.get("errors", [])
+    }
+    rows = []
+    for initial_error in initial_objective.get("errors", []):
+        key = (initial_error["time"], initial_error["metric"])
+        best_error = best_lookup.get(key)
+        if not best_error:
+            continue
+        initial_abs = abs(initial_error["residual"])
+        best_abs = abs(best_error["residual"])
+        rows.append(
+            {
+                "time": initial_error["time"],
+                "metric": initial_error["metric"],
+                "observed": initial_error["observed"],
+                "initialPredicted": initial_error["predicted"],
+                "optimizedPredicted": best_error["predicted"],
+                "initialResidual": initial_error["residual"],
+                "optimizedResidual": best_error["residual"],
+                "absoluteErrorImprovement": initial_abs - best_abs,
+            }
+        )
+    return rows
+
+
 def reference_observations(case_id: str) -> list[dict[str, Any]]:
     case = get_reference_case(case_id)
     targets = case.get("targets", {})
@@ -297,7 +325,8 @@ def calibration_optimize(
 
     report()
     best_params = base_params.copy()
-    best_result, best_objective = evaluate(best_params)
+    best_result, initial_objective = evaluate(best_params)
+    best_objective = initial_objective
     history = [
         {
             "iteration": 0,
@@ -338,7 +367,9 @@ def calibration_optimize(
         "tunableParams": selected_tunables,
         "targets": selected_targets,
         "observationCount": len(rows),
+        "initialObjectiveDetail": initial_objective,
         "objectiveDetail": best_objective,
+        "comparisonRows": objective_comparison_rows(initial_objective, best_objective),
         "history": history,
         "warnings": warnings + best_result.get("warnings", []),
         "durationMs": (perf_counter() - started) * 1000,

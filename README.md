@@ -220,7 +220,7 @@ Example calibration request:
 }
 ```
 
-The optimizer currently uses a bounded coordinate search. It is intentionally conservative and deterministic so calibration experiments are easy to inspect before introducing heavier optimizers.
+The optimizer currently uses a bounded coordinate search. It is intentionally conservative and deterministic so calibration experiments are easy to inspect before introducing heavier optimizers. Optimization responses include `initialObjectiveDetail`, `objectiveDetail`, and `comparisonRows` so the frontend can show observed values, initial predictions, optimized predictions, and residual improvement for each calibration point.
 
 Calibration runs can now be saved into the active project:
 
@@ -474,14 +474,14 @@ Main milestones:
 - Connected the frontend parameter panel to project selection and per-project parameter save/reset.
 - Extended project scope to CSV boundary data, realtime records, realtime state/results, and calculation logs.
 - Added ownership, permission, database migration, and deployment plans for the future online platform.
-- Added project-scoped calibration run archive, a minimal frontend calibration workspace, observation CSV upload for calibration targets, a BSM1 baseline-vs-target calibration report, and staged calibration presets.
+- Added project-scoped calibration run archive, a minimal frontend calibration workspace, observation CSV upload for calibration targets, a BSM1 baseline-vs-target calibration report, staged calibration presets, and before/after residual comparison rows.
 
 ## Suggested Next Steps
 
 - Add CSV template download and stricter input validation.
 - Add model-state persistence for real-time data.
 - Expose initial-condition controls in the frontend advanced settings.
-- Add before/after calibration result comparison.
+- Add richer calibration report export and chart overlays.
 - Add export of simulation results as CSV.
 - Align the BSM1 five-tank layout against official dynamic input files and evaluation windows so the built-in BSM1 targets can become a comparable validation case instead of `reference_only`.
 - Implement authentication and project membership enforcement.

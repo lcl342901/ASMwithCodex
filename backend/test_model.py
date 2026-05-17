@@ -261,6 +261,9 @@ class ModelTest(unittest.TestCase):
         self.assertLessEqual(optimized["bestObjective"], optimized["initialObjective"])
         self.assertEqual(optimized["tunableParams"], ["muA"])
         self.assertGreater(len(optimized["history"]), 1)
+        self.assertIn("initialObjectiveDetail", optimized)
+        self.assertTrue(optimized["comparisonRows"])
+        self.assertEqual(optimized["comparisonRows"][0]["metric"], "effNh4")
 
     def test_calibration_optimizer_can_use_bsm1_layout(self):
         optimized = calibration_optimize_endpoint(

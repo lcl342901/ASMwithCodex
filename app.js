@@ -625,6 +625,19 @@ function renderCalibrationSummary(result) {
     calibrationSummary.innerHTML = "";
     return;
   }
+  const comparisonRows = (result.comparisonRows || [])
+    .slice(0, 8)
+    .map((row) => `
+      <tr>
+        <td>${escapeHtml(row.metric)}</td>
+        <td>${formatChartValue(row.time)}</td>
+        <td>${formatChartValue(row.observed)}</td>
+        <td>${formatChartValue(row.initialPredicted)}</td>
+        <td>${formatChartValue(row.optimizedPredicted)}</td>
+        <td>${formatChartValue(row.absoluteErrorImprovement)}</td>
+      </tr>
+    `)
+    .join("");
   calibrationSummary.innerHTML = `
     <div><span>方法</span><strong>${escapeHtml(result.method || "--")}</strong></div>
     <div><span>布局</span><strong>${escapeHtml(result.mapping || "--")}</strong></div>
@@ -632,6 +645,14 @@ function renderCalibrationSummary(result) {
     <div><span>最优误差</span><strong>${formatChartValue(result.bestObjective)}</strong></div>
     <div><span>改善</span><strong>${formatChartValue(result.improvementPercent)}%</strong></div>
     <div><span>记录</span><strong>${result.savedRun?.id ? `#${result.savedRun.id}` : "--"}</strong></div>
+    ${comparisonRows ? `
+      <table class="calibration-report-table">
+        <thead>
+          <tr><th>指标</th><th>时间</th><th>观测</th><th>初始</th><th>校准后</th><th>误差改善</th></tr>
+        </thead>
+        <tbody>${comparisonRows}</tbody>
+      </table>
+    ` : ""}
   `;
 }
 
