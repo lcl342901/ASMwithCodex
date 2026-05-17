@@ -225,7 +225,9 @@ GET    /api/projects/{projectId}/calibration-runs/{runId}
 DELETE /api/projects/{projectId}/calibration-runs/{runId}
 ```
 
-Set `saveRun: true` in `/api/calibration/optimize` to archive the request and result. The frontend includes a compact `校准` workspace that can run a quick NH4 calibration for the active project and list saved calibration records.
+Set `saveRun: true` in `/api/calibration/optimize` to archive the request and result. The frontend includes a compact `校准` workspace that can run a quick NH4 calibration for the active project, upload observation CSV data, and list saved calibration records.
+
+Observation CSV files in the calibration workspace should include a time column (`time`, `day`, `timestamp`, etc.) plus one or more effluent target columns such as `effNh4`, `effCod`, `effNo3`, `effTn`, `effTss`, or `BOD5`. When observation data is loaded, the frontend uses those rows as calibration targets; otherwise it falls back to a built-in NH4 quick-check target.
 
 For a closer BSM1 structural experiment, `POST /api/simulate` also accepts:
 
@@ -467,14 +469,14 @@ Main milestones:
 - Connected the frontend parameter panel to project selection and per-project parameter save/reset.
 - Extended project scope to CSV boundary data, realtime records, realtime state/results, and calculation logs.
 - Added ownership, permission, database migration, and deployment plans for the future online platform.
-- Added project-scoped calibration run archive and a minimal frontend calibration workspace.
+- Added project-scoped calibration run archive, a minimal frontend calibration workspace, and observation CSV upload for calibration targets.
 
 ## Suggested Next Steps
 
 - Add CSV template download and stricter input validation.
 - Add model-state persistence for real-time data.
 - Expose initial-condition controls in the frontend advanced settings.
-- Add observation CSV upload and richer staged calibration UI.
+- Add richer staged calibration UI.
 - Add export of simulation results as CSV.
 - Align the BSM1 five-tank layout against official dynamic input files and evaluation windows so the built-in BSM1 targets can become a comparable validation case instead of `reference_only`.
 - Implement authentication and project membership enforcement.

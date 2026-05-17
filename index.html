@@ -140,11 +140,25 @@
         <div id="calibrationTools" class="calibration-tools" hidden>
           <div class="tool-section">
             <div class="tool-section-heading">
-              <strong>快速校准</strong>
+              <strong>观测数据</strong>
+              <span>出水指标 CSV</span>
+            </div>
+            <label class="file-picker compact-file">
+              <span>上传观测 CSV</span>
+              <input id="calibrationObservationFileInput" type="file" accept=".csv,text/csv" />
+            </label>
+            <div class="realtime-actions">
+              <button id="clearCalibrationObservations" class="secondary-button danger-lite" type="button">清除观测</button>
+            </div>
+            <p id="calibrationObservationStatus">尚未加载观测数据。可使用 time/day + effNh4/effCod/effNo3/effTn/effTss/BOD5 列。</p>
+          </div>
+          <div class="tool-section">
+            <div class="tool-section-heading">
+              <strong>校准任务</strong>
               <span>当前项目</span>
             </div>
             <div class="realtime-actions">
-              <button id="runQuickCalibration" class="secondary-button" type="button">运行 NH4 校准</button>
+              <button id="runQuickCalibration" class="secondary-button" type="button">运行校准</button>
               <button id="refreshCalibrationRuns" class="secondary-button" type="button">刷新记录</button>
             </div>
             <p id="calibrationStatus">尚未运行校准任务。</p>

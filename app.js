@@ -47,6 +47,9 @@ const logStatus = document.getElementById("logStatus");
 const logList = document.getElementById("logList");
 const runQuickCalibration = document.getElementById("runQuickCalibration");
 const refreshCalibrationRuns = document.getElementById("refreshCalibrationRuns");
+const calibrationObservationFileInput = document.getElementById("calibrationObservationFileInput");
+const clearCalibrationObservations = document.getElementById("clearCalibrationObservations");
+const calibrationObservationStatus = document.getElementById("calibrationObservationStatus");
 const calibrationStatus = document.getElementById("calibrationStatus");
 const calibrationSummary = document.getElementById("calibrationSummary");
 const calibrationRunList = document.getElementById("calibrationRunList");
@@ -221,6 +224,9 @@ let hoverPoint = null;
 let csvRecords = [];
 let csvFileName = "";
 let csvText = "";
+let calibrationObservations = [];
+let calibrationObservationFileName = "";
+let calibrationObservationTargets = [];
 let progressTimer = null;
 let progressValue = 0;
 let projects = [];
@@ -605,6 +611,11 @@ function updateCalibrationStatus(message, isError = false) {
   calibrationStatus.classList.toggle("error", isError);
 }
 
+function updateCalibrationObservationStatus(message, isError = false) {
+  calibrationObservationStatus.textContent = message;
+  calibrationObservationStatus.classList.toggle("error", isError);
+}
+
 function renderCalibrationSummary(result) {
   if (!result) {
     calibrationSummary.innerHTML = "";
@@ -649,21 +660,76 @@ async function refreshProjectCalibrationRuns() {
   }
 }
 
+function calibrationTargetsFromObservations(rows) {
+  const targets = ["effCod", "effNh4", "effNo3", "effTn", "effTss", "bod5"];
+  return targets.filter((target) => rows.some((row) => Number.isFinite(Number(row[target]))));
+}
+
+function normalizeCalibrationObservations(text) {
+  const rows = parseCsvRows(text);
+  if (rows.length < 2) throw new Error("CSV 至少需要表头和一行观测数据。");
+  const headers = rows[0].map(normalizeHeader);
+  const rawRows = rows.slice(1).map((values) => {
+    const row = {};
+    headers.forEach((header, index) => {
+      row[header] = values[index] ?? "";
+    });
+    return row;
+  });
+  const timeAliases = ["time", "timestamp", "datetime", "date", "day", "days", "t"];
+  const firstTimeValue = timeAliases.map((alias) => rawRows[0][normalizeHeader(alias)]).find(Boolean);
+  const parsedFirstTimestamp = firstTimeValue && !Number.isFinite(Number(firstTimeValue)) ? Date.parse(firstTimeValue) : 0;
+  const firstTimestamp = Number.isFinite(parsedFirstTimestamp) ? parsedFirstTimestamp : 0;
+  const metricAliases = [
+    ["effCod", ["effcod", "outcod", "codout", "cod", "tcod"]],
+    ["effNh4", ["effnh4", "effnh4n", "outnh4", "outnh4n", "nh4out", "nh4", "nh4n", "snh"]],
+    ["effNo3", ["effno3", "effno3n", "outno3", "outno3n", "no3out", "no3", "no3n", "sno"]],
+    ["effTn", ["efftn", "outtn", "tnout", "tn", "totaln"]],
+    ["effTss", ["efftss", "outtss", "tssout", "tss"]],
+    ["bod5", ["bod5", "effbod5", "outbod5", "bod"]],
+  ];
+  const normalized = rawRows
+    .map((row, index) => {
+      const timeValue = timeAliases.map((alias) => row[normalizeHeader(alias)]).find((value) => value !== undefined && value !== "");
+      const record = {
+        time: parseCsvTime(timeValue, index, firstTimestamp),
+      };
+      metricAliases.forEach(([target, aliases]) => {
+        const value = getCsvNumber(row, aliases);
+        if (value !== null) record[target] = value;
+      });
+      return record;
+    })
+    .filter((row) => Number.isFinite(row.time) && calibrationTargetsFromObservations([row]).length)
+    .sort((a, b) => a.time - b.time);
+  if (!normalized.length) {
+    throw new Error("没有识别到可用于校准的观测值。请提供 effNh4、effCod、effNo3、effTn、effTss 或 BOD5 列。");
+  }
+  return normalized;
+}
+
 async function runQuickNh4Calibration() {
   updateCalibrationStatus("校准计算中...");
-  const horizon = Math.min(Math.max(params.simulationDays || 1, 0.02), 0.1);
+  const quickHorizon = Math.min(Math.max(params.simulationDays || 1, 0.02), 0.1);
+  const observationHorizon = calibrationObservations.length
+    ? Math.max(...calibrationObservations.map((row) => row.time).filter(Number.isFinite))
+    : quickHorizon;
+  const horizon = calibrationObservations.length ? Math.max(params.simulationDays || 0, observationHorizon) : quickHorizon;
+  const observations = calibrationObservations.length ? calibrationObservations : [{ time: horizon, effNh4: 2.5 }];
+  const targets = calibrationObservations.length ? calibrationObservationTargets : ["effNh4"];
+  const label = calibrationObservations.length ? `Observation calibration (${calibrationObservationFileName})` : "NH4 quick calibration";
   try {
     const result = await calibrationRequest("/optimize", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         projectId: activeProjectId,
-        name: "NH4 quick calibration",
+        name: label,
         saveRun: true,
         params: { ...params, simulationDays: horizon, outputIntervalHours: Math.min(params.outputIntervalHours || 1, 1) },
-        observations: [{ time: horizon, effNh4: 2.5 }],
+        observations,
         tunableParams: ["muA", "kNH"],
-        targets: ["effNh4"],
+        targets,
         maxIterations: 1,
         stepFraction: 0.1,
       }),
@@ -2293,6 +2359,34 @@ runQuickCalibration.addEventListener("click", async () => {
 });
 refreshCalibrationRuns.addEventListener("click", async () => {
   await refreshProjectCalibrationRuns();
+});
+calibrationObservationFileInput.addEventListener("change", async () => {
+  const file = calibrationObservationFileInput.files?.[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    calibrationObservations = normalizeCalibrationObservations(text);
+    calibrationObservationTargets = calibrationTargetsFromObservations(calibrationObservations);
+    calibrationObservationFileName = file.name;
+    const start = calibrationObservations[0]?.time ?? 0;
+    const end = calibrationObservations[calibrationObservations.length - 1]?.time ?? 0;
+    updateCalibrationObservationStatus(
+      `已加载 ${file.name}：${calibrationObservations.length} 条观测，指标 ${calibrationObservationTargets.join(", ")}，时间 ${formatChartValue(start)} - ${formatChartValue(end)} d。`
+    );
+  } catch (error) {
+    calibrationObservations = [];
+    calibrationObservationTargets = [];
+    calibrationObservationFileName = "";
+    calibrationObservationFileInput.value = "";
+    updateCalibrationObservationStatus(`观测 CSV 解析失败：${error.message}`, true);
+  }
+});
+clearCalibrationObservations.addEventListener("click", () => {
+  calibrationObservations = [];
+  calibrationObservationTargets = [];
+  calibrationObservationFileName = "";
+  calibrationObservationFileInput.value = "";
+  updateCalibrationObservationStatus("已清除观测数据。再次运行将使用内置 NH4 快速目标。");
 });
 clearLogs.addEventListener("click", async () => {
   await clearCalculationLogs();

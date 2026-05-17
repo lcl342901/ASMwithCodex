@@ -475,6 +475,10 @@ h2 {
   font-weight: 500;
 }
 
+.compact-file {
+  padding: 8px;
+}
+
 .secondary-button {
   align-self: start;
   height: 34px;
