@@ -170,7 +170,8 @@ h2 {
   padding: 14px;
 }
 
-.data-mode-tabs {
+.data-mode-tabs,
+.result-mode-tabs {
   display: flex;
   gap: 8px;
   padding: 12px 14px 0;
@@ -503,7 +504,7 @@ h2 {
 .param-tabs {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 6px;
+  gap: 14px;
   padding: 10px 14px 0;
 }
 
@@ -511,6 +512,7 @@ h2 {
 .parameter-form[hidden],
 .data-tools[hidden],
 .realtime-tools[hidden],
+.batch-results[hidden],
 .log-tools[hidden],
 .calibration-tools[hidden],
 .metric-picker[hidden],
@@ -527,8 +529,22 @@ h2 {
 }
 
 .param-tab {
+  position: relative;
   height: 32px;
   font-size: 12px;
+}
+
+.workflow-tabs .param-tab:not(:last-child)::after {
+  content: "→";
+  position: absolute;
+  top: 50%;
+  right: -13px;
+  width: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+  transform: translateY(-50%);
+  pointer-events: none;
 }
 
 .tab.active,
@@ -544,6 +560,36 @@ h2 {
   padding: 14px;
   max-height: calc(100vh - 250px);
   overflow: auto;
+}
+
+.parameter-section {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdfb;
+}
+
+.parameter-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 2px;
+}
+
+.parameter-section-heading h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.parameter-section-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: right;
 }
 
 .data-tools,

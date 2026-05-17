@@ -36,7 +36,8 @@ const exportConfigJson = document.getElementById("exportConfigJson");
 const importConfigJson = document.getElementById("importConfigJson");
 const runSimulationButton = document.getElementById("runSimulation");
 const cancelSimulationButton = document.getElementById("cancelSimulation");
-const dataModeTabs = Array.from(document.querySelectorAll(".data-mode-tab"));
+const batchResults = document.getElementById("batchResults");
+const resultModeTabs = Array.from(document.querySelectorAll(".result-mode-tab"));
 const realtimeBoundaryRows = document.getElementById("realtimeBoundaryRows");
 const realtimeResultRows = document.getElementById("realtimeResultRows");
 const metricPicker = document.getElementById("metricPicker");
@@ -227,7 +228,7 @@ const fields = {
 
 let activePanel = "process";
 let activeTab = "influent";
-let activeDataMode = "csv";
+let activeResultMode = "batch";
 let selectedNode = null;
 let lastResult = null;
 let activeChart = "boundaries";
@@ -268,9 +269,8 @@ const C = {
 
 const workspaceLabels = {
   process: ["工艺模型", "AAO 工艺流程"],
-  params: ["仿真配置", "边界条件与尺寸"],
-  data: ["数据中心", "边界、实时与清洗"],
-  results: ["仿真结果", "结果曲线与导出"],
+  params: ["仿真配置", "边界、模型与解算器"],
+  results: ["仿真结果", "批量仿真与实时结果"],
   evaluation: ["模型评估", "可信度与标准对比"],
   calibration: ["校准中心", "模型率定与报告"],
   logs: ["系统日志", "计算状态与失败日志"],
@@ -426,7 +426,7 @@ function selectNode(id) {
     anaerobic: "process",
     anoxic: "process",
     aerobic: "process",
-    clarifier: "clarifier",
+    clarifier: "model",
     ras: "operation",
     was: "operation",
     effluent: "operation",
@@ -583,13 +583,17 @@ async function loadSavedParams() {
 
 async function saveCurrentParams() {
   try {
+    const projectId = activeProjectId;
     const payload = await projectRequest(`/${encodeURIComponent(activeProjectId)}/params`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ params }),
     });
+    activeProjectId = payload.project?.id || projectId;
     applyParamValues(payload.params || params);
     await loadProjects();
+    activeProjectId = payload.project?.id || projectId;
+    renderProjectOptions();
     renderForm();
     updateParamStorageStatus(`${payload.project?.name || "当前项目"}：已保存 ${new Date().toLocaleTimeString()}`);
   } catch (error) {
@@ -948,78 +952,108 @@ async function clearCalculationLogs() {
   }
 }
 
+function createParamField([key, label, unit, min, max, options]) {
+  const fieldMax = key === "clarifierFeedLayer" ? params.clarifierLayers : max;
+  const field = document.createElement("div");
+  field.className = "field";
+  field.innerHTML = `
+    <label for="${key}">
+      <span>${label}</span>
+      <small>${unit}</small>
+    </label>
+    ${
+      options
+        ? `<select id="${key}">${options.map((option) => `<option value="${option}"${params[key] === option ? " selected" : ""}>${option}</option>`).join("")}</select>`
+        : `<input id="${key}" type="number" value="${params[key]}" min="${min}" max="${fieldMax}" step="any" />`
+    }
+  `;
+  const input = field.querySelector("input, select");
+  input.addEventListener("input", () => {
+    if (options) {
+      params[key] = input.value;
+      updateParamStorageStatus("有未保存修改");
+      if (lastResult?.mode === "boundaryPreview") {
+        showDefaultBoundaryPreview();
+      }
+      return;
+    }
+    const parsed = Number(input.value);
+    if (Number.isFinite(parsed)) {
+      params[key] = key === "clarifierLayers" || key === "clarifierFeedLayer" ? Math.round(parsed) : parsed;
+      if (key === "clarifierLayers") {
+        params.clarifierFeedLayer = clamp(Math.round(params.clarifierFeedLayer), 1, params.clarifierLayers);
+        renderForm();
+      }
+      syncAsm1Params();
+      updateParamStorageStatus("有未保存修改");
+      if (lastResult?.mode === "boundaryPreview") {
+        showDefaultBoundaryPreview();
+      }
+    }
+  });
+  return field;
+}
+
+function appendParamSection(title, description, fieldList) {
+  const section = document.createElement("section");
+  section.className = "parameter-section";
+  section.innerHTML = `
+    <div class="parameter-section-heading">
+      <h3>${title}</h3>
+      <p>${description}</p>
+    </div>
+  `;
+  fieldList.forEach((fieldConfig) => section.appendChild(createParamField(fieldConfig)));
+  parameterForm.appendChild(section);
+}
+
+function showRealtimeResults() {
+  if (activePanel !== "results" || activeResultMode !== "realtime") return;
+  refreshRealtimeLatest();
+  refreshRealtimeMockStatus();
+  refreshRealtimeHistory();
+}
+
 function renderForm() {
   const showingParams = activePanel === "params";
+  const showingResults = activePanel === "results";
   workspacePages.forEach((page) => {
     page.classList.toggle("active", page.dataset.page === activePanel);
   });
   const [eyebrow, title] = workspaceLabels[activePanel] || workspaceLabels.process;
   workspaceEyebrow.textContent = eyebrow;
   workspaceTitle.textContent = title;
-  dataTools.hidden = activePanel !== "data";
-  realtimeTools.hidden = activePanel !== "data";
-  if (activePanel === "data") {
-    dataTools.hidden = activeDataMode !== "csv";
-    realtimeTools.hidden = activeDataMode !== "realtime";
-  }
+  dataTools.hidden = !(showingParams && activeTab === "boundaryData");
+  realtimeTools.hidden = !(showingResults && activeResultMode === "realtime");
+  batchResults.hidden = !(showingResults && activeResultMode === "batch");
   logTools.hidden = activePanel !== "logs";
   calibrationTools.hidden = activePanel !== "calibration";
   paramTabs.hidden = !showingParams;
-  parameterForm.hidden = !showingParams;
+  parameterForm.hidden = !showingParams || activeTab === "boundaryData";
   parameterForm.innerHTML = "";
   if (!showingParams) {
     if (activePanel === "process") {
       drawEdges();
     }
-    if (activePanel === "results" && lastResult) {
+    if (activePanel === "results" && activeResultMode === "batch" && lastResult) {
       drawChart(lastResult, activeChart);
     }
     return;
   }
-  if (activeTab === "clarifier") {
+  if (activeTab === "model") {
     params.clarifierLayers = clamp(Math.round(params.clarifierLayers), 4, 20);
     params.clarifierFeedLayer = clamp(Math.round(params.clarifierFeedLayer), 1, params.clarifierLayers);
   }
-  fields[activeTab].forEach(([key, label, unit, min, max, options]) => {
-    const fieldMax = key === "clarifierFeedLayer" ? params.clarifierLayers : max;
-    const field = document.createElement("div");
-    field.className = "field";
-    field.innerHTML = `
-      <label for="${key}">
-        <span>${label}</span>
-        <small>${unit}</small>
-      </label>
-      ${
-        options
-          ? `<select id="${key}">${options.map((option) => `<option value="${option}"${params[key] === option ? " selected" : ""}>${option}</option>`).join("")}</select>`
-          : `<input id="${key}" type="number" value="${params[key]}" min="${min}" max="${fieldMax}" step="any" />`
-      }
-    `;
-    const input = field.querySelector("input, select");
-    input.addEventListener("input", () => {
-      if (options) {
-        params[key] = input.value;
-        updateParamStorageStatus("有未保存修改");
-        if (lastResult?.mode === "boundaryPreview") {
-          showDefaultBoundaryPreview();
-        }
-        return;
-      }
-      const parsed = Number(input.value);
-      if (Number.isFinite(parsed)) {
-        params[key] = key === "clarifierLayers" || key === "clarifierFeedLayer" ? Math.round(parsed) : parsed;
-        if (key === "clarifierLayers") {
-          params.clarifierFeedLayer = clamp(Math.round(params.clarifierFeedLayer), 1, params.clarifierLayers);
-          renderForm();
-        }
-        syncAsm1Params();
-        updateParamStorageStatus("有未保存修改");
-        if (lastResult?.mode === "boundaryPreview") {
-          showDefaultBoundaryPreview();
-        }
-      }
-    });
-    parameterForm.appendChild(field);
+  if (activeTab === "boundaryData") {
+    return;
+  }
+  if (activeTab === "model") {
+    appendParamSection("活性污泥参数", "ASM1 动力学、产率、半饱和常数和温度修正。", fields.asm1);
+    appendParamSection("二沉池参数", "二沉池层数、进水层、捕获效率和 Takacs 沉降参数。", fields.clarifier);
+    return;
+  }
+  fields[activeTab].forEach((fieldConfig) => {
+    parameterForm.appendChild(createParamField(fieldConfig));
   });
 }
 
@@ -2640,10 +2674,8 @@ document.querySelectorAll(".panel-tab").forEach((tab) => {
     if (activePanel === "logs") {
       refreshCalculationLogs();
     }
-    if (activePanel === "data") {
-      refreshRealtimeLatest();
-      refreshRealtimeMockStatus();
-      refreshRealtimeHistory();
+    if (activePanel === "results" && activeResultMode === "realtime") {
+      showRealtimeResults();
     }
     if (activePanel === "calibration") {
       refreshCalibrationStages();
@@ -2661,16 +2693,14 @@ document.querySelectorAll(".param-tab").forEach((tab) => {
   });
 });
 
-dataModeTabs.forEach((tab) => {
-  tab.addEventListener("click", async () => {
-    dataModeTabs.forEach((item) => item.classList.remove("active"));
+resultModeTabs.forEach((tab) => {
+  tab.addEventListener("click", () => {
+    resultModeTabs.forEach((item) => item.classList.remove("active"));
     tab.classList.add("active");
-    activeDataMode = tab.dataset.dataMode;
+    activeResultMode = tab.dataset.resultMode;
     renderForm();
-    if (activeDataMode === "realtime") {
-      await refreshRealtimeLatest();
-      await refreshRealtimeHistory();
-      await refreshRealtimeMockStatus();
+    if (activeResultMode === "realtime") {
+      showRealtimeResults();
     }
   });
 });
@@ -2707,7 +2737,7 @@ projectSelect.addEventListener("change", async () => {
   await loadProjectCsv(activeProjectId);
   renderForm();
   showDefaultBoundaryPreview();
-  if (activePanel === "data") await refreshRealtimeLatest();
+  if (activePanel === "results" && activeResultMode === "realtime") showRealtimeResults();
   if (activePanel === "logs") await refreshCalculationLogs();
   if (activePanel === "calibration") {
     await refreshCalibrationStages();
@@ -2923,7 +2953,9 @@ runSimulationButton.addEventListener("click", async () => {
   lastResult = createRunningSimulationResult();
   updateMetricCards(lastResult);
   activePanel = "results";
+  activeResultMode = "batch";
   document.querySelectorAll(".panel-tab").forEach((item) => item.classList.toggle("active", item.dataset.panel === "results"));
+  resultModeTabs.forEach((item) => item.classList.toggle("active", item.dataset.resultMode === activeResultMode));
   renderForm();
   document.getElementById("resultSummary").textContent = "仿真计算中，曲线会随已完成的输出时间点持续更新。";
   renderWarnings(lastResult);

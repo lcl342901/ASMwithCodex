@@ -22,10 +22,6 @@
             <span>仿真配置</span>
             <small>参数与尺寸</small>
           </button>
-          <button class="nav-item panel-tab" data-panel="data" type="button">
-            <span>数据中心</span>
-            <small>边界与实时</small>
-          </button>
           <button class="nav-item panel-tab" data-panel="results" type="button">
             <span>仿真结果</span>
             <small>曲线与导出</small>
@@ -101,29 +97,15 @@
             </div>
           </div>
         </div>
-        <div id="paramTabs" class="param-tabs" role="tablist" aria-label="参数分组">
+        <div id="paramTabs" class="param-tabs workflow-tabs" role="tablist" aria-label="配置流程">
           <button class="tab param-tab active" data-tab="influent">进水</button>
-          <button class="tab param-tab" data-tab="process">池体</button>
-          <button class="tab param-tab" data-tab="operation">运行</button>
+          <button class="tab param-tab" data-tab="process">池体尺寸</button>
+          <button class="tab param-tab" data-tab="operation">控制边界</button>
+          <button class="tab param-tab" data-tab="boundaryData">边界数据</button>
           <button class="tab param-tab" data-tab="solver">解算器</button>
-          <button class="tab param-tab" data-tab="asm1">ASM1</button>
-          <button class="tab param-tab" data-tab="clarifier">二沉池</button>
+          <button class="tab param-tab" data-tab="model">模型参数</button>
         </div>
         <form id="parameterForm" class="parameter-form"></form>
-      </section>
-
-      <section class="workspace-page stack-page" data-page="data" aria-label="数据中心">
-        <div class="panel-heading">
-          <div>
-            <h2>数据中心</h2>
-            <p>管理边界 CSV、实时输入、Mock 数据源和后续数据清洗入口。</p>
-          </div>
-        </div>
-        <div class="data-mode-tabs" role="tablist" aria-label="数据来源">
-          <button class="tab data-mode-tab active" data-data-mode="csv" type="button">CSV 历史数据</button>
-          <button class="tab data-mode-tab" data-data-mode="realtime" type="button">实时输入</button>
-        </div>
-        <div class="section-grid">
         <div id="dataTools" class="data-tools" hidden>
           <label class="file-picker">
             <span>上传 CSV 历史数据</span>
@@ -131,99 +113,6 @@
           </label>
           <button id="clearCsvData" class="secondary-button" type="button">清除数据</button>
           <p id="csvStatus">尚未加载历史数据。CSV 作为边界条件序列，仿真总时长和计算步长由“运行”页设置。可直接使用 sample-data.csv。</p>
-        </div>
-
-        <div id="realtimeTools" class="realtime-tools" hidden>
-          <div class="realtime-console">
-            <div class="tool-section">
-              <div class="tool-section-heading">
-                <strong>实时输入</strong>
-                <span>边界数据写入</span>
-              </div>
-              <div class="realtime-actions">
-                <button id="ingestRealtimeSample" class="secondary-button" type="button">仅推送边界</button>
-                <button id="pushAndStepRealtime" class="secondary-button" type="button">推送并计算一步</button>
-                <button id="refreshRealtime" class="secondary-button" type="button">刷新最新</button>
-              </div>
-            </div>
-            <div class="tool-section">
-              <div class="tool-section-heading">
-                <strong>模型推进</strong>
-                <span>从保存状态继续计算</span>
-              </div>
-              <div class="realtime-actions">
-                <button id="stepRealtime" class="secondary-button" type="button">用最新边界推进一步</button>
-                <button id="resetRealtime" class="secondary-button danger-lite" type="button">重置实时状态</button>
-              </div>
-            </div>
-            <div class="tool-section">
-              <div class="tool-section-heading">
-                <strong>Mock 数据源</strong>
-                <span>开发演示</span>
-              </div>
-              <p class="tool-note">Mock 会每 5 分钟自动生成一条模拟边界并推进模型。它不会阻止你手动推送边界，但开启后表格里会同时出现 mock 和手动/API 数据。</p>
-              <div class="realtime-actions">
-                <button id="startMockRealtime" class="secondary-button" type="button">启动 Mock</button>
-                <button id="stopMockRealtime" class="secondary-button" type="button">停止 Mock</button>
-                <button id="refreshMockRealtime" class="secondary-button" type="button">Mock 状态</button>
-              </div>
-              <div id="mockSummary" class="mock-summary"></div>
-            </div>
-            <p id="realtimeStatus">尚未接入实时数据。可先推送当前进水参数，再推进模型一步。</p>
-            <div id="realtimeSummary" class="realtime-summary"></div>
-          </div>
-
-          <div class="realtime-history-grid">
-            <div class="tool-section table-section">
-              <div class="tool-section-heading">
-                <strong>在线边界数据</strong>
-                <span>最近 12 小时</span>
-              </div>
-              <div class="table-scroll">
-                <table class="data-table">
-                  <thead>
-                    <tr>
-                      <th>边界时间</th>
-                      <th>ID</th>
-                      <th>Q</th>
-                      <th>COD</th>
-                      <th>NH4</th>
-                      <th>NO3</th>
-                      <th>TSS</th>
-                      <th>DO</th>
-                      <th>质量</th>
-                    </tr>
-                  </thead>
-                  <tbody id="realtimeBoundaryRows"></tbody>
-                </table>
-              </div>
-            </div>
-            <div class="tool-section table-section">
-              <div class="tool-section-heading">
-                <strong>推进结果</strong>
-                <span>最近 12 小时</span>
-              </div>
-              <div class="table-scroll">
-                <table class="data-table">
-                  <thead>
-                    <tr>
-                      <th>模型时间</th>
-                      <th>边界时间</th>
-                      <th>输入 ID</th>
-                      <th>步长</th>
-                      <th>COD</th>
-                      <th>NH4-N</th>
-                      <th>TN</th>
-                      <th>TSS</th>
-                      <th>MLSS</th>
-                    </tr>
-                  </thead>
-                  <tbody id="realtimeResultRows"></tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
         </div>
       </section>
 
@@ -331,40 +220,139 @@
           </div>
         </div>
 
-        <div class="chart-toolbar">
-          <div class="chart-view-tabs" role="tablist" aria-label="结果视图">
-            <button class="chart-toggle" data-chart="effluent">出水水质</button>
-            <button class="chart-toggle active" data-chart="boundaries">边界输入</button>
-            <button class="chart-toggle" data-chart="nitrogen">氮转化</button>
-            <button class="chart-toggle" data-chart="solids">污泥与 DO</button>
-            <button class="chart-toggle" data-chart="unit">单体过程</button>
+        <div class="result-mode-tabs" role="tablist" aria-label="结果模式">
+          <button class="tab result-mode-tab active" data-result-mode="batch" type="button">批量仿真结果</button>
+          <button class="tab result-mode-tab" data-result-mode="realtime" type="button">实时结果</button>
+        </div>
+
+        <div id="batchResults" class="batch-results">
+          <div class="chart-toolbar">
+            <div class="chart-view-tabs" role="tablist" aria-label="结果视图">
+              <button class="chart-toggle" data-chart="effluent">出水水质</button>
+              <button class="chart-toggle active" data-chart="boundaries">边界输入</button>
+              <button class="chart-toggle" data-chart="nitrogen">氮转化</button>
+              <button class="chart-toggle" data-chart="solids">污泥与 DO</button>
+              <button class="chart-toggle" data-chart="unit">单体过程</button>
+            </div>
+            <div class="chart-actions">
+              <label id="metricPicker" class="metric-picker" hidden>
+                <span>指标</span>
+                <select id="unitMetricSelect"></select>
+              </label>
+              <div class="export-menu">
+                <button id="exportMenuButton" class="secondary-button" type="button" aria-expanded="false">导出</button>
+                <div id="exportMenu" class="export-menu-panel" hidden>
+                  <button id="exportResultsCsv" type="button">导出结果 CSV</button>
+                  <button id="exportBoundariesCsv" type="button">导出边界 CSV</button>
+                  <button id="exportUnitsCsv" type="button">导出单体 CSV</button>
+                  <button id="exportConfigJson" type="button">导出配置 JSON</button>
+                  <label class="import-config">
+                    <span>导入配置</span>
+                    <input id="importConfigJson" type="file" accept=".json,application/json" />
+                  </label>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="chart-actions">
-            <label id="metricPicker" class="metric-picker" hidden>
-              <span>指标</span>
-              <select id="unitMetricSelect"></select>
-            </label>
-            <div class="export-menu">
-              <button id="exportMenuButton" class="secondary-button" type="button" aria-expanded="false">导出</button>
-              <div id="exportMenu" class="export-menu-panel" hidden>
-                <button id="exportResultsCsv" type="button">导出结果 CSV</button>
-                <button id="exportBoundariesCsv" type="button">导出边界 CSV</button>
-                <button id="exportUnitsCsv" type="button">导出单体 CSV</button>
-                <button id="exportConfigJson" type="button">导出配置 JSON</button>
-                <label class="import-config">
-                  <span>导入配置</span>
-                  <input id="importConfigJson" type="file" accept=".json,application/json" />
-                </label>
+          <div id="warningPanel" class="warning-panel" hidden></div>
+          <div class="chart-wrap">
+            <canvas id="resultChart" width="1200" height="420"></canvas>
+            <div id="chartTooltip" class="chart-tooltip" hidden></div>
+          </div>
+          <div id="legend" class="legend"></div>
+        </div>
+
+        <div id="realtimeTools" class="realtime-tools" hidden>
+          <div class="realtime-console">
+            <div class="tool-section">
+              <div class="tool-section-heading">
+                <strong>实时输入</strong>
+                <span>边界数据写入</span>
+              </div>
+              <div class="realtime-actions">
+                <button id="ingestRealtimeSample" class="secondary-button" type="button">仅推送边界</button>
+                <button id="pushAndStepRealtime" class="secondary-button" type="button">推送并计算一步</button>
+                <button id="refreshRealtime" class="secondary-button" type="button">刷新最新</button>
+              </div>
+            </div>
+            <div class="tool-section">
+              <div class="tool-section-heading">
+                <strong>模型推进</strong>
+                <span>从保存状态继续计算</span>
+              </div>
+              <div class="realtime-actions">
+                <button id="stepRealtime" class="secondary-button" type="button">用最新边界推进一步</button>
+                <button id="resetRealtime" class="secondary-button danger-lite" type="button">重置实时状态</button>
+              </div>
+            </div>
+            <div class="tool-section">
+              <div class="tool-section-heading">
+                <strong>Mock 数据源</strong>
+                <span>开发演示</span>
+              </div>
+              <p class="tool-note">Mock 会每 5 分钟自动生成一条模拟边界并推进模型。它不会阻止你手动推送边界，但开启后表格里会同时出现 mock 和手动/API 数据。</p>
+              <div class="realtime-actions">
+                <button id="startMockRealtime" class="secondary-button" type="button">启动 Mock</button>
+                <button id="stopMockRealtime" class="secondary-button" type="button">停止 Mock</button>
+                <button id="refreshMockRealtime" class="secondary-button" type="button">Mock 状态</button>
+              </div>
+              <div id="mockSummary" class="mock-summary"></div>
+            </div>
+            <p id="realtimeStatus">尚未接入实时数据。可先推送当前进水参数，再推进模型一步。</p>
+            <div id="realtimeSummary" class="realtime-summary"></div>
+          </div>
+
+          <div class="realtime-history-grid">
+            <div class="tool-section table-section">
+              <div class="tool-section-heading">
+                <strong>在线边界数据</strong>
+                <span>最近 12 小时</span>
+              </div>
+              <div class="table-scroll">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>边界时间</th>
+                      <th>ID</th>
+                      <th>Q</th>
+                      <th>COD</th>
+                      <th>NH4</th>
+                      <th>NO3</th>
+                      <th>TSS</th>
+                      <th>DO</th>
+                      <th>质量</th>
+                    </tr>
+                  </thead>
+                  <tbody id="realtimeBoundaryRows"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="tool-section table-section">
+              <div class="tool-section-heading">
+                <strong>推进结果</strong>
+                <span>最近 12 小时</span>
+              </div>
+              <div class="table-scroll">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>模型时间</th>
+                      <th>边界时间</th>
+                      <th>输入 ID</th>
+                      <th>步长</th>
+                      <th>COD</th>
+                      <th>NH4-N</th>
+                      <th>TN</th>
+                      <th>TSS</th>
+                      <th>MLSS</th>
+                    </tr>
+                  </thead>
+                  <tbody id="realtimeResultRows"></tbody>
+                </table>
               </div>
             </div>
           </div>
         </div>
-        <div id="warningPanel" class="warning-panel" hidden></div>
-        <div class="chart-wrap">
-          <canvas id="resultChart" width="1200" height="420"></canvas>
-          <div id="chartTooltip" class="chart-tooltip" hidden></div>
-        </div>
-        <div id="legend" class="legend"></div>
       </section>
       </main>
     </div>
