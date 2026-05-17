@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import math
 import random
@@ -94,6 +94,19 @@ def age_seconds(value: str | None) -> float | None:
     return max(0.0, (datetime.now(timezone.utc) - parsed).total_seconds())
 
 
+def add_hours_to_iso(value: str | None, hours: float) -> str:
+    base = parse_iso(value) or datetime.now(timezone.utc)
+    return (base + timedelta(hours=hours)).isoformat()
+
+
+def later_iso(first: str | None, second: str | None) -> str:
+    first_dt = parse_iso(first)
+    second_dt = parse_iso(second)
+    if first_dt and second_dt:
+        return first if first_dt >= second_dt else second
+    return first or second or now_iso()
+
+
 def list_data_sources() -> dict[str, Any]:
     return {"sources": list(DATA_SOURCES.values())}
 
@@ -182,6 +195,15 @@ def init_db() -> None:
               params_json TEXT NOT NULL,
               state_json TEXT NOT NULL,
               last_input_id INTEGER,
+              updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS project_simulation_state (
+              project_id TEXT PRIMARY KEY,
+              timestamp TEXT NOT NULL,
+              params_json TEXT NOT NULL,
+              state_json TEXT NOT NULL,
+              summary_json TEXT NOT NULL,
               updated_at TEXT NOT NULL
             );
             """
@@ -363,6 +385,64 @@ def save_state(timestamp: str, params: dict[str, float], state: dict[str, Any], 
         )
 
 
+def load_simulation_state(project_id: str | None = None) -> dict[str, Any] | None:
+    init_db()
+    resolved_project_id = normalize_project_id(project_id)
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM project_simulation_state WHERE project_id = ?", (resolved_project_id,)).fetchone()
+    if not row:
+        return None
+    return {
+        "projectId": row["project_id"],
+        "timestamp": row["timestamp"],
+        "params": json.loads(row["params_json"]),
+        "state": json.loads(row["state_json"]),
+        "summary": json.loads(row["summary_json"]),
+        "updatedAt": row["updated_at"],
+    }
+
+
+def save_simulation_state(
+    project_id: str | None,
+    params: dict[str, Any],
+    state: dict[str, Any],
+    summary: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    init_db()
+    resolved_project_id = normalize_project_id(project_id)
+    timestamp = now_iso()
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO project_simulation_state (project_id, timestamp, params_json, state_json, summary_json, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(project_id) DO UPDATE SET
+              timestamp = excluded.timestamp,
+              params_json = excluded.params_json,
+              state_json = excluded.state_json,
+              summary_json = excluded.summary_json,
+              updated_at = excluded.updated_at
+            """,
+            (
+                resolved_project_id,
+                timestamp,
+                json.dumps(params),
+                json.dumps(state),
+                json.dumps(summary or {}),
+                timestamp,
+            ),
+        )
+    return {"projectId": resolved_project_id, "updatedAt": timestamp}
+
+
+def clear_simulation_state(project_id: str | None = None) -> dict[str, Any]:
+    init_db()
+    resolved_project_id = normalize_project_id(project_id)
+    with connect() as conn:
+        cursor = conn.execute("DELETE FROM project_simulation_state WHERE project_id = ?", (resolved_project_id,))
+    return {"status": "cleared", "projectId": resolved_project_id, "deleted": cursor.rowcount}
+
+
 def get_saved_params() -> dict[str, Any]:
     init_db()
     with connect() as conn:
@@ -505,6 +585,64 @@ def get_latest_result(project_id: str | None = None) -> dict[str, Any] | None:
     }
 
 
+def realtime_history(project_id: str | None = None, hours: float = 12, limit: int = 200) -> dict[str, Any]:
+    init_db()
+    resolved_project_id = normalize_project_id(project_id)
+    safe_limit = max(1, min(int(limit), 500))
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=max(float(hours), 0.1))).isoformat()
+    with connect() as conn:
+        input_rows = conn.execute(
+            """
+            SELECT * FROM realtime_inputs
+            WHERE project_id = ? AND timestamp >= ?
+            ORDER BY timestamp DESC, id DESC
+            LIMIT ?
+            """,
+            (resolved_project_id, cutoff, safe_limit),
+        ).fetchall()
+        result_rows = conn.execute(
+            """
+            SELECT * FROM realtime_results
+            WHERE project_id = ? AND timestamp >= ?
+            ORDER BY timestamp DESC, id DESC
+            LIMIT ?
+            """,
+            (resolved_project_id, cutoff, safe_limit),
+        ).fetchall()
+
+    inputs = [
+        {
+            "id": row["id"],
+            "projectId": row["project_id"],
+            "timestamp": row["timestamp"],
+            "values": json.loads(row["values_json"]),
+            "quality": json.loads(row["quality_json"]),
+            "createdAt": row["created_at"],
+        }
+        for row in reversed(input_rows)
+    ]
+    results = [
+        {
+            "id": row["id"],
+            "projectId": row["project_id"],
+            "timestamp": row["timestamp"],
+            "inputId": row["input_id"],
+            "stepHours": row["step_hours"],
+            "result": json.loads(row["result_json"]),
+            "warnings": json.loads(row["warnings_json"]),
+            "createdAt": row["created_at"],
+        }
+        for row in reversed(result_rows)
+    ]
+    return {
+        "projectId": resolved_project_id,
+        "hours": hours,
+        "limit": safe_limit,
+        "inputs": inputs,
+        "results": results,
+    }
+
+
 def realtime_step(
     timestamp: str | None = None,
     values: dict[str, Any] | None = None,
@@ -524,6 +662,7 @@ def realtime_step(
         raise ValueError("; ".join(errors))
 
     input_record = None
+    inserted_input = values is not None
     if values is not None:
         input_record = insert_input(timestamp, values, quality, resolved_project_id)
     else:
@@ -540,18 +679,25 @@ def realtime_step(
     ctx = SimulationContext(params=clean_params, source_name="realtime", mode="realtime")
     state = saved["state"] if saved else ctx.create_simulation_state()
     step = float(step_hours if step_hours is not None else clean_params["timeStepHours"])
+    base_timestamp = saved["timestamp"] if saved else input_record["timestamp"]
+    if inserted_input:
+        base_timestamp = later_iso(base_timestamp, input_record["timestamp"])
+    model_timestamp = add_hours_to_iso(base_timestamp, step)
     stepped = ctx.step_realtime_state(state, boundary_values, step)
     result = stepped["snapshot"]
     result["mode"] = "realtime"
     result["projectId"] = resolved_project_id
-    result["timestamp"] = input_record["timestamp"]
+    result["timestamp"] = model_timestamp
+    result["modelTimestamp"] = model_timestamp
+    result["inputTimestamp"] = input_record["timestamp"]
     result["inputId"] = input_record["id"]
+    result["createdNewInput"] = inserted_input
     result["warnings"] = warnings
     result["quality"] = quality_report
     result["validation"] = {"ok": True, "warningCount": len(warnings), "warnings": warnings}
 
-    save_state(input_record["timestamp"], ctx.params, stepped["state"], input_record["id"], resolved_project_id)
-    result_id = insert_result(input_record["timestamp"], input_record["id"], step, result, warnings, resolved_project_id)
+    save_state(model_timestamp, ctx.params, stepped["state"], input_record["id"], resolved_project_id)
+    result_id = insert_result(model_timestamp, input_record["id"], step, result, warnings, resolved_project_id)
     return {"resultId": result_id, "projectId": resolved_project_id, "input": input_record, "result": result, "state": load_state(resolved_project_id)}
 
 

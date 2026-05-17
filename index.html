@@ -15,7 +15,7 @@
         </div>
         <nav class="primary-nav">
           <button class="nav-item panel-tab active" data-panel="process" type="button">
-            <span>工艺建模</span>
+            <span>工艺模型</span>
             <small>流程图与单体</small>
           </button>
           <button class="nav-item panel-tab" data-panel="params" type="button">
@@ -51,11 +51,21 @@
       <main class="workspace">
         <header class="topbar">
           <div>
-            <p id="workspaceEyebrow" class="eyebrow">工艺建模</p>
+            <p id="workspaceEyebrow" class="eyebrow">工艺模型</p>
             <h2 id="workspaceTitle">AAO 工艺流程</h2>
           </div>
           <div class="topbar-actions">
+            <div class="simulation-status" aria-live="polite">
+              <span id="statusBadge" class="status-badge">待运行</span>
+              <div class="progress-row" aria-label="计算进度">
+                <div class="progress-track">
+                  <div id="progressBar" class="progress-bar"></div>
+                </div>
+                <span id="progressPercent" class="progress-percent">0%</span>
+              </div>
+            </div>
             <button id="runSimulation" class="primary-button">运行仿真</button>
+            <button id="cancelSimulation" class="secondary-button danger-lite" type="button" hidden>终止计算</button>
           </div>
         </header>
 
@@ -67,15 +77,6 @@
           </div>
           <div class="panel-tools">
             <button id="resetLayout" class="secondary-button" type="button">重置布局</button>
-            <div class="simulation-status" aria-live="polite">
-              <span id="statusBadge" class="status-badge">待运行</span>
-              <div class="progress-row" aria-label="计算进度">
-                <div class="progress-track">
-                  <div id="progressBar" class="progress-bar"></div>
-                </div>
-                <span id="progressPercent" class="progress-percent">0%</span>
-              </div>
-            </div>
           </div>
         </div>
         <div id="flowCanvas" class="flow-canvas">
@@ -118,6 +119,10 @@
             <p>管理边界 CSV、实时输入、Mock 数据源和后续数据清洗入口。</p>
           </div>
         </div>
+        <div class="data-mode-tabs" role="tablist" aria-label="数据来源">
+          <button class="tab data-mode-tab active" data-data-mode="csv" type="button">CSV 历史数据</button>
+          <button class="tab data-mode-tab" data-data-mode="realtime" type="button">实时输入</button>
+        </div>
         <div class="section-grid">
         <div id="dataTools" class="data-tools" hidden>
           <label class="file-picker">
@@ -129,40 +134,95 @@
         </div>
 
         <div id="realtimeTools" class="realtime-tools" hidden>
-          <div class="tool-section">
-            <div class="tool-section-heading">
-              <strong>实时输入</strong>
-              <span>边界数据写入</span>
+          <div class="realtime-console">
+            <div class="tool-section">
+              <div class="tool-section-heading">
+                <strong>实时输入</strong>
+                <span>边界数据写入</span>
+              </div>
+              <div class="realtime-actions">
+                <button id="ingestRealtimeSample" class="secondary-button" type="button">仅推送边界</button>
+                <button id="pushAndStepRealtime" class="secondary-button" type="button">推送并计算一步</button>
+                <button id="refreshRealtime" class="secondary-button" type="button">刷新最新</button>
+              </div>
             </div>
-            <div class="realtime-actions">
-              <button id="ingestRealtimeSample" class="secondary-button" type="button">推送当前边界</button>
-              <button id="refreshRealtime" class="secondary-button" type="button">刷新最新</button>
+            <div class="tool-section">
+              <div class="tool-section-heading">
+                <strong>模型推进</strong>
+                <span>从保存状态继续计算</span>
+              </div>
+              <div class="realtime-actions">
+                <button id="stepRealtime" class="secondary-button" type="button">用最新边界推进一步</button>
+                <button id="resetRealtime" class="secondary-button danger-lite" type="button">重置实时状态</button>
+              </div>
+            </div>
+            <div class="tool-section">
+              <div class="tool-section-heading">
+                <strong>Mock 数据源</strong>
+                <span>开发演示</span>
+              </div>
+              <p class="tool-note">Mock 会每 5 分钟自动生成一条模拟边界并推进模型。它不会阻止你手动推送边界，但开启后表格里会同时出现 mock 和手动/API 数据。</p>
+              <div class="realtime-actions">
+                <button id="startMockRealtime" class="secondary-button" type="button">启动 Mock</button>
+                <button id="stopMockRealtime" class="secondary-button" type="button">停止 Mock</button>
+                <button id="refreshMockRealtime" class="secondary-button" type="button">Mock 状态</button>
+              </div>
+              <div id="mockSummary" class="mock-summary"></div>
+            </div>
+            <p id="realtimeStatus">尚未接入实时数据。可先推送当前进水参数，再推进模型一步。</p>
+            <div id="realtimeSummary" class="realtime-summary"></div>
+          </div>
+
+          <div class="realtime-history-grid">
+            <div class="tool-section table-section">
+              <div class="tool-section-heading">
+                <strong>在线边界数据</strong>
+                <span>最近 12 小时</span>
+              </div>
+              <div class="table-scroll">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>边界时间</th>
+                      <th>ID</th>
+                      <th>Q</th>
+                      <th>COD</th>
+                      <th>NH4</th>
+                      <th>NO3</th>
+                      <th>TSS</th>
+                      <th>DO</th>
+                      <th>质量</th>
+                    </tr>
+                  </thead>
+                  <tbody id="realtimeBoundaryRows"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="tool-section table-section">
+              <div class="tool-section-heading">
+                <strong>推进结果</strong>
+                <span>最近 12 小时</span>
+              </div>
+              <div class="table-scroll">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>模型时间</th>
+                      <th>边界时间</th>
+                      <th>输入 ID</th>
+                      <th>步长</th>
+                      <th>COD</th>
+                      <th>NH4-N</th>
+                      <th>TN</th>
+                      <th>TSS</th>
+                      <th>MLSS</th>
+                    </tr>
+                  </thead>
+                  <tbody id="realtimeResultRows"></tbody>
+                </table>
+              </div>
             </div>
           </div>
-          <div class="tool-section">
-            <div class="tool-section-heading">
-              <strong>模型推进</strong>
-              <span>从保存状态继续计算</span>
-            </div>
-            <div class="realtime-actions">
-              <button id="stepRealtime" class="secondary-button" type="button">推进一步</button>
-              <button id="resetRealtime" class="secondary-button danger-lite" type="button">重置实时状态</button>
-            </div>
-          </div>
-          <div class="tool-section">
-            <div class="tool-section-heading">
-              <strong>Mock 数据源</strong>
-              <span>每 5 分钟自动推进</span>
-            </div>
-            <div class="realtime-actions">
-              <button id="startMockRealtime" class="secondary-button" type="button">启动 Mock</button>
-              <button id="stopMockRealtime" class="secondary-button" type="button">停止 Mock</button>
-              <button id="refreshMockRealtime" class="secondary-button" type="button">Mock 状态</button>
-            </div>
-            <div id="mockSummary" class="mock-summary"></div>
-          </div>
-          <p id="realtimeStatus">尚未接入实时数据。可先推送当前进水参数，再推进模型一步。</p>
-          <div id="realtimeSummary" class="realtime-summary"></div>
         </div>
         </div>
       </section>

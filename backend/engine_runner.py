@@ -50,6 +50,8 @@ def simulate_with_engine(
     csv_text: str = "",
     csv_file_name: str = "",
     progress_callback: Callable[[float, float], None] | None = None,
+    partial_result_callback: Callable[[dict[str, Any]], None] | None = None,
+    initial_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     engine_version = normalize_engine_version(params)
     if engine_version == "v1":
@@ -58,6 +60,8 @@ def simulate_with_engine(
             csv_text=csv_text,
             csv_file_name=csv_file_name,
             progress_callback=progress_callback,
+            partial_result_callback=partial_result_callback,
+            initial_state=initial_state,
         )
         result["engineVersion"] = "v1"
         result["credibility"] = assess_result_credibility(result, params)

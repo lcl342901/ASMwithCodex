@@ -6,7 +6,7 @@ from pathlib import Path
 
 from backend.engine_compare import compare_engines
 from backend.engine_runner import normalize_engine_version, simulate_with_engine
-from backend.main import calibration_bsm1_mapping_endpoint, calibration_bsm1_report_endpoint, calibration_optimize_endpoint, calibration_preview_endpoint, calibration_stage_run_endpoint, calibration_stages_endpoint, clear_project_csv_endpoint, create_project_endpoint, default_project_endpoint, delete_project_calibration_run_endpoint, get_project_calibration_run_endpoint, get_project_csv_endpoint, get_project_params_endpoint, create_simulation_job_endpoint, get_simulation_job_endpoint, get_simulation_job_result_endpoint, list_project_calibration_runs_endpoint, list_projects_endpoint, model_credibility_endpoint, model_initial_conditions_endpoint, model_metadata_endpoint, model_reference_case_compare_endpoint, model_reference_case_endpoint, model_reference_cases_endpoint, realtime_sources_endpoint, realtime_status_endpoint, reset_project_params_endpoint, save_project_csv_endpoint, save_project_params_endpoint, simulate_endpoint
+from backend.main import calibration_bsm1_mapping_endpoint, calibration_bsm1_report_endpoint, calibration_optimize_endpoint, calibration_preview_endpoint, calibration_stage_run_endpoint, calibration_stages_endpoint, cancel_simulation_job_endpoint, clear_project_csv_endpoint, create_project_endpoint, default_project_endpoint, delete_project_calibration_run_endpoint, get_project_calibration_run_endpoint, get_project_csv_endpoint, get_project_params_endpoint, create_simulation_job_endpoint, get_simulation_job_endpoint, get_simulation_job_result_endpoint, list_project_calibration_runs_endpoint, list_projects_endpoint, model_credibility_endpoint, model_initial_conditions_endpoint, model_metadata_endpoint, model_reference_case_compare_endpoint, model_reference_case_endpoint, model_reference_cases_endpoint, realtime_sources_endpoint, realtime_status_endpoint, reset_project_params_endpoint, save_project_csv_endpoint, save_project_params_endpoint, simulate_endpoint
 from backend.model import DEFAULT_PARAMS, csv_values_at, normalize_csv_records, simulate, SimulationContext, sanitize_params
 from backend.schemas import Bsm1CalibrationReportRequest, Bsm1MappingRequest, CalibrationOptimizeRequest, CalibrationPreviewRequest, CalibrationStageRunRequest, InitialConditionRequest, ModelCredibilityRequest, ParamConfigRequest, ProjectCsvRequest, ProjectRequest, ReferenceComparisonRequest, SimulationRequest
 from backend.solver_benchmark import benchmark_v2_solvers, project_long_horizon_durations, step_consistency_report
@@ -75,6 +75,21 @@ class ModelTest(unittest.TestCase):
         self.assertGreater(len(result["time"]), 1)
         self.assertIn("warningCount", result["validation"])
         assert_finite_tree(self, result)
+
+    def test_manual_simulation_reports_partial_results(self):
+        partial_lengths = []
+
+        def capture_partial(result):
+            partial_lengths.append(len(result["time"]))
+
+        result = simulate(
+            params=rk4_params(simulationDays=0.05, outputIntervalHours=0.24, timeStepHours=0.5),
+            partial_result_callback=capture_partial,
+        )
+
+        self.assertGreaterEqual(len(partial_lengths), 2)
+        self.assertEqual(partial_lengths[-1], len(result["time"]))
+        self.assertEqual(partial_lengths, sorted(partial_lengths))
 
     def test_csv_simulation_uses_requested_simulation_horizon(self):
         csv_text = Path("sample-data.csv").read_text(encoding="utf-8")
@@ -325,6 +340,30 @@ class ModelTest(unittest.TestCase):
         latest = realtime.latest()
 
         self.assertAlmostEqual(latest["result"]["stepHours"], 5 / 60)
+
+    def test_realtime_step_without_values_reuses_latest_input_and_advances_model_time(self):
+        input_record = realtime.ingest_input("2026-05-18T00:00:00+00:00", {"Q": 10000, "COD": 420}, {"source": "unit-test"})
+        first = realtime.realtime_step(step_hours=1)
+        second = realtime.realtime_step(step_hours=1)
+
+        self.assertEqual(realtime.realtime_counts()["inputs"], 1)
+        self.assertEqual(realtime.realtime_counts()["results"], 2)
+        self.assertEqual(first["result"]["inputId"], input_record["id"])
+        self.assertEqual(second["result"]["inputId"], input_record["id"])
+        self.assertEqual(first["result"]["inputTimestamp"], input_record["timestamp"])
+        self.assertEqual(second["result"]["inputTimestamp"], input_record["timestamp"])
+        self.assertEqual(first["result"]["modelTimestamp"], "2026-05-18T01:00:00+00:00")
+        self.assertEqual(second["result"]["modelTimestamp"], "2026-05-18T02:00:00+00:00")
+        self.assertFalse(second["result"]["createdNewInput"])
+
+    def test_realtime_history_returns_recent_inputs_and_results(self):
+        realtime.realtime_step(values={"Q": 10000, "COD": 420}, step_hours=5 / 60)
+        history = realtime.realtime_history(hours=12)
+
+        self.assertEqual(len(history["inputs"]), 1)
+        self.assertEqual(len(history["results"]), 1)
+        self.assertEqual(history["results"][0]["inputId"], history["inputs"][0]["id"])
+        self.assertIn("effCod", history["results"][0]["result"])
 
     def test_realtime_ingest_enriches_quality_report(self):
         record = realtime.ingest_input(
@@ -779,6 +818,18 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(result["mode"], "manual")
         self.assertAlmostEqual(result["time"][-1], 0.05)
 
+    def test_simulate_api_reuses_project_final_state(self):
+        params = rk4_params(simulationDays=0.02, timeStepHours=0.5, outputIntervalHours=0.24)
+        first = simulate_endpoint(SimulationRequest(projectId="stateful-project", params=params))
+        second = simulate_endpoint(SimulationRequest(projectId="stateful-project", params=params))
+
+        self.assertIn("finalState", first)
+        self.assertFalse(first["statePersistence"]["usedPreviousState"])
+        self.assertTrue(first["statePersistence"]["savedFinalState"])
+        self.assertTrue(second["statePersistence"]["usedPreviousState"])
+        self.assertTrue(second["statePersistence"]["savedFinalState"])
+        self.assertAlmostEqual(second["units"]["aerobic"]["NH4"][0], first["units"]["aerobic"]["NH4"][-1], places=6)
+
     def test_simulation_job_api_records_v2_engine_version(self):
         job = create_simulation_job_endpoint(
             SimulationRequest(params=rk4_params(engineVersion="v2", simulationDays=0.05, timeStepHours=0.5, outputIntervalHours=1))
@@ -796,6 +847,22 @@ class ModelTest(unittest.TestCase):
 
         self.assertEqual(final_job["status"], "success")
         self.assertEqual(get_simulation_job_result_endpoint(job_id)["engineVersion"], "v2")
+
+    def test_simulation_job_can_be_cancelled(self):
+        job = create_simulation_job_endpoint(
+            SimulationRequest(params=rk4_params(simulationDays=10, timeStepHours=0.5, outputIntervalHours=0.5))
+        )
+        cancel = cancel_simulation_job_endpoint(job["jobId"])
+        self.assertTrue(cancel["cancelRequested"])
+
+        final_job = cancel
+        for _ in range(80):
+            final_job = get_simulation_job_endpoint(job["jobId"])
+            if final_job["status"] in {"cancelled", "success", "failed"}:
+                break
+            time.sleep(0.05)
+
+        self.assertEqual(final_job["status"], "cancelled")
 
 
 if __name__ == "__main__":

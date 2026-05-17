@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import copy
 from time import perf_counter
 from threading import Lock, Thread
 from uuid import uuid4
@@ -43,12 +46,15 @@ from .realtime import (
     latest,
     list_data_sources,
     list_calculation_logs,
+    load_simulation_state,
     mock_status,
+    realtime_history,
     realtime_step,
     realtime_status,
     reset,
     reset_params_config,
     save_params_config,
+    save_simulation_state,
     start_mock,
     stop_mock,
 )
@@ -103,11 +109,62 @@ def update_job(job_id: str, **values: Any) -> None:
             SIMULATION_JOBS[job_id].update(values)
 
 
+class SimulationCancelled(Exception):
+    pass
+
+
+def job_cancel_requested(job_id: str) -> bool:
+    with SIMULATION_JOBS_LOCK:
+        return bool(SIMULATION_JOBS.get(job_id, {}).get("cancelRequested"))
+
+
+def result_state_summary(result: dict[str, Any]) -> dict[str, Any]:
+    last_index = len(result.get("time", [])) - 1
+    if last_index < 0:
+        return {}
+    return {
+        "time": result["time"][last_index],
+        "mode": result.get("mode", ""),
+        "engineVersion": result.get("engineVersion", ""),
+        "effCod": result.get("effCod", [None])[last_index],
+        "effNh4": result.get("effNh4", [None])[last_index],
+        "effTn": result.get("effTn", [None])[last_index],
+        "effTss": result.get("effTss", [None])[last_index],
+    }
+
+
+def stateful_initial_state(request: SimulationRequest, engine_version: str) -> tuple[str, dict[str, Any] | None, dict[str, Any] | None]:
+    project_id = request.projectId or "default"
+    saved = load_simulation_state(project_id) if request.useLastFinalState and engine_version == "v1" else None
+    return project_id, saved, saved["state"] if saved else None
+
+
+def persist_result_state(request: SimulationRequest, result: dict[str, Any], project_id: str, saved_state: dict[str, Any] | None) -> dict[str, Any]:
+    final_state = result.get("finalState")
+    saved_final = False
+    updated_at = None
+    if request.saveFinalState and isinstance(final_state, dict):
+        saved = save_simulation_state(project_id, request.params, final_state, result_state_summary(result))
+        saved_final = True
+        updated_at = saved["updatedAt"]
+    metadata = {
+        "projectId": project_id,
+        "usedPreviousState": bool(saved_state),
+        "previousStateUpdatedAt": saved_state.get("updatedAt") if saved_state else None,
+        "savedFinalState": saved_final,
+        "updatedAt": updated_at,
+    }
+    result["statePersistence"] = metadata
+    return metadata
+
+
 def run_simulation_job(job_id: str, request: SimulationRequest) -> None:
     started = perf_counter()
     engine_version = "unknown"
 
     def report_progress(current_time: float, total_time: float) -> None:
+        if job_cancel_requested(job_id):
+            raise SimulationCancelled("仿真已由用户终止。")
         percent = 0 if total_time <= 0 else min(99, max(0, current_time / total_time * 100))
         update_job(
             job_id,
@@ -118,15 +175,31 @@ def run_simulation_job(job_id: str, request: SimulationRequest) -> None:
             message=f"已计算到 {current_time:.2f} / {total_time:.2f} d",
         )
 
+    def report_partial_result(partial: dict[str, Any]) -> None:
+        if job_cancel_requested(job_id):
+            raise SimulationCancelled("仿真已由用户终止。")
+        partial_copy = copy.deepcopy(partial)
+        partial_copy["engineVersion"] = engine_version
+        partial_copy["solverMethod"] = request.params.get("solverMethod", "RK4")
+        update_job(
+            job_id,
+            partialResult=partial_copy,
+            partialPoints=len(partial_copy.get("time", [])),
+        )
+
     update_job(job_id, status="running", message="仿真已开始。", progressPercent=0)
     try:
         engine_version = normalize_engine_version(request.params)
+        project_id, saved_state, initial_state = stateful_initial_state(request, engine_version)
         result = simulate_with_engine(
             params=request.params,
             csv_text=request.csvText or "",
             csv_file_name=request.csvFileName or "",
             progress_callback=report_progress,
+            partial_result_callback=report_partial_result,
+            initial_state=initial_state,
         )
+        state_metadata = persist_result_state(request, result, project_id, saved_state)
         duration_ms = (perf_counter() - started) * 1000
         with SIMULATION_JOBS_LOCK:
             SIMULATION_JOBS[job_id].update(
@@ -138,6 +211,8 @@ def run_simulation_job(job_id: str, request: SimulationRequest) -> None:
                     "message": "仿真完成。",
                     "durationMs": duration_ms,
                     "result": result,
+                    "partialResult": result,
+                    "partialPoints": len(result["time"]),
                 }
             )
         insert_calculation_log(
@@ -153,17 +228,25 @@ def run_simulation_job(job_id: str, request: SimulationRequest) -> None:
                 "warningCount": result.get("validation", {}).get("warningCount", 0),
                 "solverMethod": request.params.get("solverMethod", "RK4"),
                 "engineVersion": result.get("engineVersion", engine_version),
+                "projectId": project_id,
+                "usedPreviousState": state_metadata["usedPreviousState"],
+                "savedFinalState": state_metadata["savedFinalState"],
             },
             duration_ms,
+            project_id,
         )
+    except SimulationCancelled as exc:
+        duration_ms = (perf_counter() - started) * 1000
+        update_job(job_id, status="cancelled", message=str(exc), error=None, durationMs=duration_ms, progressPercent=progress_value(job_id))
+        insert_calculation_log("simulate_job", "cancelled", str(exc), {"jobId": job_id, "projectId": request.projectId or "default", "solverMethod": request.params.get("solverMethod", "RK4"), "engineVersion": engine_version}, duration_ms, request.projectId)
     except ValueError as exc:
         duration_ms = (perf_counter() - started) * 1000
         update_job(job_id, status="failed", message=str(exc), error=str(exc), durationMs=duration_ms)
-        insert_calculation_log("simulate_job", "failed", str(exc), {"jobId": job_id, "solverMethod": request.params.get("solverMethod", "RK4"), "engineVersion": engine_version}, duration_ms)
+        insert_calculation_log("simulate_job", "failed", str(exc), {"jobId": job_id, "projectId": request.projectId or "default", "solverMethod": request.params.get("solverMethod", "RK4"), "engineVersion": engine_version}, duration_ms, request.projectId)
     except Exception as exc:
         duration_ms = (perf_counter() - started) * 1000
         update_job(job_id, status="failed", message="仿真任务失败。", error=str(exc), durationMs=duration_ms)
-        insert_calculation_log("simulate_job", "failed", str(exc), {"jobId": job_id, "solverMethod": request.params.get("solverMethod", "RK4"), "engineVersion": engine_version}, duration_ms)
+        insert_calculation_log("simulate_job", "failed", str(exc), {"jobId": job_id, "projectId": request.projectId or "default", "solverMethod": request.params.get("solverMethod", "RK4"), "engineVersion": engine_version}, duration_ms, request.projectId)
 
 
 @app.post("/api/simulate")
@@ -172,11 +255,14 @@ def simulate_endpoint(request: SimulationRequest) -> dict:
     engine_version = "unknown"
     try:
         engine_version = normalize_engine_version(request.params)
+        project_id, saved_state, initial_state = stateful_initial_state(request, engine_version)
         result = simulate_with_engine(
             params=request.params,
             csv_text=request.csvText or "",
             csv_file_name=request.csvFileName or "",
+            initial_state=initial_state,
         )
+        state_metadata = persist_result_state(request, result, project_id, saved_state)
         insert_calculation_log(
             "simulate",
             "success",
@@ -189,8 +275,12 @@ def simulate_endpoint(request: SimulationRequest) -> dict:
                 "warningCount": result.get("validation", {}).get("warningCount", 0),
                 "solverMethod": request.params.get("solverMethod", "RK4"),
                 "engineVersion": result.get("engineVersion", engine_version),
+                "projectId": project_id,
+                "usedPreviousState": state_metadata["usedPreviousState"],
+                "savedFinalState": state_metadata["savedFinalState"],
             },
             (perf_counter() - started) * 1000,
+            project_id,
         )
         return result
     except ValueError as exc:
@@ -198,8 +288,9 @@ def simulate_endpoint(request: SimulationRequest) -> dict:
             "simulate",
             "failed",
             str(exc),
-            {"csvFileName": request.csvFileName or "", "hasCsv": bool((request.csvText or "").strip()), "solverMethod": request.params.get("solverMethod", "RK4"), "engineVersion": engine_version},
+            {"projectId": request.projectId or "default", "csvFileName": request.csvFileName or "", "hasCsv": bool((request.csvText or "").strip()), "solverMethod": request.params.get("solverMethod", "RK4"), "engineVersion": engine_version},
             (perf_counter() - started) * 1000,
+            request.projectId,
         )
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
@@ -207,8 +298,9 @@ def simulate_endpoint(request: SimulationRequest) -> dict:
             "simulate",
             "failed",
             str(exc),
-            {"csvFileName": request.csvFileName or "", "hasCsv": bool((request.csvText or "").strip()), "solverMethod": request.params.get("solverMethod", "RK4"), "engineVersion": engine_version},
+            {"projectId": request.projectId or "default", "csvFileName": request.csvFileName or "", "hasCsv": bool((request.csvText or "").strip()), "solverMethod": request.params.get("solverMethod", "RK4"), "engineVersion": engine_version},
             (perf_counter() - started) * 1000,
+            request.projectId,
         )
         raise HTTPException(status_code=500, detail="Simulation failed unexpectedly.") from exc
 
@@ -232,6 +324,9 @@ def create_simulation_job_endpoint(request: SimulationRequest) -> dict:
             "durationMs": None,
             "solverMethod": request.params.get("solverMethod", "RK4"),
             "engineVersion": engine_version,
+            "partialResult": None,
+            "partialPoints": 0,
+            "cancelRequested": False,
         }
     Thread(target=run_simulation_job, args=(job_id, request), daemon=True).start()
     return job_public(job_id)
@@ -243,6 +338,24 @@ def get_simulation_job_endpoint(job_id: str) -> dict:
         return job_public(job_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Simulation job not found.") from exc
+
+
+def progress_value(job_id: str) -> float:
+    with SIMULATION_JOBS_LOCK:
+        return float(SIMULATION_JOBS.get(job_id, {}).get("progressPercent") or 0)
+
+
+@app.post("/api/simulate/jobs/{job_id}/cancel")
+def cancel_simulation_job_endpoint(job_id: str) -> dict:
+    with SIMULATION_JOBS_LOCK:
+        job = SIMULATION_JOBS.get(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Simulation job not found.")
+        if job["status"] in {"success", "failed", "cancelled"}:
+            return {key: value for key, value in job.items() if key != "result"}
+        job["cancelRequested"] = True
+        job["message"] = "正在终止仿真..."
+    return job_public(job_id)
 
 
 @app.get("/api/simulate/jobs/{job_id}/result")
@@ -657,6 +770,11 @@ def realtime_step_endpoint(request: RealtimeStepRequest) -> dict:
 @app.get("/api/realtime/latest")
 def realtime_latest_endpoint(projectId: str = "default") -> dict:
     return latest(projectId)
+
+
+@app.get("/api/realtime/history")
+def realtime_history_endpoint(projectId: str = "default", hours: float = 12, limit: int = 200) -> dict:
+    return realtime_history(projectId, hours, limit)
 
 
 @app.get("/api/realtime/sources")

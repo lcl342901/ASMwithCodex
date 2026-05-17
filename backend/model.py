@@ -264,6 +264,8 @@ class SimulationContext:
     source_name: str = ""
     mode: str = "manual"
     progress_callback: Callable[[float, float], None] | None = None
+    partial_result_callback: Callable[[dict[str, Any]], None] | None = None
+    initial_state: dict[str, Any] | None = None
     asm1: dict[str, float] = field(default_factory=lambda: ASM1_DEFAULTS.copy())
 
     def __post_init__(self) -> None:
@@ -718,6 +720,8 @@ class SimulationContext:
     def create_simulation_state(self) -> dict[str, Any]:
         layer_count = int(clamp(round(self.params["clarifierLayers"]), 4, 20))
         self.params["clarifierFeedLayer"] = clamp(round(self.params["clarifierFeedLayer"]), 1, layer_count)
+        if self.initial_state:
+            return self.normalize_simulation_state(self.initial_state, layer_count)
         aerobic = self.initial_reactor_state("aerobic")
         return {
             "anaerobic": self.initial_reactor_state("anaerobic"),
@@ -725,6 +729,45 @@ class SimulationContext:
             "aerobic": aerobic,
             "ras": aerobic.copy(),
             "clarifierLayers": [self.tss(aerobic)] * layer_count,
+        }
+
+    def normalize_state_vector(self, value: Any, fallback: list[float]) -> list[float]:
+        if not isinstance(value, list) or len(value) != len(C):
+            return fallback.copy()
+        normalized: list[float] = []
+        for item in value:
+            parsed = as_number(item, 0.0)
+            normalized.append(max(0.0, parsed if parsed is not None else 0.0))
+        return normalized
+
+    def normalize_simulation_state(self, saved_state: dict[str, Any], layer_count: int) -> dict[str, Any]:
+        fallback = {
+            "anaerobic": self.initial_reactor_state("anaerobic"),
+            "anoxic": self.initial_reactor_state("anoxic"),
+            "aerobic": self.initial_reactor_state("aerobic"),
+        }
+        aerobic = self.normalize_state_vector(saved_state.get("aerobic"), fallback["aerobic"])
+        ras = self.normalize_state_vector(saved_state.get("ras"), aerobic)
+        layers_value = saved_state.get("clarifierLayers")
+        if isinstance(layers_value, list) and len(layers_value) == layer_count:
+            layers = [clamp(as_number(value, self.tss(aerobic)) or 0.0, 0, self.params["maxLayerTss"]) for value in layers_value]
+        else:
+            layers = [self.tss(aerobic)] * layer_count
+        return {
+            "anaerobic": self.normalize_state_vector(saved_state.get("anaerobic"), fallback["anaerobic"]),
+            "anoxic": self.normalize_state_vector(saved_state.get("anoxic"), fallback["anoxic"]),
+            "aerobic": aerobic,
+            "ras": ras,
+            "clarifierLayers": layers,
+        }
+
+    def copy_simulation_state(self, state: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "anaerobic": [float(value) for value in state["anaerobic"]],
+            "anoxic": [float(value) for value in state["anoxic"]],
+            "aerobic": [float(value) for value in state["aerobic"]],
+            "ras": [float(value) for value in state["ras"]],
+            "clarifierLayers": [float(value) for value in state["clarifierLayers"]],
         }
 
     def step_simulation_state(self, state: dict[str, Any], influent: list[float], dt: float) -> dict[str, Any]:
@@ -764,9 +807,11 @@ class SimulationContext:
     def output_interval_days(self) -> float:
         return max(self.solver_step_days(), self.params["outputIntervalHours"] / 24)
 
-    def report_progress(self, current_time: float, total_time: float) -> None:
+    def report_progress(self, current_time: float, total_time: float, series: dict[str, Any] | None = None) -> None:
         if self.progress_callback:
             self.progress_callback(current_time, total_time)
+        if self.partial_result_callback and series:
+            self.partial_result_callback(series)
 
     def run_asm1_simulation(self) -> dict[str, Any]:
         self.sync_asm1_params()
@@ -778,7 +823,7 @@ class SimulationContext:
         series = self.create_result_series()
         split = self.takacs_clarifier_step(state["clarifierLayers"], state["aerobic"], self.params["influentQ"] * (1 + self.params["rasRatio"]), self.params["influentQ"] * self.params["rasRatio"], min(self.params["wasQ"], self.params["influentQ"] * 0.8), 0, clamp(self.params["captureEfficiency"] / 100, 0.8, 0.9995))
         self.push_snapshot(series, 0, influent, state["anaerobic"], state["anoxic"], state["aerobic"], split, state["ras"], state["clarifierLayers"])
-        self.report_progress(0, end_time)
+        self.report_progress(0, end_time, series)
 
         current_time = 0.0
         next_output = output_interval
@@ -789,9 +834,10 @@ class SimulationContext:
             current_time += dt
             if current_time >= next_output - EPSILON_DAYS or current_time >= end_time - EPSILON_DAYS:
                 self.push_snapshot(series, current_time, influent, state["anaerobic"], state["anoxic"], state["aerobic"], split, state["ras"], state["clarifierLayers"])
-                self.report_progress(current_time, end_time)
+                self.report_progress(current_time, end_time, series)
                 while next_output <= current_time + EPSILON_DAYS:
                     next_output += output_interval
+        series["finalState"] = self.copy_simulation_state(state)
         return series
 
     def run_historical_simulation(self, records: list[dict[str, Any]]) -> dict[str, Any]:
@@ -815,7 +861,7 @@ class SimulationContext:
             influent = self.influent_vector()
             split = self.takacs_clarifier_step(state["clarifierLayers"], state["aerobic"], self.params["influentQ"] * (1 + self.params["rasRatio"]), self.params["influentQ"] * self.params["rasRatio"], min(self.params["wasQ"], self.params["influentQ"] * 0.8), 0, clamp(self.params["captureEfficiency"] / 100, 0.8, 0.9995))
             self.push_snapshot(series, current_time, influent, state["anaerobic"], state["anoxic"], state["aerobic"], split, state["ras"], state["clarifierLayers"])
-            self.report_progress(current_time, end_time)
+            self.report_progress(current_time, end_time, series)
 
             next_output = output_interval
             while current_time < end_time - EPSILON_DAYS:
@@ -828,12 +874,13 @@ class SimulationContext:
                 current_time += dt
                 if current_time >= next_output - EPSILON_DAYS or current_time >= end_time - EPSILON_DAYS:
                     self.push_snapshot(series, current_time, influent, state["anaerobic"], state["anoxic"], state["aerobic"], split, state["ras"], state["clarifierLayers"])
-                    self.report_progress(current_time, end_time)
+                    self.report_progress(current_time, end_time, series)
                     while next_output <= current_time + EPSILON_DAYS:
                         next_output += output_interval
         finally:
             self.params = saved_params
             self.sync_asm1_params()
+        series["finalState"] = self.copy_simulation_state(state)
         return series
 
     def step_realtime_state(self, state: dict[str, Any], boundary_values: dict[str, float], step_hours: float) -> dict[str, Any]:
@@ -1155,6 +1202,8 @@ def simulate(
     csv_text: str = "",
     csv_file_name: str = "",
     progress_callback: Callable[[float, float], None] | None = None,
+    partial_result_callback: Callable[[dict[str, Any]], None] | None = None,
+    initial_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     clean_params = sanitize_params(params)
     errors, warnings = validate_params(clean_params)
@@ -1166,6 +1215,8 @@ def simulate(
         source_name=csv_file_name or "",
         mode="csv" if csv_text.strip() else "manual",
         progress_callback=progress_callback,
+        partial_result_callback=partial_result_callback,
+        initial_state=initial_state,
     )
     if csv_text.strip():
         records = normalize_csv_records(csv_text, ctx)

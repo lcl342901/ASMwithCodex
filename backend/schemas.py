@@ -4,9 +4,12 @@ from pydantic import BaseModel, Field
 
 
 class SimulationRequest(BaseModel):
+    projectId: Optional[str] = "default"
     params: dict[str, Any] = Field(default_factory=dict)
     csvText: Optional[str] = ""
     csvFileName: Optional[str] = ""
+    useLastFinalState: bool = True
+    saveFinalState: bool = True
 
 
 class RealtimeIngestRequest(BaseModel):

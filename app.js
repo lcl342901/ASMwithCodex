@@ -21,6 +21,7 @@ const realtimeStatus = document.getElementById("realtimeStatus");
 const realtimeSummary = document.getElementById("realtimeSummary");
 const mockSummary = document.getElementById("mockSummary");
 const ingestRealtimeSample = document.getElementById("ingestRealtimeSample");
+const pushAndStepRealtime = document.getElementById("pushAndStepRealtime");
 const stepRealtime = document.getElementById("stepRealtime");
 const refreshRealtime = document.getElementById("refreshRealtime");
 const resetRealtime = document.getElementById("resetRealtime");
@@ -33,6 +34,11 @@ const exportBoundariesCsv = document.getElementById("exportBoundariesCsv");
 const exportUnitsCsv = document.getElementById("exportUnitsCsv");
 const exportConfigJson = document.getElementById("exportConfigJson");
 const importConfigJson = document.getElementById("importConfigJson");
+const runSimulationButton = document.getElementById("runSimulation");
+const cancelSimulationButton = document.getElementById("cancelSimulation");
+const dataModeTabs = Array.from(document.querySelectorAll(".data-mode-tab"));
+const realtimeBoundaryRows = document.getElementById("realtimeBoundaryRows");
+const realtimeResultRows = document.getElementById("realtimeResultRows");
 const metricPicker = document.getElementById("metricPicker");
 const exportMenuButton = document.getElementById("exportMenuButton");
 const exportMenu = document.getElementById("exportMenu");
@@ -221,6 +227,7 @@ const fields = {
 
 let activePanel = "process";
 let activeTab = "influent";
+let activeDataMode = "csv";
 let selectedNode = null;
 let lastResult = null;
 let activeChart = "boundaries";
@@ -236,6 +243,9 @@ let calibrationObservationTargets = [];
 let calibrationStages = [];
 let progressTimer = null;
 let progressValue = 0;
+let simulationRunning = false;
+let activeSimulationJobId = null;
+let simulationCancelRequested = false;
 let projects = [];
 let activeProjectId = "default";
 const hiddenDatasets = new Set();
@@ -257,7 +267,7 @@ const C = {
 };
 
 const workspaceLabels = {
-  process: ["工艺建模", "AAO 工艺流程"],
+  process: ["工艺模型", "AAO 工艺流程"],
   params: ["仿真配置", "边界条件与尺寸"],
   data: ["数据中心", "边界、实时与清洗"],
   results: ["仿真结果", "结果曲线与导出"],
@@ -948,6 +958,10 @@ function renderForm() {
   workspaceTitle.textContent = title;
   dataTools.hidden = activePanel !== "data";
   realtimeTools.hidden = activePanel !== "data";
+  if (activePanel === "data") {
+    dataTools.hidden = activeDataMode !== "csv";
+    realtimeTools.hidden = activeDataMode !== "realtime";
+  }
   logTools.hidden = activePanel !== "logs";
   calibrationTools.hidden = activePanel !== "calibration";
   paramTabs.hidden = !showingParams;
@@ -1756,6 +1770,40 @@ function createDefaultBoundaryPreview() {
   };
 }
 
+function createRunningSimulationResult() {
+  return {
+    time: [],
+    mode: "running",
+    sourceName: csvFileName || "",
+    effCod: [],
+    effNh4: [],
+    effNo3: [],
+    effTn: [],
+    effTss: [],
+    anaerobicNo3: [],
+    anoxicNo3: [],
+    aerobicNo3: [],
+    aerobicDo: [],
+    aerobicMlss: [],
+    rasMlss: [],
+    boundaries: {
+      q: [],
+      cod: [],
+      nh4: [],
+      no3: [],
+      tss: [],
+      do: [],
+      rasQ: [],
+      irQ: [],
+      wasQ: [],
+    },
+    units: {},
+    clarifier: {},
+    warnings: [],
+    validation: { ok: true, warningCount: 0, warnings: [] },
+  };
+}
+
 function showDefaultBoundaryPreview() {
   lastResult = createDefaultBoundaryPreview();
   setActiveChart("boundaries");
@@ -1792,6 +1840,8 @@ function finishProgress(failed = false) {
 async function runBackendSimulation() {
   const job = await createSimulationJob();
   const jobId = job.jobId;
+  activeSimulationJobId = jobId;
+  let renderedPartialPoints = 0;
   while (true) {
     await delay(500);
     const status = await getSimulationJob(jobId);
@@ -1801,11 +1851,20 @@ async function runBackendSimulation() {
     } else {
       statusBadge.textContent = status.status === "queued" ? "排队中" : "计算中";
     }
+    if (status.partialResult && (status.partialPoints || 0) > renderedPartialPoints) {
+      renderedPartialPoints = status.partialPoints || status.partialResult.time?.length || renderedPartialPoints;
+      lastResult = status.partialResult;
+      updateMetricCards(lastResult);
+      drawChart(lastResult, activeChart);
+    }
     if (status.status === "success") {
       setProgress(100);
       const result = await getSimulationJobResult(jobId);
       result.durationMs = status.durationMs;
       return result;
+    }
+    if (status.status === "cancelled") {
+      throw new Error("仿真已终止。");
     }
     if (status.status === "failed") {
       throw new Error(status.error || status.message || "仿真任务失败。");
@@ -1826,9 +1885,12 @@ async function createSimulationJob() {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        projectId: activeProjectId,
         params,
         csvText: csvText || "",
         csvFileName,
+        useLastFinalState: true,
+        saveFinalState: true,
       }),
     });
   } catch (error) {
@@ -1872,6 +1934,14 @@ async function getSimulationJobResult(jobId) {
   return response.json();
 }
 
+async function cancelSimulationJob(jobId) {
+  const response = await fetch(`${SIMULATION_API_URL}/jobs/${jobId}/cancel`, { method: "POST" });
+  if (!response.ok) {
+    throw new Error(`终止任务失败：HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
 async function realtimeRequest(path, options = {}) {
   let response;
   try {
@@ -1909,19 +1979,96 @@ function updateRealtimeStatus(message, isError = false) {
 }
 
 function renderRealtimeSummary(payload) {
-  const latestResult = payload?.result?.result || payload?.result;
+  const resultRecord = payload?.result?.result ? payload.result : null;
+  const latestResult = resultRecord?.result || payload?.result;
   if (!latestResult) {
     realtimeSummary.innerHTML = "";
     return;
   }
+  const input = payload?.input || {};
+  const modelTimestamp = latestResult.modelTimestamp || latestResult.timestamp || resultRecord?.timestamp || "--";
+  const inputTimestamp = latestResult.inputTimestamp || input.timestamp || "--";
+  const inputId = latestResult.inputId ?? resultRecord?.inputId ?? input.id ?? "--";
+  const stepHours = resultRecord?.stepHours ?? latestResult.stepHours;
   realtimeSummary.innerHTML = `
-    <div><span>时间戳</span><strong>${latestResult.timestamp || payload.result.timestamp || "--"}</strong></div>
-    <div><span>输入 ID</span><strong>${latestResult.inputId ?? payload.result.inputId ?? "--"}</strong></div>
+    <div><span>模型时间</span><strong>${modelTimestamp}</strong></div>
+    <div><span>边界时间</span><strong>${inputTimestamp}</strong></div>
+    <div><span>输入 ID</span><strong>${inputId}</strong></div>
+    <div><span>步长</span><strong>${Number.isFinite(stepHours) ? `${formatChartValue(stepHours)} h` : "--"}</strong></div>
     <div><span>出水 COD</span><strong>${formatChartValue(latestResult.effCod)} g/m3</strong></div>
     <div><span>出水 NH4-N</span><strong>${formatChartValue(latestResult.effNh4)} g/m3</strong></div>
     <div><span>出水 TN</span><strong>${formatChartValue(latestResult.effTn)} g/m3</strong></div>
     <div><span>出水 TSS</span><strong>${formatChartValue(latestResult.effTss)} g/m3</strong></div>
   `;
+}
+
+function shortDateTime(value) {
+  if (!value) return "--";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return value;
+  return date.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function boundaryValue(record, key) {
+  const accepted = record.quality?.acceptedValues || {};
+  const raw = record.values || {};
+  return accepted[key] ?? raw[key] ?? raw[key.replace("influent", "").toUpperCase()] ?? raw[key.toLowerCase()];
+}
+
+function renderRealtimeHistory(payload) {
+  const inputs = payload?.inputs || [];
+  const results = payload?.results || [];
+  realtimeBoundaryRows.innerHTML = inputs.length
+    ? inputs
+        .map(
+          (record) => `
+          <tr>
+            <td>${shortDateTime(record.timestamp)}</td>
+            <td>${record.id}</td>
+            <td>${formatChartValue(boundaryValue(record, "influentQ"))}</td>
+            <td>${formatChartValue(boundaryValue(record, "influentCod"))}</td>
+            <td>${formatChartValue(boundaryValue(record, "influentNh4"))}</td>
+            <td>${formatChartValue(boundaryValue(record, "influentNo3"))}</td>
+            <td>${formatChartValue(boundaryValue(record, "influentTss"))}</td>
+            <td>${formatChartValue(boundaryValue(record, "aerobicDo"))}</td>
+            <td>${record.quality?.status || "--"}</td>
+          </tr>
+        `,
+        )
+        .join("")
+    : `<tr><td colspan="9">最近 12 小时暂无在线边界数据。</td></tr>`;
+
+  realtimeResultRows.innerHTML = results.length
+    ? results
+        .map((record) => {
+          const result = record.result || {};
+          return `
+            <tr>
+              <td>${shortDateTime(result.modelTimestamp || record.timestamp)}</td>
+              <td>${shortDateTime(result.inputTimestamp)}</td>
+              <td>${record.inputId ?? result.inputId ?? "--"}</td>
+              <td>${formatChartValue(record.stepHours)} h</td>
+              <td>${formatChartValue(result.effCod)}</td>
+              <td>${formatChartValue(result.effNh4)}</td>
+              <td>${formatChartValue(result.effTn)}</td>
+              <td>${formatChartValue(result.effTss)}</td>
+              <td>${formatChartValue(result.aerobicMlss)}</td>
+            </tr>
+          `;
+        })
+        .join("")
+    : `<tr><td colspan="9">最近 12 小时暂无推进结果。</td></tr>`;
+}
+
+async function refreshRealtimeHistory() {
+  const payload = await realtimeRequest(withProjectQuery("/history?hours=12&limit=200"));
+  renderRealtimeHistory(payload);
 }
 
 function renderMockSummary(status) {
@@ -1945,22 +2092,24 @@ async function ingestCurrentRealtimeBoundary() {
   });
   updateRealtimeStatus(`已推送实时边界输入 #${payload.id}。`);
   await refreshRealtimeLatest();
+  await refreshRealtimeHistory();
 }
 
-async function stepRealtimeModel() {
+async function stepRealtimeModel(pushCurrentBoundary = false) {
   const payload = await realtimeRequest("/step", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       projectId: activeProjectId,
-      timestamp: new Date().toISOString(),
-      values: realtimeBoundaryValues(),
+      timestamp: pushCurrentBoundary ? new Date().toISOString() : null,
+      values: pushCurrentBoundary ? realtimeBoundaryValues() : null,
       params,
       stepHours: params.timeStepHours,
     }),
   });
-  updateRealtimeStatus(`已完成实时推进，结果 #${payload.resultId}。`);
+  updateRealtimeStatus(pushCurrentBoundary ? `已推送当前边界并完成一步计算，结果 #${payload.resultId}。` : `已使用最新边界推进一步，结果 #${payload.resultId}。`);
   renderRealtimeSummary(payload);
+  await refreshRealtimeHistory();
 }
 
 async function refreshRealtimeLatest() {
@@ -1972,6 +2121,7 @@ async function refreshRealtimeLatest() {
   }
   updateRealtimeStatus(`已刷新最新实时结果 #${payload.result.id}。`);
   renderRealtimeSummary(payload);
+  await refreshRealtimeHistory();
 }
 
 async function resetRealtimeState() {
@@ -2155,6 +2305,7 @@ function yToPixel(value, yMin, yMax, pad, plotH) {
 }
 
 function formatChartValue(value) {
+  if (!Number.isFinite(value)) return "--";
   const abs = Math.abs(value);
   if (abs >= 1000) return value.toFixed(0);
   if (abs >= 100) return value.toFixed(1);
@@ -2191,6 +2342,26 @@ function drawChart(result, chartName) {
   ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, width, height);
+
+  if (!result.time?.length) {
+    currentChartState = null;
+    legend.innerHTML = "";
+    ctx.strokeStyle = "#d7dfd8";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i <= 5; i += 1) {
+      const y = pad.top + ((height - pad.top - pad.bottom) * i) / 5;
+      ctx.moveTo(pad.left, y);
+      ctx.lineTo(width - pad.right, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = "#637168";
+    ctx.font = "13px system-ui";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("等待后端返回第 0 个输出点，曲线将从本次计算重新绘制。", width / 2, height / 2);
+    return;
+  }
 
   const charts = {
     boundaries: [
@@ -2435,17 +2606,28 @@ function hideChartTooltip() {
   if (lastResult) drawChart(lastResult, activeChart);
 }
 
-function updateMetrics(result) {
+function updateMetricCards(result) {
   const last = result.time.length - 1;
+  if (last < 0) {
+    document.getElementById("metricNh4").textContent = "--";
+    document.getElementById("metricTn").textContent = "--";
+    document.getElementById("metricTss").textContent = "--";
+    return;
+  }
   document.getElementById("metricNh4").textContent = `${result.effNh4[last].toFixed(1)} g/m3`;
   document.getElementById("metricTn").textContent = `${result.effTn[last].toFixed(1)} g/m3`;
   document.getElementById("metricTss").textContent = `${result.effTss[last].toFixed(1)} g/m3`;
+}
+
+function updateMetrics(result) {
+  updateMetricCards(result);
   const sourceText = result.mode === "csv" ? `历史数据 ${result.sourceName}` : "手动参数";
   const warningText = result.warnings?.length ? `，含 ${result.warnings.length} 条校验提示` : "";
   const solverText = result.solverMethod ? `，解算器 ${result.solverMethod}` : "";
   const durationText = Number.isFinite(result.durationMs) ? `，耗时 ${(result.durationMs / 1000).toFixed(2)} s` : "";
+  const stateText = result.statePersistence?.usedPreviousState ? "，已继承上次最终状态" : "，已保存本次最终状态";
   document.getElementById("resultSummary").textContent =
-    `已完成 ${sourceText} 仿真${solverText}${durationText}${warningText}。可点击任一单体并在下拉框选择 WEST 风格指标查看过程浓度。`;
+    `已完成 ${sourceText} 仿真${solverText}${durationText}${stateText}${warningText}。可点击任一单体并在下拉框选择 WEST 风格指标查看过程浓度。`;
   renderWarnings(result);
 }
 
@@ -2461,6 +2643,7 @@ document.querySelectorAll(".panel-tab").forEach((tab) => {
     if (activePanel === "data") {
       refreshRealtimeLatest();
       refreshRealtimeMockStatus();
+      refreshRealtimeHistory();
     }
     if (activePanel === "calibration") {
       refreshCalibrationStages();
@@ -2475,6 +2658,20 @@ document.querySelectorAll(".param-tab").forEach((tab) => {
     tab.classList.add("active");
     activeTab = tab.dataset.tab;
     renderForm();
+  });
+});
+
+dataModeTabs.forEach((tab) => {
+  tab.addEventListener("click", async () => {
+    dataModeTabs.forEach((item) => item.classList.remove("active"));
+    tab.classList.add("active");
+    activeDataMode = tab.dataset.dataMode;
+    renderForm();
+    if (activeDataMode === "realtime") {
+      await refreshRealtimeLatest();
+      await refreshRealtimeHistory();
+      await refreshRealtimeMockStatus();
+    }
   });
 });
 
@@ -2621,6 +2818,14 @@ stepRealtime.addEventListener("click", async () => {
   }
 });
 
+pushAndStepRealtime.addEventListener("click", async () => {
+  try {
+    await stepRealtimeModel(true);
+  } catch (error) {
+    updateRealtimeStatus(`推送并计算失败：${error.message}`, true);
+  }
+});
+
 refreshRealtime.addEventListener("click", async () => {
   try {
     await refreshRealtimeLatest();
@@ -2699,23 +2904,59 @@ clearCsvData.addEventListener("click", async () => {
   }
 });
 
-document.getElementById("runSimulation").addEventListener("click", async () => {
+runSimulationButton.addEventListener("click", async () => {
+  const runButton = runSimulationButton;
+  if (simulationRunning) {
+    statusBadge.textContent = "计算中";
+    return;
+  }
+  simulationRunning = true;
+  simulationCancelRequested = false;
+  activeSimulationJobId = null;
+  runButton.disabled = true;
+  runButton.textContent = "计算中";
+  cancelSimulationButton.hidden = false;
+  cancelSimulationButton.disabled = false;
   statusBadge.textContent = "计算中";
   startProgress();
   hideChartTooltip();
+  lastResult = createRunningSimulationResult();
+  updateMetricCards(lastResult);
+  activePanel = "results";
+  document.querySelectorAll(".panel-tab").forEach((item) => item.classList.toggle("active", item.dataset.panel === "results"));
+  renderForm();
+  document.getElementById("resultSummary").textContent = "仿真计算中，曲线会随已完成的输出时间点持续更新。";
+  renderWarnings(lastResult);
+  drawChart(lastResult, activeChart);
   try {
     lastResult = await runBackendSimulation();
     statusBadge.textContent = "已完成";
     finishProgress();
     updateMetrics(lastResult);
-    activePanel = "results";
-    document.querySelectorAll(".panel-tab").forEach((item) => item.classList.toggle("active", item.dataset.panel === "results"));
-    renderForm();
     drawChart(lastResult, activeChart);
   } catch (error) {
-    statusBadge.textContent = "计算失败";
-    finishProgress(true);
-    updateCsvStatus(`后端计算失败：${error.message}`, true);
+    statusBadge.textContent = simulationCancelRequested ? "已终止" : "计算失败";
+    finishProgress(!simulationCancelRequested);
+    updateCsvStatus(simulationCancelRequested ? "仿真已终止。" : `后端计算失败：${error.message}`, !simulationCancelRequested);
+  } finally {
+    simulationRunning = false;
+    runButton.disabled = false;
+    runButton.textContent = "运行仿真";
+    cancelSimulationButton.hidden = true;
+    cancelSimulationButton.disabled = false;
+    activeSimulationJobId = null;
+  }
+});
+
+cancelSimulationButton.addEventListener("click", async () => {
+  if (!activeSimulationJobId || simulationCancelRequested) return;
+  simulationCancelRequested = true;
+  cancelSimulationButton.disabled = true;
+  statusBadge.textContent = "正在终止";
+  try {
+    await cancelSimulationJob(activeSimulationJobId);
+  } catch (error) {
+    updateCsvStatus(error.message, true);
   }
 });
 

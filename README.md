@@ -164,9 +164,10 @@ The frontend uses asynchronous simulation jobs for real progress updates:
 POST /api/simulate/jobs
 GET  /api/simulate/jobs/{jobId}
 GET  /api/simulate/jobs/{jobId}/result
+POST /api/simulate/jobs/{jobId}/cancel
 ```
 
-The job status includes `status`, `progressPercent`, `currentTime`, `totalTime`, `message`, and `error`. The original synchronous `POST /api/simulate` remains available for API callers that want a blocking request/response flow.
+The job status includes `status`, `progressPercent`, `currentTime`, `totalTime`, `message`, `error`, and partial result fields for progressive chart updates. `POST /api/simulate/jobs/{jobId}/cancel` marks a running job for cooperative cancellation; the model stops at the next progress/output checkpoint. The original synchronous `POST /api/simulate` remains available for API callers that want a blocking request/response flow.
 
 ## Model Trust And Calibration APIs
 
@@ -262,6 +263,7 @@ Available endpoints:
 POST /api/realtime/ingest
 POST /api/realtime/step
 GET  /api/realtime/latest
+GET  /api/realtime/history
 GET  /api/realtime/sources
 GET  /api/realtime/status
 POST /api/realtime/reset
@@ -289,6 +291,17 @@ curl -X POST http://127.0.0.1:8000/api/realtime/step \
 ```
 
 This MVP uses the current dynamic ASM1 engine and continues from the saved model state on each step. It is intended as a first online/digital-twin prototype, not yet a production historian or SCADA connector.
+
+Realtime operation separates boundary input time from model time:
+
+- `POST /api/realtime/ingest` stores one boundary input row only. It does not advance the model.
+- `POST /api/realtime/step` with `values` stores a new boundary row and advances the model once.
+- `POST /api/realtime/step` without `values` reuses the latest stored boundary row and advances the model once.
+- `stepHours` is the external realtime advance duration. If `stepHours = 0.5`, one realtime step advances the model state by 0.5 hours.
+- `inputTimestamp` is the boundary data timestamp. It identifies when the input row came in.
+- `modelTimestamp` is the model-state timestamp. It advances by `stepHours` each realtime step, even when the boundary input stays unchanged.
+
+`GET /api/realtime/history?hours=12` returns recent boundary inputs and realtime step results for the active project. The frontend uses it to show the latest 12 hours of input/output tables in the realtime workspace.
 
 Realtime inputs now carry a normalized quality report. The backend stores the raw payload, then derives `quality.status`,
 per-field `fieldQuality`, `issues`, and `acceptedValues`. Missing boundaries fall back to current model parameters, and
@@ -420,15 +433,21 @@ Between CSV rows, values are linearly interpolated.
 ## Time Settings
 
 - `仿真天数`: total simulation horizon.
-- `计算步长`: requested numerical calculation step in hours.
+- `计算步长`: external requested step in hours. In realtime mode, “推进一步” advances the model by this duration unless a specific `stepHours` is supplied.
 - `结果输出间隔`: chart sampling interval in hours.
 - `解算器方法`: `RK4` is the default for current routine runs. In `engineVersion=v2`, `LSODA`, `BDF`, and `Radau` are also available for API-only comparison.
 - `最大耦合步长`: maximum outer coupling step for adaptive solver segments.
 
-For RK4, the internal solver caps the actual calculation step at `0.0005 d` (about 0.72 minutes). In the stable v1 engine,
-adaptive solvers are retained mainly for comparison. In the experimental v2 state-vector engine, `LSODA`, `BDF`, and
-`Radau` can integrate the full v2 state vector. Early short-horizon benchmarks show close results versus v2-RK4, but
-adaptive solvers are still slower for the current small Python model, so RK4 remains the default strategy.
+For RK4, `计算步长` is not used as one large RK4 integration step. The stable v1 engine caps the internal RK4 substep at `0.0005 d` (about 0.72 minutes). For example, if `计算步长 = 0.5 h`, a realtime “推进一步” advances the model by 0.5 hours, but the backend internally splits that 0.5 hours into many smaller RK4 substeps. This protects numerical stability while keeping the user-facing step aligned with data/update frequency.
+
+Recommended RK4 settings:
+
+- Learning/demo runs: `0.5 h`.
+- 5-minute online data: `0.0833 h`.
+- Fine online calculation: `0.05 h` to `0.1 h`.
+- Avoid very large realtime steps such as `2-6 h` unless intentionally testing slow boundary updates, because boundary changes will be held constant over the whole step.
+
+In the stable v1 engine, adaptive solvers are retained mainly for comparison. In the experimental v2 state-vector engine, `LSODA`, `BDF`, and `Radau` can integrate the full v2 state vector. Early short-horizon benchmarks show close results versus v2-RK4, but adaptive solvers are still slower for the current small Python model, so RK4 remains the default strategy.
 
 ## Model Notes
 
