@@ -23,6 +23,10 @@ from .platform import (
     delete_project,
     ensure_default_project,
     get_project,
+    delete_calibration_run,
+    get_calibration_run,
+    insert_calibration_run,
+    list_calibration_runs,
     get_project_csv,
     get_project_params,
     list_projects,
@@ -329,6 +333,7 @@ def calibration_bsm1_mapping_endpoint(request: Bsm1MappingRequest) -> dict:
 def calibration_optimize_endpoint(request: CalibrationOptimizeRequest) -> dict:
     started = perf_counter()
     try:
+        request_payload = request.model_dump()
         result = calibration_optimize(
             params=request.params,
             observations=request.observations,
@@ -353,10 +358,20 @@ def calibration_optimize_endpoint(request: CalibrationOptimizeRequest) -> dict:
                 "tunableCount": len(result["tunableParams"]),
             },
             (perf_counter() - started) * 1000,
+            request.projectId,
         )
+        if request.saveRun:
+            saved = insert_calibration_run(
+                request.projectId or "default",
+                request.name or "Calibration run",
+                result["status"],
+                request_payload,
+                result,
+            )
+            result["savedRun"] = {"id": saved["id"], "name": saved["name"], "projectId": saved["projectId"]}
         return result
     except ValueError as exc:
-        insert_calculation_log("calibration_optimize", "failed", str(exc), {}, (perf_counter() - started) * 1000)
+        insert_calculation_log("calibration_optimize", "failed", str(exc), {}, (perf_counter() - started) * 1000, request.projectId)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
@@ -453,6 +468,30 @@ def save_project_csv_endpoint(project_id: str, request: ProjectCsvRequest) -> di
 def clear_project_csv_endpoint(project_id: str) -> dict:
     try:
         return clear_project_csv(project_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/projects/{project_id}/calibration-runs")
+def list_project_calibration_runs_endpoint(project_id: str, limit: int = 100) -> dict:
+    try:
+        return list_calibration_runs(project_id, limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/api/projects/{project_id}/calibration-runs/{run_id}")
+def get_project_calibration_run_endpoint(project_id: str, run_id: int) -> dict:
+    try:
+        return get_calibration_run(project_id, run_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.delete("/api/projects/{project_id}/calibration-runs/{run_id}")
+def delete_project_calibration_run_endpoint(project_id: str, run_id: int) -> dict:
+    try:
+        return delete_calibration_run(project_id, run_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

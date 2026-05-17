@@ -356,7 +356,7 @@ h2 {
 
 .main-tabs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
   padding: 14px 14px 0;
 }
@@ -373,6 +373,7 @@ h2 {
 .data-tools[hidden],
 .realtime-tools[hidden],
 .log-tools[hidden],
+.calibration-tools[hidden],
 .metric-picker[hidden],
 .export-menu-panel[hidden] {
   display: none;
@@ -408,7 +409,8 @@ h2 {
 
 .data-tools,
 .realtime-tools,
-.log-tools {
+.log-tools,
+.calibration-tools {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 10px;
@@ -416,7 +418,8 @@ h2 {
 }
 
 .realtime-tools,
-.log-tools {
+.log-tools,
+.calibration-tools {
   grid-template-columns: 1fr;
   max-height: calc(54vh - 118px);
   overflow: auto;
@@ -487,7 +490,8 @@ h2 {
 
 .data-tools p,
 .realtime-tools p,
-.log-tools p {
+.log-tools p,
+.calibration-tools p {
   grid-column: 1 / -1;
   margin: 0;
   color: var(--muted);
@@ -497,7 +501,8 @@ h2 {
 
 .data-tools p.error,
 .realtime-tools p.error,
-.log-tools p.error {
+.log-tools p.error,
+.calibration-tools p.error {
   color: var(--red);
 }
 
@@ -577,7 +582,8 @@ h2 {
   gap: 8px;
 }
 
-.realtime-summary {
+.realtime-summary,
+.calibration-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
@@ -593,7 +599,8 @@ h2 {
   font-size: 12px;
 }
 
-.realtime-summary div {
+.realtime-summary div,
+.calibration-summary div {
   padding: 9px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -602,13 +609,15 @@ h2 {
 }
 
 .realtime-summary span,
-.mock-summary span {
+.mock-summary span,
+.calibration-summary span {
   display: block;
   color: var(--muted);
 }
 
 .realtime-summary strong,
-.mock-summary strong {
+.mock-summary strong,
+.calibration-summary strong {
   display: block;
   margin-top: 3px;
   overflow: hidden;

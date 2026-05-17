@@ -40,6 +40,18 @@ def init_platform_db() -> None:
               updated_at TEXT NOT NULL,
               FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
             );
+
+            CREATE TABLE IF NOT EXISTS calibration_runs (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              project_id TEXT NOT NULL,
+              name TEXT NOT NULL,
+              status TEXT NOT NULL,
+              request_json TEXT NOT NULL,
+              result_json TEXT NOT NULL,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
+            );
             """
         )
 
@@ -136,6 +148,7 @@ def delete_project(project_id: str) -> dict[str, Any]:
     with realtime.connect() as conn:
         conn.execute("DELETE FROM project_param_configs WHERE project_id = ?", (project_id,))
         conn.execute("DELETE FROM project_csv_inputs WHERE project_id = ?", (project_id,))
+        conn.execute("DELETE FROM calibration_runs WHERE project_id = ?", (project_id,))
         cursor = conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
     return {"status": "deleted", "projectId": project_id, "deleted": cursor.rowcount}
 
@@ -245,3 +258,83 @@ def clear_project_csv(project_id: str) -> dict[str, Any]:
         cursor = conn.execute("DELETE FROM project_csv_inputs WHERE project_id = ?", (project_id,))
         conn.execute("UPDATE projects SET updated_at = ? WHERE id = ?", (timestamp, project_id))
     return {"project": {**project, "updatedAt": timestamp}, "status": "cleared", "deleted": cursor.rowcount}
+
+
+def insert_calibration_run(project_id: str, name: str, status: str, request: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
+    project = get_project(project_id)
+    timestamp = realtime.now_iso()
+    clean_name = name.strip() or f"Calibration {timestamp}"
+    with realtime.connect() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO calibration_runs (project_id, name, status, request_json, result_json, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (project_id, clean_name, status, json.dumps(request), json.dumps(result), timestamp, timestamp),
+        )
+        row_id = int(cursor.lastrowid)
+        conn.execute("UPDATE projects SET updated_at = ? WHERE id = ?", (timestamp, project_id))
+    return get_calibration_run(project_id, row_id) | {"project": project}
+
+
+def list_calibration_runs(project_id: str, limit: int = 100) -> dict[str, Any]:
+    project = get_project(project_id)
+    safe_limit = max(1, min(int(limit), 500))
+    with realtime.connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, project_id, name, status, result_json, created_at, updated_at
+            FROM calibration_runs
+            WHERE project_id = ?
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (project_id, safe_limit),
+        ).fetchall()
+    runs = []
+    for row in rows:
+        result = json.loads(row["result_json"])
+        runs.append(
+            {
+                "id": row["id"],
+                "projectId": row["project_id"],
+                "name": row["name"],
+                "status": row["status"],
+                "bestObjective": result.get("bestObjective"),
+                "initialObjective": result.get("initialObjective"),
+                "mapping": result.get("mapping"),
+                "method": result.get("method"),
+                "createdAt": row["created_at"],
+                "updatedAt": row["updated_at"],
+            }
+        )
+    return {"project": project, "runs": runs, "limit": safe_limit}
+
+
+def get_calibration_run(project_id: str, run_id: int) -> dict[str, Any]:
+    project = get_project(project_id)
+    with realtime.connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM calibration_runs WHERE project_id = ? AND id = ?",
+            (project_id, run_id),
+        ).fetchone()
+    if not row:
+        raise ValueError(f"校准任务不存在：{run_id}。")
+    return {
+        "project": project,
+        "id": row["id"],
+        "projectId": row["project_id"],
+        "name": row["name"],
+        "status": row["status"],
+        "request": json.loads(row["request_json"]),
+        "result": json.loads(row["result_json"]),
+        "createdAt": row["created_at"],
+        "updatedAt": row["updated_at"],
+    }
+
+
+def delete_calibration_run(project_id: str, run_id: int) -> dict[str, Any]:
+    get_calibration_run(project_id, run_id)
+    with realtime.connect() as conn:
+        cursor = conn.execute("DELETE FROM calibration_runs WHERE project_id = ? AND id = ?", (project_id, run_id))
+    return {"status": "deleted", "projectId": project_id, "runId": run_id, "deleted": cursor.rowcount}

@@ -13,6 +13,7 @@ const paramTabs = document.getElementById("paramTabs");
 const dataTools = document.getElementById("dataTools");
 const realtimeTools = document.getElementById("realtimeTools");
 const logTools = document.getElementById("logTools");
+const calibrationTools = document.getElementById("calibrationTools");
 const csvFileInput = document.getElementById("csvFileInput");
 const clearCsvData = document.getElementById("clearCsvData");
 const csvStatus = document.getElementById("csvStatus");
@@ -44,11 +45,17 @@ const refreshLogs = document.getElementById("refreshLogs");
 const clearLogs = document.getElementById("clearLogs");
 const logStatus = document.getElementById("logStatus");
 const logList = document.getElementById("logList");
+const runQuickCalibration = document.getElementById("runQuickCalibration");
+const refreshCalibrationRuns = document.getElementById("refreshCalibrationRuns");
+const calibrationStatus = document.getElementById("calibrationStatus");
+const calibrationSummary = document.getElementById("calibrationSummary");
+const calibrationRunList = document.getElementById("calibrationRunList");
 const SIMULATION_API_URL = "http://127.0.0.1:8000/api/simulate";
 const REALTIME_API_URL = "http://127.0.0.1:8000/api/realtime";
 const PARAM_CONFIG_API_URL = "http://127.0.0.1:8000/api/config/params";
 const PROJECT_API_URL = "http://127.0.0.1:8000/api/projects";
 const LOG_API_URL = "http://127.0.0.1:8000/api/logs";
+const CALIBRATION_API_URL = "http://127.0.0.1:8000/api/calibration";
 const MAX_SOLVER_STEP_DAYS = 0.0005;
 const EPSILON_DAYS = 1e-12;
 
@@ -584,6 +591,91 @@ async function logRequest(path = "", options = {}) {
   return payload;
 }
 
+async function calibrationRequest(path = "", options = {}) {
+  const response = await fetch(`${CALIBRATION_API_URL}${path}`, options);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.detail || response.statusText || "校准请求失败。");
+  }
+  return payload;
+}
+
+function updateCalibrationStatus(message, isError = false) {
+  calibrationStatus.textContent = message;
+  calibrationStatus.classList.toggle("error", isError);
+}
+
+function renderCalibrationSummary(result) {
+  if (!result) {
+    calibrationSummary.innerHTML = "";
+    return;
+  }
+  calibrationSummary.innerHTML = `
+    <div><span>方法</span><strong>${escapeHtml(result.method || "--")}</strong></div>
+    <div><span>布局</span><strong>${escapeHtml(result.mapping || "--")}</strong></div>
+    <div><span>初始误差</span><strong>${formatChartValue(result.initialObjective)}</strong></div>
+    <div><span>最优误差</span><strong>${formatChartValue(result.bestObjective)}</strong></div>
+    <div><span>改善</span><strong>${formatChartValue(result.improvementPercent)}%</strong></div>
+    <div><span>记录</span><strong>${result.savedRun?.id ? `#${result.savedRun.id}` : "--"}</strong></div>
+  `;
+}
+
+function renderCalibrationRuns(runs) {
+  if (!runs.length) {
+    calibrationRunList.innerHTML = `<div class="log-item"><div class="log-message">暂无校准记录。</div></div>`;
+    return;
+  }
+  calibrationRunList.innerHTML = runs
+    .map((run) => `
+      <article class="log-item">
+        <div class="log-item-header">
+          <span class="log-status">${escapeHtml(run.status)}</span>
+          <span class="log-event">${escapeHtml(run.name)}</span>
+          <span class="log-time">#${run.id} · ${escapeHtml(run.createdAt)}</span>
+        </div>
+        <div class="log-message">最优误差 ${formatChartValue(run.bestObjective)}，初始误差 ${formatChartValue(run.initialObjective)}，${escapeHtml(run.mapping || "custom")}</div>
+      </article>
+    `)
+    .join("");
+}
+
+async function refreshProjectCalibrationRuns() {
+  try {
+    const payload = await projectRequest(`/${encodeURIComponent(activeProjectId)}/calibration-runs?limit=20`);
+    renderCalibrationRuns(payload.runs || []);
+    updateCalibrationStatus(`已加载 ${payload.runs?.length || 0} 条校准记录。`);
+  } catch (error) {
+    updateCalibrationStatus(`校准记录加载失败：${error.message}`, true);
+  }
+}
+
+async function runQuickNh4Calibration() {
+  updateCalibrationStatus("校准计算中...");
+  const horizon = Math.min(Math.max(params.simulationDays || 1, 0.02), 0.1);
+  try {
+    const result = await calibrationRequest("/optimize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId: activeProjectId,
+        name: "NH4 quick calibration",
+        saveRun: true,
+        params: { ...params, simulationDays: horizon, outputIntervalHours: Math.min(params.outputIntervalHours || 1, 1) },
+        observations: [{ time: horizon, effNh4: 2.5 }],
+        tunableParams: ["muA", "kNH"],
+        targets: ["effNh4"],
+        maxIterations: 1,
+        stepFraction: 0.1,
+      }),
+    });
+    renderCalibrationSummary(result);
+    updateCalibrationStatus(`校准完成，最优误差 ${formatChartValue(result.bestObjective)}。`);
+    await refreshProjectCalibrationRuns();
+  } catch (error) {
+    updateCalibrationStatus(`校准失败：${error.message}`, true);
+  }
+}
+
 function withProjectQuery(path = "") {
   const separator = path.includes("?") ? "&" : "?";
   return `${path}${separator}projectId=${encodeURIComponent(activeProjectId)}`;
@@ -638,6 +730,7 @@ function renderForm() {
   dataTools.hidden = activePanel !== "data";
   realtimeTools.hidden = activePanel !== "realtime";
   logTools.hidden = activePanel !== "logs";
+  calibrationTools.hidden = activePanel !== "calibration";
   paramTabs.hidden = !showingParams;
   parameterForm.hidden = !showingParams;
   parameterForm.innerHTML = "";
@@ -2138,6 +2231,9 @@ document.querySelectorAll(".panel-tab").forEach((tab) => {
     if (activePanel === "logs") {
       refreshCalculationLogs();
     }
+    if (activePanel === "calibration") {
+      refreshProjectCalibrationRuns();
+    }
   });
 });
 
@@ -2184,12 +2280,19 @@ projectSelect.addEventListener("change", async () => {
   showDefaultBoundaryPreview();
   if (activePanel === "realtime") await refreshRealtimeLatest();
   if (activePanel === "logs") await refreshCalculationLogs();
+  if (activePanel === "calibration") await refreshProjectCalibrationRuns();
 });
 newProject.addEventListener("click", async () => {
   await createNewProject();
 });
 refreshLogs.addEventListener("click", async () => {
   await refreshCalculationLogs();
+});
+runQuickCalibration.addEventListener("click", async () => {
+  await runQuickNh4Calibration();
+});
+refreshCalibrationRuns.addEventListener("click", async () => {
+  await refreshProjectCalibrationRuns();
 });
 clearLogs.addEventListener("click", async () => {
   await clearCalculationLogs();

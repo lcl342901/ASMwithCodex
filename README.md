@@ -217,6 +217,16 @@ Example calibration request:
 
 The optimizer currently uses a bounded coordinate search. It is intentionally conservative and deterministic so calibration experiments are easy to inspect before introducing heavier optimizers.
 
+Calibration runs can now be saved into the active project:
+
+```http
+GET    /api/projects/{projectId}/calibration-runs
+GET    /api/projects/{projectId}/calibration-runs/{runId}
+DELETE /api/projects/{projectId}/calibration-runs/{runId}
+```
+
+Set `saveRun: true` in `/api/calibration/optimize` to archive the request and result. The frontend includes a compact `校准` workspace that can run a quick NH4 calibration for the active project and list saved calibration records.
+
 For a closer BSM1 structural experiment, `POST /api/simulate` also accepts:
 
 ```json
@@ -457,14 +467,15 @@ Main milestones:
 - Connected the frontend parameter panel to project selection and per-project parameter save/reset.
 - Extended project scope to CSV boundary data, realtime records, realtime state/results, and calculation logs.
 - Added ownership, permission, database migration, and deployment plans for the future online platform.
+- Added project-scoped calibration run archive and a minimal frontend calibration workspace.
 
 ## Suggested Next Steps
 
 - Add CSV template download and stricter input validation.
 - Add model-state persistence for real-time data.
 - Expose initial-condition controls in the frontend advanced settings.
-- Add richer calibration UI and observation CSV upload.
+- Add observation CSV upload and richer staged calibration UI.
 - Add export of simulation results as CSV.
 - Align the BSM1 five-tank layout against official dynamic input files and evaluation windows so the built-in BSM1 targets can become a comparable validation case instead of `reference_only`.
 - Implement authentication and project membership enforcement.
-- Add project-scoped simulation job/result archive and calibration result storage.
+- Add project-scoped simulation job/result archive.

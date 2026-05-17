@@ -6,7 +6,7 @@ from pathlib import Path
 
 from backend.engine_compare import compare_engines
 from backend.engine_runner import normalize_engine_version, simulate_with_engine
-from backend.main import calibration_bsm1_mapping_endpoint, calibration_optimize_endpoint, calibration_preview_endpoint, clear_project_csv_endpoint, create_project_endpoint, default_project_endpoint, get_project_csv_endpoint, get_project_params_endpoint, create_simulation_job_endpoint, get_simulation_job_endpoint, get_simulation_job_result_endpoint, list_projects_endpoint, model_credibility_endpoint, model_initial_conditions_endpoint, model_metadata_endpoint, model_reference_case_compare_endpoint, model_reference_case_endpoint, model_reference_cases_endpoint, realtime_sources_endpoint, realtime_status_endpoint, reset_project_params_endpoint, save_project_csv_endpoint, save_project_params_endpoint, simulate_endpoint
+from backend.main import calibration_bsm1_mapping_endpoint, calibration_optimize_endpoint, calibration_preview_endpoint, clear_project_csv_endpoint, create_project_endpoint, default_project_endpoint, delete_project_calibration_run_endpoint, get_project_calibration_run_endpoint, get_project_csv_endpoint, get_project_params_endpoint, create_simulation_job_endpoint, get_simulation_job_endpoint, get_simulation_job_result_endpoint, list_project_calibration_runs_endpoint, list_projects_endpoint, model_credibility_endpoint, model_initial_conditions_endpoint, model_metadata_endpoint, model_reference_case_compare_endpoint, model_reference_case_endpoint, model_reference_cases_endpoint, realtime_sources_endpoint, realtime_status_endpoint, reset_project_params_endpoint, save_project_csv_endpoint, save_project_params_endpoint, simulate_endpoint
 from backend.model import DEFAULT_PARAMS, csv_values_at, normalize_csv_records, simulate, SimulationContext, sanitize_params
 from backend.schemas import Bsm1MappingRequest, CalibrationOptimizeRequest, CalibrationPreviewRequest, InitialConditionRequest, ModelCredibilityRequest, ParamConfigRequest, ProjectCsvRequest, ProjectRequest, ReferenceComparisonRequest, SimulationRequest
 from backend.solver_benchmark import benchmark_v2_solvers, project_long_horizon_durations, step_consistency_report
@@ -244,6 +244,35 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(optimized["status"], "completed")
         self.assertEqual(optimized["mapping"], "bsm1_5tank")
         self.assertLessEqual(optimized["bestObjective"], optimized["initialObjective"])
+
+    def test_calibration_optimizer_can_save_project_run(self):
+        project = create_project_endpoint(ProjectRequest(name="Calibration archive"))
+        optimized = calibration_optimize_endpoint(
+            CalibrationOptimizeRequest(
+                projectId=project["id"],
+                name="NH4 calibration",
+                saveRun=True,
+                params={"simulationDays": 0.02, "outputIntervalHours": 1},
+                observations=[{"time": 0.02, "effNh4": 2.5}],
+                tunableParams=["muA"],
+                targets=["effNh4"],
+                maxIterations=1,
+                stepFraction=0.1,
+            )
+        )
+        saved = optimized["savedRun"]
+        listed = list_project_calibration_runs_endpoint(project["id"])
+        detail = get_project_calibration_run_endpoint(project["id"], saved["id"])
+
+        self.assertEqual(saved["projectId"], project["id"])
+        self.assertEqual(listed["runs"][0]["id"], saved["id"])
+        self.assertEqual(detail["name"], "NH4 calibration")
+        self.assertEqual(detail["request"]["projectId"], project["id"])
+        self.assertEqual(detail["result"]["bestObjective"], optimized["bestObjective"])
+
+        deleted = delete_project_calibration_run_endpoint(project["id"], saved["id"])
+        self.assertEqual(deleted["deleted"], 1)
+        self.assertEqual(list_project_calibration_runs_endpoint(project["id"])["runs"], [])
 
     def test_realtime_step_persists_latest_result(self):
         step = realtime.realtime_step(values={"Q": 10000, "COD": 420, "NH4": 32, "NO3": 0.5, "TSS": 220}, step_hours=0.5)

@@ -70,6 +70,9 @@ class Bsm1MappingRequest(BaseModel):
 
 
 class CalibrationOptimizeRequest(BaseModel):
+    projectId: Optional[str] = "default"
+    name: str = ""
+    saveRun: bool = False
     params: dict[str, Any] = Field(default_factory=dict)
     observations: list[dict[str, Any]] = Field(default_factory=list)
     tunableParams: list[str] = Field(default_factory=list)
