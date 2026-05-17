@@ -7,31 +7,74 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">A2O / AAO Process Simulator</p>
-        <h1>AAO 工艺在线仿真</h1>
-      </div>
-      <div class="topbar-actions">
-        <button id="resetLayout" class="icon-button" title="重置流程图布局">↺</button>
-        <button id="runSimulation" class="primary-button">运行仿真</button>
-      </div>
-    </header>
+    <div class="app-frame">
+      <aside class="app-sidebar" aria-label="主导航">
+        <div class="brand-block">
+          <p class="eyebrow">A2O / AAO</p>
+          <h1>AAO 工艺在线仿真</h1>
+        </div>
+        <nav class="primary-nav">
+          <button class="nav-item panel-tab active" data-panel="process" type="button">
+            <span>工艺建模</span>
+            <small>流程图与单体</small>
+          </button>
+          <button class="nav-item panel-tab" data-panel="params" type="button">
+            <span>仿真配置</span>
+            <small>参数与尺寸</small>
+          </button>
+          <button class="nav-item panel-tab" data-panel="data" type="button">
+            <span>数据中心</span>
+            <small>边界与实时</small>
+          </button>
+          <button class="nav-item panel-tab" data-panel="results" type="button">
+            <span>仿真结果</span>
+            <small>曲线与导出</small>
+          </button>
+          <button class="nav-item panel-tab" data-panel="evaluation" type="button">
+            <span>模型评估</span>
+            <small>可信度与对比</small>
+          </button>
+          <button class="nav-item panel-tab" data-panel="calibration" type="button">
+            <span>校准中心</span>
+            <small>率定与报告</small>
+          </button>
+          <button class="nav-item panel-tab" data-panel="logs" type="button">
+            <span>系统日志</span>
+            <small>任务与失败</small>
+          </button>
+        </nav>
+        <div class="sidebar-footer">
+          <span id="paramStorageStatus">使用当前参数</span>
+        </div>
+      </aside>
 
-    <main class="app-shell">
-      <section class="canvas-panel" aria-label="AAO 工艺流程图">
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <p id="workspaceEyebrow" class="eyebrow">工艺建模</p>
+            <h2 id="workspaceTitle">AAO 工艺流程</h2>
+          </div>
+          <div class="topbar-actions">
+            <button id="runSimulation" class="primary-button">运行仿真</button>
+          </div>
+        </header>
+
+        <section class="canvas-panel workspace-page active" data-page="process" aria-label="AAO 工艺流程图">
         <div class="panel-heading">
           <div>
             <h2>工艺流程</h2>
             <p>拖动单元位置，点击节点编辑关键参数。</p>
           </div>
-          <div class="simulation-status" aria-live="polite">
-            <span id="statusBadge" class="status-badge">待运行</span>
-            <div class="progress-row" aria-label="计算进度">
-              <div class="progress-track">
-                <div id="progressBar" class="progress-bar"></div>
+          <div class="panel-tools">
+            <button id="resetLayout" class="secondary-button" type="button">重置布局</button>
+            <div class="simulation-status" aria-live="polite">
+              <span id="statusBadge" class="status-badge">待运行</span>
+              <div class="progress-row" aria-label="计算进度">
+                <div class="progress-track">
+                  <div id="progressBar" class="progress-bar"></div>
+                </div>
+                <span id="progressPercent" class="progress-percent">0%</span>
               </div>
-              <span id="progressPercent" class="progress-percent">0%</span>
             </div>
           </div>
         </div>
@@ -40,10 +83,10 @@
         </div>
       </section>
 
-      <aside class="params-panel" aria-label="参数设置">
+      <section class="params-panel workspace-page" data-page="params" aria-label="参数设置">
         <div class="panel-heading compact">
           <div>
-            <h2>边界条件与尺寸</h2>
+            <h2>仿真配置</h2>
             <p id="activeNodeLabel">全局参数</p>
           </div>
           <div class="param-actions" aria-label="参数保存">
@@ -55,18 +98,8 @@
               <button id="saveParams" class="secondary-button" type="button">保存参数</button>
               <button id="resetParams" class="secondary-button danger-lite" type="button">重置默认</button>
             </div>
-            <span id="paramStorageStatus">使用当前参数</span>
           </div>
         </div>
-
-        <div class="main-tabs" role="tablist" aria-label="工作区">
-          <button class="tab panel-tab active" data-panel="params">参数</button>
-          <button class="tab panel-tab" data-panel="data">数据</button>
-          <button class="tab panel-tab" data-panel="realtime">实时</button>
-          <button class="tab panel-tab" data-panel="calibration">校准</button>
-          <button class="tab panel-tab" data-panel="logs">日志</button>
-        </div>
-
         <div id="paramTabs" class="param-tabs" role="tablist" aria-label="参数分组">
           <button class="tab param-tab active" data-tab="influent">进水</button>
           <button class="tab param-tab" data-tab="process">池体</button>
@@ -75,7 +108,17 @@
           <button class="tab param-tab" data-tab="asm1">ASM1</button>
           <button class="tab param-tab" data-tab="clarifier">二沉池</button>
         </div>
+        <form id="parameterForm" class="parameter-form"></form>
+      </section>
 
+      <section class="workspace-page stack-page" data-page="data" aria-label="数据中心">
+        <div class="panel-heading">
+          <div>
+            <h2>数据中心</h2>
+            <p>管理边界 CSV、实时输入、Mock 数据源和后续数据清洗入口。</p>
+          </div>
+        </div>
+        <div class="section-grid">
         <div id="dataTools" class="data-tools" hidden>
           <label class="file-picker">
             <span>上传 CSV 历史数据</span>
@@ -121,7 +164,16 @@
           <p id="realtimeStatus">尚未接入实时数据。可先推送当前进水参数，再推进模型一步。</p>
           <div id="realtimeSummary" class="realtime-summary"></div>
         </div>
+        </div>
+      </section>
 
+      <section class="workspace-page stack-page" data-page="logs" aria-label="系统日志">
+        <div class="panel-heading">
+          <div>
+            <h2>系统日志</h2>
+            <p>查看计算状态、失败日志和最近任务记录。</p>
+          </div>
+        </div>
         <div id="logTools" class="log-tools" hidden>
           <div class="tool-section">
             <div class="tool-section-heading">
@@ -136,7 +188,15 @@
           </div>
           <div id="logList" class="log-list"></div>
         </div>
+      </section>
 
+      <section class="workspace-page stack-page" data-page="calibration" aria-label="校准中心">
+        <div class="panel-heading">
+          <div>
+            <h2>校准中心</h2>
+            <p>上传观测数据、运行分阶段校准，并查看校准前后误差变化。</p>
+          </div>
+        </div>
         <div id="calibrationTools" class="calibration-tools" hidden>
           <div class="tool-section">
             <div class="tool-section-heading">
@@ -174,11 +234,22 @@
           <div id="calibrationSummary" class="calibration-summary"></div>
           <div id="calibrationRunList" class="log-list"></div>
         </div>
+      </section>
 
-        <form id="parameterForm" class="parameter-form"></form>
-      </aside>
+      <section class="workspace-page stack-page" data-page="evaluation" aria-label="模型评估">
+        <div class="panel-heading">
+          <div>
+            <h2>模型评估</h2>
+            <p>P9.1 将在这里展示模型可信度、BSM1 对比、初始状态和参数风险。</p>
+          </div>
+        </div>
+        <div class="empty-state">
+          <strong>模型可信度工作区</strong>
+          <p>当前 P6 能力已经在后端具备，下一步会把可信度评分、参考模型对比和校验提示产品化到这里。</p>
+        </div>
+      </section>
 
-      <section class="results-panel" aria-label="仿真结果">
+      <section class="results-panel workspace-page" data-page="results" aria-label="仿真结果">
         <div class="panel-heading">
           <div>
             <h2>仿真结果</h2>
@@ -235,7 +306,8 @@
         </div>
         <div id="legend" class="legend"></div>
       </section>
-    </main>
+      </main>
+    </div>
 
     <script src="./app.js"></script>
   </body>

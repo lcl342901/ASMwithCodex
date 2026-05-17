@@ -56,6 +56,9 @@ const calibrationObservationStatus = document.getElementById("calibrationObserva
 const calibrationStatus = document.getElementById("calibrationStatus");
 const calibrationSummary = document.getElementById("calibrationSummary");
 const calibrationRunList = document.getElementById("calibrationRunList");
+const workspaceTitle = document.getElementById("workspaceTitle");
+const workspaceEyebrow = document.getElementById("workspaceEyebrow");
+const workspacePages = Array.from(document.querySelectorAll(".workspace-page"));
 const SIMULATION_API_URL = "http://127.0.0.1:8000/api/simulate";
 const REALTIME_API_URL = "http://127.0.0.1:8000/api/realtime";
 const PARAM_CONFIG_API_URL = "http://127.0.0.1:8000/api/config/params";
@@ -216,7 +219,7 @@ const fields = {
   ],
 };
 
-let activePanel = "params";
+let activePanel = "process";
 let activeTab = "influent";
 let selectedNode = null;
 let lastResult = null;
@@ -251,6 +254,16 @@ const C = {
   X_BA: 10,
   X_P: 11,
   X_ND: 12,
+};
+
+const workspaceLabels = {
+  process: ["工艺建模", "AAO 工艺流程"],
+  params: ["仿真配置", "边界条件与尺寸"],
+  data: ["数据中心", "边界、实时与清洗"],
+  results: ["仿真结果", "结果曲线与导出"],
+  evaluation: ["模型评估", "可信度与标准对比"],
+  calibration: ["校准中心", "模型率定与报告"],
+  logs: ["系统日志", "计算状态与失败日志"],
 };
 
 const soluble = [C.S_I, C.S_S, C.S_O, C.S_NO, C.S_NH, C.S_ND, C.S_ALK];
@@ -398,9 +411,22 @@ function selectNode(id) {
   selectedNode = id;
   const node = nodes.find((item) => item.id === id);
   activeNodeLabel.textContent = node ? node.title : "全局参数";
+  const tabByNode = {
+    influent: "influent",
+    anaerobic: "process",
+    anoxic: "process",
+    aerobic: "process",
+    clarifier: "clarifier",
+    ras: "operation",
+    was: "operation",
+    effluent: "operation",
+  };
+  activeTab = tabByNode[id] || activeTab;
+  document.querySelectorAll(".param-tab").forEach((item) => item.classList.toggle("active", item.dataset.tab === activeTab));
+  document.querySelectorAll(".panel-tab").forEach((item) => item.classList.toggle("active", item.dataset.panel === "params"));
+  activePanel = "params";
   drawNodes();
-  setActiveChart("unit");
-  if (lastResult) drawChart(lastResult, activeChart);
+  renderForm();
 }
 
 function setActiveChart(chartName) {
@@ -914,14 +940,28 @@ async function clearCalculationLogs() {
 
 function renderForm() {
   const showingParams = activePanel === "params";
+  workspacePages.forEach((page) => {
+    page.classList.toggle("active", page.dataset.page === activePanel);
+  });
+  const [eyebrow, title] = workspaceLabels[activePanel] || workspaceLabels.process;
+  workspaceEyebrow.textContent = eyebrow;
+  workspaceTitle.textContent = title;
   dataTools.hidden = activePanel !== "data";
-  realtimeTools.hidden = activePanel !== "realtime";
+  realtimeTools.hidden = activePanel !== "data";
   logTools.hidden = activePanel !== "logs";
   calibrationTools.hidden = activePanel !== "calibration";
   paramTabs.hidden = !showingParams;
   parameterForm.hidden = !showingParams;
   parameterForm.innerHTML = "";
-  if (!showingParams) return;
+  if (!showingParams) {
+    if (activePanel === "process") {
+      drawEdges();
+    }
+    if (activePanel === "results" && lastResult) {
+      drawChart(lastResult, activeChart);
+    }
+    return;
+  }
   if (activeTab === "clarifier") {
     params.clarifierLayers = clamp(Math.round(params.clarifierLayers), 4, 20);
     params.clarifierFeedLayer = clamp(Math.round(params.clarifierFeedLayer), 1, params.clarifierLayers);
@@ -2418,6 +2458,10 @@ document.querySelectorAll(".panel-tab").forEach((tab) => {
     if (activePanel === "logs") {
       refreshCalculationLogs();
     }
+    if (activePanel === "data") {
+      refreshRealtimeLatest();
+      refreshRealtimeMockStatus();
+    }
     if (activePanel === "calibration") {
       refreshCalibrationStages();
       refreshProjectCalibrationRuns();
@@ -2466,7 +2510,7 @@ projectSelect.addEventListener("change", async () => {
   await loadProjectCsv(activeProjectId);
   renderForm();
   showDefaultBoundaryPreview();
-  if (activePanel === "realtime") await refreshRealtimeLatest();
+  if (activePanel === "data") await refreshRealtimeLatest();
   if (activePanel === "logs") await refreshCalculationLogs();
   if (activePanel === "calibration") {
     await refreshCalibrationStages();
@@ -2664,6 +2708,9 @@ document.getElementById("runSimulation").addEventListener("click", async () => {
     statusBadge.textContent = "已完成";
     finishProgress();
     updateMetrics(lastResult);
+    activePanel = "results";
+    document.querySelectorAll(".panel-tab").forEach((item) => item.classList.toggle("active", item.dataset.panel === "results"));
+    renderForm();
     drawChart(lastResult, activeChart);
   } catch (error) {
     statusBadge.textContent = "计算失败";

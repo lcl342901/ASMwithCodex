@@ -475,14 +475,13 @@ Main milestones:
 - Extended project scope to CSV boundary data, realtime records, realtime state/results, and calculation logs.
 - Added ownership, permission, database migration, and deployment plans for the future online platform.
 - Added project-scoped calibration run archive, a minimal frontend calibration workspace, observation CSV upload for calibration targets, a BSM1 baseline-vs-target calibration report, staged calibration presets, and before/after residual comparison rows.
+- Reworked the frontend information architecture into a desktop workbench with left-side primary navigation for process modeling, simulation configuration, data center, results, model evaluation, calibration center, and system logs.
 
 ## Suggested Next Steps
 
-- Add CSV template download and stricter input validation.
-- Add model-state persistence for real-time data.
-- Expose initial-condition controls in the frontend advanced settings.
-- Add richer calibration report export and chart overlays.
-- Add export of simulation results as CSV.
+- Productize model credibility in the new Model Evaluation workspace.
+- Productize realtime data cleaning in the new Data Center workspace.
+- Add richer calibration report export and chart overlays in the Calibration Center.
 - Align the BSM1 five-tank layout against official dynamic input files and evaluation windows so the built-in BSM1 targets can become a comparable validation case instead of `reference_only`.
 - Implement authentication and project membership enforcement.
 - Add project-scoped simulation job/result archive.
