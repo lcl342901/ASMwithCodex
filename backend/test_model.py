@@ -6,9 +6,9 @@ from pathlib import Path
 
 from backend.engine_compare import compare_engines
 from backend.engine_runner import normalize_engine_version, simulate_with_engine
-from backend.main import calibration_bsm1_mapping_endpoint, calibration_optimize_endpoint, calibration_preview_endpoint, clear_project_csv_endpoint, create_project_endpoint, default_project_endpoint, delete_project_calibration_run_endpoint, get_project_calibration_run_endpoint, get_project_csv_endpoint, get_project_params_endpoint, create_simulation_job_endpoint, get_simulation_job_endpoint, get_simulation_job_result_endpoint, list_project_calibration_runs_endpoint, list_projects_endpoint, model_credibility_endpoint, model_initial_conditions_endpoint, model_metadata_endpoint, model_reference_case_compare_endpoint, model_reference_case_endpoint, model_reference_cases_endpoint, realtime_sources_endpoint, realtime_status_endpoint, reset_project_params_endpoint, save_project_csv_endpoint, save_project_params_endpoint, simulate_endpoint
+from backend.main import calibration_bsm1_mapping_endpoint, calibration_bsm1_report_endpoint, calibration_optimize_endpoint, calibration_preview_endpoint, clear_project_csv_endpoint, create_project_endpoint, default_project_endpoint, delete_project_calibration_run_endpoint, get_project_calibration_run_endpoint, get_project_csv_endpoint, get_project_params_endpoint, create_simulation_job_endpoint, get_simulation_job_endpoint, get_simulation_job_result_endpoint, list_project_calibration_runs_endpoint, list_projects_endpoint, model_credibility_endpoint, model_initial_conditions_endpoint, model_metadata_endpoint, model_reference_case_compare_endpoint, model_reference_case_endpoint, model_reference_cases_endpoint, realtime_sources_endpoint, realtime_status_endpoint, reset_project_params_endpoint, save_project_csv_endpoint, save_project_params_endpoint, simulate_endpoint
 from backend.model import DEFAULT_PARAMS, csv_values_at, normalize_csv_records, simulate, SimulationContext, sanitize_params
-from backend.schemas import Bsm1MappingRequest, CalibrationOptimizeRequest, CalibrationPreviewRequest, InitialConditionRequest, ModelCredibilityRequest, ParamConfigRequest, ProjectCsvRequest, ProjectRequest, ReferenceComparisonRequest, SimulationRequest
+from backend.schemas import Bsm1CalibrationReportRequest, Bsm1MappingRequest, CalibrationOptimizeRequest, CalibrationPreviewRequest, InitialConditionRequest, ModelCredibilityRequest, ParamConfigRequest, ProjectCsvRequest, ProjectRequest, ReferenceComparisonRequest, SimulationRequest
 from backend.solver_benchmark import benchmark_v2_solvers, project_long_horizon_durations, step_consistency_report
 from backend.engine_v2 import clarifier_layer_rhs, continuous_step, hybrid_step, initial_vector_state, pack_state, run_vector_simulation_v2, unpack_state, vector_snapshot
 from backend import realtime
@@ -206,6 +206,22 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(mapping["params"]["anoxicVolume"], 2000)
         self.assertEqual(mapping["params"]["aerobicVolume"], 4000)
         self.assertEqual(mapping["params"]["simulationDays"], 0.05)
+
+    def test_bsm1_calibration_report_compares_baseline_and_optimized(self):
+        report = calibration_bsm1_report_endpoint(
+            Bsm1CalibrationReportRequest(
+                params={"simulationDays": 0.02, "outputIntervalHours": 1},
+                maxIterations=1,
+                stepFraction=0.1,
+            )
+        )
+
+        self.assertEqual(report["status"], "completed")
+        self.assertEqual(report["layout"], "bsm1_5tank")
+        self.assertIn("baselineObjective", report)
+        self.assertIn("optimizedObjective", report)
+        self.assertTrue(report["rows"])
+        self.assertTrue(any(row["metric"] == "effNh4" for row in report["rows"]))
 
     def test_calibration_optimizer_improves_or_matches_objective(self):
         baseline_params = rk4_params(simulationDays=0.03, outputIntervalHours=1, timeStepHours=0.5)

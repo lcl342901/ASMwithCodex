@@ -630,6 +630,25 @@ h2 {
   white-space: nowrap;
 }
 
+.calibration-report-table {
+  grid-column: 1 / -1;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.calibration-report-table th,
+.calibration-report-table td {
+  padding: 6px 4px;
+  border-top: 1px solid var(--line);
+  text-align: right;
+}
+
+.calibration-report-table th:first-child,
+.calibration-report-table td:first-child {
+  text-align: left;
+}
+
 .field {
   display: grid;
   grid-template-columns: 1fr 128px;

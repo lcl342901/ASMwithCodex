@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from .calibration import bsm1_mapping_report, calibration_optimize
+from .calibration import bsm1_calibration_report, bsm1_mapping_report, calibration_optimize
 from .engine_runner import normalize_engine_version, simulate_with_engine
 from .model_trust import (
     assess_result_credibility,
@@ -54,6 +54,7 @@ from .realtime import (
 )
 from .schemas import (
     CalibrationPreviewRequest,
+    Bsm1CalibrationReportRequest,
     Bsm1MappingRequest,
     CalibrationOptimizeRequest,
     InitialConditionRequest,
@@ -326,6 +327,33 @@ def calibration_bsm1_mapping_endpoint(request: Bsm1MappingRequest) -> dict:
     try:
         return bsm1_mapping_report(request.params)
     except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/calibration/bsm1/report")
+def calibration_bsm1_report_endpoint(request: Bsm1CalibrationReportRequest) -> dict:
+    started = perf_counter()
+    try:
+        result = bsm1_calibration_report(
+            params=request.params,
+            use_bsm1_layout=request.useBsm1Layout,
+            max_iterations=request.maxIterations,
+            step_fraction=request.stepFraction,
+        )
+        insert_calculation_log(
+            "calibration_bsm1_report",
+            "success",
+            "BSM1 calibration report completed.",
+            {
+                "layout": result["layout"],
+                "baselineObjective": result["baselineObjective"],
+                "optimizedObjective": result["optimizedObjective"],
+            },
+            (perf_counter() - started) * 1000,
+        )
+        return result
+    except ValueError as exc:
+        insert_calculation_log("calibration_bsm1_report", "failed", str(exc), {}, (perf_counter() - started) * 1000)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 

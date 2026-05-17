@@ -178,6 +178,13 @@ def reference_observations(case_id: str) -> list[dict[str, Any]]:
     return [row]
 
 
+def final_metric_value(result: dict[str, Any], metric: str) -> float | None:
+    series = metric_series(result, metric)
+    if not series:
+        return None
+    return series[-1]
+
+
 def validate_calibration_inputs(tunable_params: list[str], targets: list[str]) -> None:
     unknown_targets = [target for target in targets if target not in CALIBRATION_TARGETS and target != "bod5"]
     if unknown_targets:
@@ -292,5 +299,86 @@ def calibration_optimize(
         "history": history,
         "warnings": warnings + best_result.get("warnings", []),
         "durationMs": (perf_counter() - started) * 1000,
-        "referenceComparison": compare_to_reference_case("bsm1_alignment_placeholder", best_result) if use_bsm1_mapping else None,
+        "referenceComparison": compare_to_reference_case("bsm1_alignment_placeholder", best_result) if (use_bsm1_mapping or use_bsm1_layout) else None,
+    }
+
+
+def bsm1_calibration_report(
+    params: dict[str, Any] | None = None,
+    use_bsm1_layout: bool = True,
+    max_iterations: int = 1,
+    step_fraction: float = 0.1,
+) -> dict[str, Any]:
+    started = perf_counter()
+    reference_case_id = "bsm1_alignment_placeholder"
+    reference_case = get_reference_case(reference_case_id)
+    targets = list(reference_case.get("targets", {}).keys())
+    observations = reference_observations(reference_case_id)
+    base_params = bsm1_mapped_params(params)
+    errors, warnings = validate_params(base_params)
+    if errors:
+        raise ValueError("; ".join(errors))
+
+    if use_bsm1_layout:
+        ctx = SimulationContext(params=base_params, source_name="", mode="manual")
+        baseline_result = run_bsm1_simulation(ctx)
+        baseline_result["engineVersion"] = "bsm1"
+    else:
+        baseline_result = simulate_with_engine(base_params)
+    baseline_objective = observation_objective(baseline_result, observations, targets)
+    optimized = calibration_optimize(
+        params=base_params,
+        observations=observations,
+        tunable_params=RECOMMENDED_TUNABLE_PARAMS[:5],
+        targets=targets,
+        max_iterations=max_iterations,
+        step_fraction=step_fraction,
+        use_bsm1_mapping=not use_bsm1_layout,
+        use_bsm1_layout=use_bsm1_layout,
+    )
+
+    baseline_comparison = compare_to_reference_case(reference_case_id, baseline_result)
+    optimized_comparison = optimized.get("referenceComparison") or {}
+    optimized_rows = {row["metric"]: row for row in optimized_comparison.get("rows", [])}
+    rows = []
+    for baseline_row in baseline_comparison["rows"]:
+        metric = baseline_row["metric"]
+        target = baseline_row["target"]
+        optimized_value = None
+        optimized_row = optimized_rows.get(metric)
+        if optimized_row:
+            optimized_value = optimized_row.get("actualFinal")
+        baseline_error = baseline_row.get("absoluteError")
+        optimized_error = None if optimized_value is None else optimized_value - target
+        rows.append(
+            {
+                "metric": metric,
+                "target": target,
+                "unit": baseline_row["unit"],
+                "baseline": baseline_row.get("actualFinal"),
+                "optimized": optimized_value,
+                "baselineError": baseline_error,
+                "optimizedError": optimized_error,
+                "absoluteErrorImprovement": None
+                if baseline_error is None or optimized_error is None
+                else abs(baseline_error) - abs(optimized_error),
+            }
+        )
+
+    return {
+        "status": "completed",
+        "caseId": reference_case_id,
+        "caseName": reference_case["name"],
+        "caseStatus": reference_case["status"],
+        "layout": "bsm1_5tank" if use_bsm1_layout else "bsm1_three_zone_aao",
+        "baselineObjective": baseline_objective["objective"],
+        "optimizedObjective": optimized["bestObjective"],
+        "improvementPercent": (baseline_objective["objective"] - optimized["bestObjective"]) / max(baseline_objective["objective"], 1e-12) * 100,
+        "rows": rows,
+        "bestParams": optimized["bestParams"],
+        "tunableParams": optimized["tunableParams"],
+        "history": optimized["history"],
+        "warnings": warnings + optimized.get("warnings", []),
+        "notes": baseline_comparison["notes"],
+        "durationMs": (perf_counter() - started) * 1000,
     }

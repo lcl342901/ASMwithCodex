@@ -46,6 +46,7 @@ const clearLogs = document.getElementById("clearLogs");
 const logStatus = document.getElementById("logStatus");
 const logList = document.getElementById("logList");
 const runQuickCalibration = document.getElementById("runQuickCalibration");
+const runBsm1CalibrationReport = document.getElementById("runBsm1CalibrationReport");
 const refreshCalibrationRuns = document.getElementById("refreshCalibrationRuns");
 const calibrationObservationFileInput = document.getElementById("calibrationObservationFileInput");
 const clearCalibrationObservations = document.getElementById("clearCalibrationObservations");
@@ -631,6 +632,33 @@ function renderCalibrationSummary(result) {
   `;
 }
 
+function renderBsm1CalibrationReport(report) {
+  const rows = (report.rows || [])
+    .map((row) => `
+      <tr>
+        <td>${escapeHtml(row.metric)}</td>
+        <td>${formatChartValue(row.target)}</td>
+        <td>${formatChartValue(row.baseline)}</td>
+        <td>${formatChartValue(row.optimized)}</td>
+        <td>${formatChartValue(row.absoluteErrorImprovement)}</td>
+      </tr>
+    `)
+    .join("");
+  calibrationSummary.innerHTML = `
+    <div><span>案例</span><strong>${escapeHtml(report.caseId || "--")}</strong></div>
+    <div><span>布局</span><strong>${escapeHtml(report.layout || "--")}</strong></div>
+    <div><span>Baseline</span><strong>${formatChartValue(report.baselineObjective)}</strong></div>
+    <div><span>Optimized</span><strong>${formatChartValue(report.optimizedObjective)}</strong></div>
+    <div><span>改善</span><strong>${formatChartValue(report.improvementPercent)}%</strong></div>
+    <table class="calibration-report-table">
+      <thead>
+        <tr><th>指标</th><th>Target</th><th>Baseline</th><th>Optimized</th><th>误差改善</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
 function renderCalibrationRuns(runs) {
   if (!runs.length) {
     calibrationRunList.innerHTML = `<div class="log-item"><div class="log-message">暂无校准记录。</div></div>`;
@@ -739,6 +767,26 @@ async function runQuickNh4Calibration() {
     await refreshProjectCalibrationRuns();
   } catch (error) {
     updateCalibrationStatus(`校准失败：${error.message}`, true);
+  }
+}
+
+async function runBsm1Report() {
+  updateCalibrationStatus("BSM1 baseline vs target 报告计算中...");
+  try {
+    const report = await calibrationRequest("/bsm1/report", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        params: { ...params, simulationDays: Math.min(Math.max(params.simulationDays || 14, 0.02), 14), outputIntervalHours: Math.min(params.outputIntervalHours || 1, 1) },
+        useBsm1Layout: true,
+        maxIterations: 1,
+        stepFraction: 0.1,
+      }),
+    });
+    renderBsm1CalibrationReport(report);
+    updateCalibrationStatus(`BSM1 报告完成，目标误差 ${formatChartValue(report.baselineObjective)} → ${formatChartValue(report.optimizedObjective)}。`);
+  } catch (error) {
+    updateCalibrationStatus(`BSM1 报告失败：${error.message}`, true);
   }
 }
 
@@ -2356,6 +2404,9 @@ refreshLogs.addEventListener("click", async () => {
 });
 runQuickCalibration.addEventListener("click", async () => {
   await runQuickNh4Calibration();
+});
+runBsm1CalibrationReport.addEventListener("click", async () => {
+  await runBsm1Report();
 });
 refreshCalibrationRuns.addEventListener("click", async () => {
   await refreshProjectCalibrationRuns();

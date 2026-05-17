@@ -69,6 +69,13 @@ class Bsm1MappingRequest(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
 
 
+class Bsm1CalibrationReportRequest(BaseModel):
+    params: dict[str, Any] = Field(default_factory=dict)
+    useBsm1Layout: bool = True
+    maxIterations: int = 1
+    stepFraction: float = 0.1
+
+
 class CalibrationOptimizeRequest(BaseModel):
     projectId: Optional[str] = "default"
     name: str = ""
