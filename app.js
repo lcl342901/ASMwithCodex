@@ -19,6 +19,8 @@ const clearCsvData = document.getElementById("clearCsvData");
 const csvStatus = document.getElementById("csvStatus");
 const realtimeStatus = document.getElementById("realtimeStatus");
 const realtimeSummary = document.getElementById("realtimeSummary");
+const realtimeQualitySummary = document.getElementById("realtimeQualitySummary");
+const boundaryQualitySummary = document.getElementById("boundaryQualitySummary");
 const mockSummary = document.getElementById("mockSummary");
 const ingestRealtimeSample = document.getElementById("ingestRealtimeSample");
 const pushAndStepRealtime = document.getElementById("pushAndStepRealtime");
@@ -56,6 +58,7 @@ const runQuickCalibration = document.getElementById("runQuickCalibration");
 const runCalibrationStage = document.getElementById("runCalibrationStage");
 const runBsm1CalibrationReport = document.getElementById("runBsm1CalibrationReport");
 const refreshCalibrationRuns = document.getElementById("refreshCalibrationRuns");
+const exportCalibrationReport = document.getElementById("exportCalibrationReport");
 const calibrationStageSelect = document.getElementById("calibrationStageSelect");
 const calibrationObservationFileInput = document.getElementById("calibrationObservationFileInput");
 const clearCalibrationObservations = document.getElementById("clearCalibrationObservations");
@@ -63,6 +66,14 @@ const calibrationObservationStatus = document.getElementById("calibrationObserva
 const calibrationStatus = document.getElementById("calibrationStatus");
 const calibrationSummary = document.getElementById("calibrationSummary");
 const calibrationRunList = document.getElementById("calibrationRunList");
+const evaluationTools = document.getElementById("evaluationTools");
+const refreshModelEvaluation = document.getElementById("refreshModelEvaluation");
+const compareBsm1Reference = document.getElementById("compareBsm1Reference");
+const modelMetadataSummary = document.getElementById("modelMetadataSummary");
+const credibilitySummary = document.getElementById("credibilitySummary");
+const initialConditionSummary = document.getElementById("initialConditionSummary");
+const referenceComparisonSummary = document.getElementById("referenceComparisonSummary");
+const evaluationStatus = document.getElementById("evaluationStatus");
 const workspaceTitle = document.getElementById("workspaceTitle");
 const workspaceEyebrow = document.getElementById("workspaceEyebrow");
 const workspacePages = Array.from(document.querySelectorAll(".workspace-page"));
@@ -72,6 +83,7 @@ const PARAM_CONFIG_API_URL = "http://127.0.0.1:8000/api/config/params";
 const PROJECT_API_URL = "http://127.0.0.1:8000/api/projects";
 const LOG_API_URL = "http://127.0.0.1:8000/api/logs";
 const CALIBRATION_API_URL = "http://127.0.0.1:8000/api/calibration";
+const MODEL_API_URL = "http://127.0.0.1:8000/api/model";
 const MAX_SOLVER_STEP_DAYS = 0.0005;
 const EPSILON_DAYS = 1e-12;
 
@@ -242,6 +254,7 @@ let calibrationObservations = [];
 let calibrationObservationFileName = "";
 let calibrationObservationTargets = [];
 let calibrationStages = [];
+let lastCalibrationReport = null;
 let progressTimer = null;
 let progressValue = 0;
 let simulationRunning = false;
@@ -650,6 +663,138 @@ async function calibrationRequest(path = "", options = {}) {
   return payload;
 }
 
+async function modelRequest(path = "", options = {}) {
+  const response = await fetch(`${MODEL_API_URL}${path}`, options);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.detail || response.statusText || "模型评估请求失败。");
+  }
+  return payload;
+}
+
+function updateEvaluationStatus(message, isError = false) {
+  evaluationStatus.textContent = message;
+  evaluationStatus.classList.toggle("error", isError);
+}
+
+function statusLabel(status) {
+  const labels = {
+    ok: "可信",
+    caution: "需留意",
+    needs_review: "需复核",
+    invalid: "不可用",
+    reference_only: "仅参考",
+    comparable: "可对比",
+    internal_baseline: "内部基线",
+    needs_mapping: "需映射",
+  };
+  return labels[status] || status || "--";
+}
+
+function renderMetadataSummary(metadata) {
+  const assumptions = (metadata.assumptions || []).slice(0, 5).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  modelMetadataSummary.innerHTML = `
+    <div><span>模型</span><strong>${escapeHtml(metadata.model || "--")}</strong></div>
+    <div><span>状态</span><strong>${statusLabel(metadata.status)}</strong></div>
+    <div><span>组分</span><strong>${metadata.asm1Components?.length || 0} 个 ASM1 组分</strong></div>
+    <div><span>推荐解算器</span><strong>RK4</strong></div>
+    ${assumptions ? `<ul class="compact-list">${assumptions}</ul>` : ""}
+  `;
+}
+
+function renderInitialConditionSummary(snapshot) {
+  const summary = snapshot.summary || {};
+  const units = ["anaerobic", "anoxic", "aerobic", "ras"];
+  initialConditionSummary.innerHTML = units
+    .map((unit) => {
+      const item = summary[unit] || {};
+      return `
+        <div>
+          <span>${unit}</span>
+          <strong>COD ${formatChartValue(item.COD)} / NH4 ${formatChartValue(item.NH4)} / TSS ${formatChartValue(item.TSS)}</strong>
+        </div>
+      `;
+    })
+    .join("") || "<p>暂无初始状态。</p>";
+}
+
+function renderCredibilitySummary(report) {
+  const issues = (report.issues || [])
+    .map((issue) => `<li><strong>${escapeHtml(issue.severity)}</strong> ${escapeHtml(issue.message)}</li>`)
+    .join("");
+  credibilitySummary.innerHTML = `
+    <div><span>评分</span><strong>${report.score ?? "--"} / 100</strong></div>
+    <div><span>状态</span><strong>${statusLabel(report.status)}</strong></div>
+    <div><span>依据</span><strong>${escapeHtml(report.basis || "--")}</strong></div>
+    ${issues ? `<ul class="compact-list">${issues}</ul>` : "<p>当前结果没有触发明显风险提示。</p>"}
+  `;
+}
+
+function renderReferenceComparison(report) {
+  const rows = (report.rows || [])
+    .map((row) => `
+      <tr>
+        <td>${escapeHtml(row.metric)}</td>
+        <td>${formatChartValue(row.actualFinal)}</td>
+        <td>${formatChartValue(row.target)}</td>
+        <td>${formatChartValue(row.absoluteError)}</td>
+        <td>${formatChartValue(row.relativeErrorPercent)}%</td>
+      </tr>
+    `)
+    .join("");
+  referenceComparisonSummary.innerHTML = `
+    <div><span>案例</span><strong>${escapeHtml(report.caseName || "--")}</strong></div>
+    <div><span>状态</span><strong>${statusLabel(report.comparisonStatus)}</strong></div>
+    ${rows ? `
+      <table class="calibration-report-table">
+        <thead><tr><th>指标</th><th>当前末值</th><th>参考目标</th><th>差值</th><th>相对差</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    ` : "<p>运行一次仿真后可对比参考目标。</p>"}
+  `;
+}
+
+async function refreshModelEvaluationPanel({ compareReference = false } = {}) {
+  try {
+    updateEvaluationStatus("正在加载模型评估...");
+    const [metadata, initialSnapshot] = await Promise.all([
+      modelRequest("/metadata"),
+      modelRequest("/initial-conditions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ params }),
+      }),
+    ]);
+    renderMetadataSummary(metadata);
+    renderInitialConditionSummary(initialSnapshot);
+
+    if (lastResult?.time?.length) {
+      const credibility = await modelRequest("/credibility", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ params, result: lastResult }),
+      });
+      renderCredibilitySummary(credibility);
+      if (compareReference) {
+        const comparison = await modelRequest("/reference-cases/bsm1_alignment_placeholder/compare", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ result: lastResult }),
+        });
+        renderReferenceComparison(comparison);
+      } else if (!referenceComparisonSummary.innerHTML.trim()) {
+        referenceComparisonSummary.innerHTML = "<p>点击“对比 BSM1”后，会用当前仿真结果和 BSM1 参考目标做尺度对比。</p>";
+      }
+    } else {
+      credibilitySummary.innerHTML = "<p>还没有批量仿真结果。运行仿真后，这里会显示结果可信度评分和风险提示。</p>";
+      referenceComparisonSummary.innerHTML = "<p>还没有可对比的仿真结果。</p>";
+    }
+    updateEvaluationStatus(compareReference ? "模型评估和 BSM1 参考对比已更新。" : "模型评估已更新。");
+  } catch (error) {
+    updateEvaluationStatus(`模型评估失败：${error.message}`, true);
+  }
+}
+
 function updateCalibrationStatus(message, isError = false) {
   calibrationStatus.textContent = message;
   calibrationStatus.classList.toggle("error", isError);
@@ -665,6 +810,7 @@ function renderCalibrationSummary(result) {
     calibrationSummary.innerHTML = "";
     return;
   }
+  lastCalibrationReport = { type: "calibration", generatedAt: new Date().toISOString(), projectId: activeProjectId, result };
   const comparisonRows = (result.comparisonRows || [])
     .slice(0, 8)
     .map((row) => `
@@ -679,6 +825,10 @@ function renderCalibrationSummary(result) {
     `)
     .join("");
   calibrationSummary.innerHTML = `
+    <div class="report-narrative">
+      <strong>校准结论</strong>
+      <p>本次校准使用 ${escapeHtml(result.method || "optimizer")}，目标函数从 ${formatChartValue(result.initialObjective)} 改善到 ${formatChartValue(result.bestObjective)}，改善 ${formatChartValue(result.improvementPercent)}%。</p>
+    </div>
     <div><span>方法</span><strong>${escapeHtml(result.method || "--")}</strong></div>
     <div><span>布局</span><strong>${escapeHtml(result.mapping || "--")}</strong></div>
     <div><span>初始误差</span><strong>${formatChartValue(result.initialObjective)}</strong></div>
@@ -697,6 +847,7 @@ function renderCalibrationSummary(result) {
 }
 
 function renderBsm1CalibrationReport(report) {
+  lastCalibrationReport = { type: "bsm1_report", generatedAt: new Date().toISOString(), projectId: activeProjectId, report };
   const rows = (report.rows || [])
     .map((row) => `
       <tr>
@@ -709,6 +860,10 @@ function renderBsm1CalibrationReport(report) {
     `)
     .join("");
   calibrationSummary.innerHTML = `
+    <div class="report-narrative">
+      <strong>BSM1 参考报告</strong>
+      <p>当前报告使用 ${escapeHtml(report.layout || "--")} 布局，对比 BSM1 参考目标，目标误差从 ${formatChartValue(report.baselineObjective)} 到 ${formatChartValue(report.optimizedObjective)}。</p>
+    </div>
     <div><span>案例</span><strong>${escapeHtml(report.caseId || "--")}</strong></div>
     <div><span>布局</span><strong>${escapeHtml(report.layout || "--")}</strong></div>
     <div><span>Baseline</span><strong>${formatChartValue(report.baselineObjective)}</strong></div>
@@ -740,6 +895,19 @@ function renderCalibrationRuns(runs) {
       </article>
     `)
     .join("");
+}
+
+function exportLastCalibrationReport() {
+  if (!lastCalibrationReport) {
+    updateCalibrationStatus("还没有可导出的校准报告。", true);
+    return;
+  }
+  downloadText(
+    `aao-calibration-report-${timestampForFile()}.json`,
+    JSON.stringify(lastCalibrationReport, null, 2),
+    "application/json;charset=utf-8",
+  );
+  updateCalibrationStatus("已导出校准报告 JSON。");
 }
 
 async function refreshProjectCalibrationRuns() {
@@ -1012,6 +1180,7 @@ function showRealtimeResults() {
   refreshRealtimeLatest();
   refreshRealtimeMockStatus();
   refreshRealtimeHistory();
+  refreshRealtimeDataQuality();
 }
 
 function renderForm() {
@@ -1028,6 +1197,7 @@ function renderForm() {
   batchResults.hidden = !(showingResults && activeResultMode === "batch");
   logTools.hidden = activePanel !== "logs";
   calibrationTools.hidden = activePanel !== "calibration";
+  evaluationTools.hidden = activePanel !== "evaluation";
   paramTabs.hidden = !showingParams;
   parameterForm.hidden = !showingParams || activeTab === "boundaryData";
   parameterForm.innerHTML = "";
@@ -2055,6 +2225,40 @@ function boundaryValue(record, key) {
   return accepted[key] ?? raw[key] ?? raw[key.replace("influent", "").toUpperCase()] ?? raw[key.toLowerCase()];
 }
 
+function qualityIssueCount(quality) {
+  return Array.isArray(quality?.issues) ? quality.issues.length : 0;
+}
+
+function qualitySource(quality) {
+  return quality?.sourceInfo?.label || quality?.source || "--";
+}
+
+function qualityStatusText(status) {
+  const labels = { ok: "通过", warning: "已修正", bad: "异常", none: "暂无", unknown: "未知" };
+  return labels[status] || status || "--";
+}
+
+function renderQualitySummary(target, quality, fallbackText = "暂无数据质量报告。") {
+  if (!target) return;
+  if (!quality) {
+    target.innerHTML = `<p>${fallbackText}</p>`;
+    return;
+  }
+  const fieldQuality = quality.fieldQuality || {};
+  const correctedFields = Object.entries(fieldQuality)
+    .filter(([, item]) => item.status !== "ok" || item.source !== "input")
+    .map(([key, item]) => `${key}: ${qualityStatusText(item.status)} (${item.source})`);
+  const issues = (quality.issues || []).slice(0, 4).map((issue) => `<li>${escapeHtml(issue.message || issue.code)}</li>`).join("");
+  target.innerHTML = `
+    <div><span>状态</span><strong>${qualityStatusText(quality.status)}</strong></div>
+    <div><span>来源</span><strong>${escapeHtml(qualitySource(quality))}</strong></div>
+    <div><span>问题数</span><strong>${qualityIssueCount(quality)}</strong></div>
+    <div><span>清洗字段</span><strong>${correctedFields.length || 0}</strong></div>
+    ${correctedFields.length ? `<p>已处理：${escapeHtml(correctedFields.slice(0, 4).join("；"))}</p>` : "<p>原始边界值可直接用于计算。</p>"}
+    ${issues ? `<ul class="compact-list">${issues}</ul>` : ""}
+  `;
+}
+
 function renderRealtimeHistory(payload) {
   const inputs = payload?.inputs || [];
   const results = payload?.results || [];
@@ -2071,12 +2275,14 @@ function renderRealtimeHistory(payload) {
             <td>${formatChartValue(boundaryValue(record, "influentNo3"))}</td>
             <td>${formatChartValue(boundaryValue(record, "influentTss"))}</td>
             <td>${formatChartValue(boundaryValue(record, "aerobicDo"))}</td>
-            <td>${record.quality?.status || "--"}</td>
+            <td>${qualityStatusText(record.quality?.status)}</td>
+            <td>${escapeHtml(qualitySource(record.quality))}</td>
+            <td>${qualityIssueCount(record.quality)}</td>
           </tr>
         `,
         )
         .join("")
-    : `<tr><td colspan="9">最近 12 小时暂无在线边界数据。</td></tr>`;
+    : `<tr><td colspan="11">最近 12 小时暂无在线边界数据。</td></tr>`;
 
   realtimeResultRows.innerHTML = results.length
     ? results
@@ -2103,6 +2309,18 @@ function renderRealtimeHistory(payload) {
 async function refreshRealtimeHistory() {
   const payload = await realtimeRequest(withProjectQuery("/history?hours=12&limit=200"));
   renderRealtimeHistory(payload);
+  if (payload.inputs?.[0]?.quality) {
+    renderQualitySummary(realtimeQualitySummary, payload.inputs[0].quality);
+    renderQualitySummary(boundaryQualitySummary, payload.inputs[0].quality, "尚无实时边界清洗报告。");
+  }
+}
+
+async function refreshRealtimeDataQuality() {
+  const payload = await realtimeRequest(withProjectQuery("/status"));
+  const quality = payload.latestInput?.quality;
+  renderQualitySummary(realtimeQualitySummary, quality, "尚无实时边界清洗报告。");
+  renderQualitySummary(boundaryQualitySummary, quality, "尚无实时边界清洗报告。");
+  return payload;
 }
 
 function renderMockSummary(status) {
@@ -2125,6 +2343,8 @@ async function ingestCurrentRealtimeBoundary() {
     body: JSON.stringify({ projectId: activeProjectId, timestamp: new Date().toISOString(), values: realtimeBoundaryValues() }),
   });
   updateRealtimeStatus(`已推送实时边界输入 #${payload.id}。`);
+  renderQualitySummary(realtimeQualitySummary, payload.quality);
+  renderQualitySummary(boundaryQualitySummary, payload.quality);
   await refreshRealtimeLatest();
   await refreshRealtimeHistory();
 }
@@ -2143,6 +2363,8 @@ async function stepRealtimeModel(pushCurrentBoundary = false) {
   });
   updateRealtimeStatus(pushCurrentBoundary ? `已推送当前边界并完成一步计算，结果 #${payload.resultId}。` : `已使用最新边界推进一步，结果 #${payload.resultId}。`);
   renderRealtimeSummary(payload);
+  renderQualitySummary(realtimeQualitySummary, payload.input?.quality || payload.result?.quality);
+  renderQualitySummary(boundaryQualitySummary, payload.input?.quality || payload.result?.quality);
   await refreshRealtimeHistory();
 }
 
@@ -2155,6 +2377,8 @@ async function refreshRealtimeLatest() {
   }
   updateRealtimeStatus(`已刷新最新实时结果 #${payload.result.id}。`);
   renderRealtimeSummary(payload);
+  renderQualitySummary(realtimeQualitySummary, payload.input?.quality || payload.result?.result?.quality);
+  renderQualitySummary(boundaryQualitySummary, payload.input?.quality || payload.result?.result?.quality);
   await refreshRealtimeHistory();
 }
 
@@ -2162,6 +2386,8 @@ async function resetRealtimeState() {
   await realtimeRequest(withProjectQuery("/reset"), { method: "POST" });
   updateRealtimeStatus("已重置实时输入、状态和结果。");
   renderRealtimeSummary(null);
+  renderQualitySummary(realtimeQualitySummary, null);
+  renderQualitySummary(boundaryQualitySummary, null);
 }
 
 async function startRealtimeMock() {
@@ -2681,6 +2907,9 @@ document.querySelectorAll(".panel-tab").forEach((tab) => {
       refreshCalibrationStages();
       refreshProjectCalibrationRuns();
     }
+    if (activePanel === "evaluation") {
+      refreshModelEvaluationPanel();
+    }
   });
 });
 
@@ -2690,6 +2919,9 @@ document.querySelectorAll(".param-tab").forEach((tab) => {
     tab.classList.add("active");
     activeTab = tab.dataset.tab;
     renderForm();
+    if (activeTab === "boundaryData") {
+      refreshRealtimeDataQuality().catch(() => {});
+    }
   });
 });
 
@@ -2762,6 +2994,9 @@ runBsm1CalibrationReport.addEventListener("click", async () => {
 refreshCalibrationRuns.addEventListener("click", async () => {
   await refreshProjectCalibrationRuns();
 });
+exportCalibrationReport.addEventListener("click", exportLastCalibrationReport);
+refreshModelEvaluation.addEventListener("click", () => refreshModelEvaluationPanel());
+compareBsm1Reference.addEventListener("click", () => refreshModelEvaluationPanel({ compareReference: true }));
 calibrationObservationFileInput.addEventListener("change", async () => {
   const file = calibrationObservationFileInput.files?.[0];
   if (!file) return;

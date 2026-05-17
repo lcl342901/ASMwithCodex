@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import copy
+import os
 from time import perf_counter
 from threading import Lock, Thread
 from uuid import uuid4
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from .calibration import bsm1_calibration_report, bsm1_mapping_report, calibration_optimize, calibration_stage_configs, run_calibration_stage
 from .engine_runner import normalize_engine_version, simulate_with_engine
@@ -88,6 +90,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def configured_api_token() -> str:
+    return os.getenv("ASM_API_TOKEN", "").strip()
+
+
+def request_api_token(request: Request) -> str:
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        return auth_header[7:].strip()
+    return request.headers.get("x-api-key", "").strip()
+
+
+@app.middleware("http")
+async def optional_api_token_middleware(request: Request, call_next):
+    token = configured_api_token()
+    if not token or request.method == "OPTIONS" or request.url.path == "/api/health":
+        return await call_next(request)
+    if request_api_token(request) != token:
+        return JSONResponse(status_code=401, content={"detail": "Missing or invalid API token."})
+    return await call_next(request)
 
 
 @app.get("/api/health")

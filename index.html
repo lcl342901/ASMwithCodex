@@ -113,6 +113,7 @@
           </label>
           <button id="clearCsvData" class="secondary-button" type="button">清除数据</button>
           <p id="csvStatus">尚未加载历史数据。CSV 作为边界条件序列，仿真总时长和计算步长由“运行”页设置。可直接使用 sample-data.csv。</p>
+          <div id="boundaryQualitySummary" class="data-quality-summary"></div>
         </div>
       </section>
 
@@ -177,6 +178,7 @@
               <button id="runCalibrationStage" class="secondary-button" type="button">运行阶段</button>
               <button id="runBsm1CalibrationReport" class="secondary-button" type="button">BSM1 报告</button>
               <button id="refreshCalibrationRuns" class="secondary-button" type="button">刷新记录</button>
+              <button id="exportCalibrationReport" class="secondary-button" type="button">导出报告</button>
             </div>
             <p id="calibrationStatus">尚未运行校准任务。</p>
           </div>
@@ -189,12 +191,45 @@
         <div class="panel-heading">
           <div>
             <h2>模型评估</h2>
-            <p>P9.1 将在这里展示模型可信度、BSM1 对比、初始状态和参数风险。</p>
+            <p>查看模型身份、假设、初始状态、结果可信度和参考模型对比。</p>
+          </div>
+          <div class="panel-tools">
+            <button id="refreshModelEvaluation" class="secondary-button" type="button">刷新评估</button>
+            <button id="compareBsm1Reference" class="secondary-button" type="button">对比 BSM1</button>
           </div>
         </div>
-        <div class="empty-state">
-          <strong>模型可信度工作区</strong>
-          <p>当前 P6 能力已经在后端具备，下一步会把可信度评分、参考模型对比和校验提示产品化到这里。</p>
+        <div id="evaluationTools" class="evaluation-tools" hidden>
+          <div class="evaluation-grid">
+            <section class="tool-section">
+              <div class="tool-section-heading">
+                <strong>模型身份</strong>
+                <span>当前引擎</span>
+              </div>
+              <div id="modelMetadataSummary" class="evaluation-summary"></div>
+            </section>
+            <section class="tool-section">
+              <div class="tool-section-heading">
+                <strong>可信度筛查</strong>
+                <span>当前结果</span>
+              </div>
+              <div id="credibilitySummary" class="evaluation-summary"></div>
+            </section>
+            <section class="tool-section">
+              <div class="tool-section-heading">
+                <strong>初始状态</strong>
+                <span>当前参数</span>
+              </div>
+              <div id="initialConditionSummary" class="evaluation-summary"></div>
+            </section>
+            <section class="tool-section">
+              <div class="tool-section-heading">
+                <strong>参考模型对比</strong>
+                <span>BSM1</span>
+              </div>
+              <div id="referenceComparisonSummary" class="evaluation-summary"></div>
+            </section>
+          </div>
+          <p id="evaluationStatus">尚未加载模型评估。</p>
         </div>
       </section>
 
@@ -299,6 +334,13 @@
               <div id="mockSummary" class="mock-summary"></div>
             </div>
             <p id="realtimeStatus">尚未接入实时数据。可先推送当前进水参数，再推进模型一步。</p>
+            <div class="tool-section">
+              <div class="tool-section-heading">
+                <strong>数据清洗状态</strong>
+                <span>最新边界</span>
+              </div>
+              <div id="realtimeQualitySummary" class="data-quality-summary"></div>
+            </div>
             <div id="realtimeSummary" class="realtime-summary"></div>
           </div>
 
@@ -321,6 +363,8 @@
                       <th>TSS</th>
                       <th>DO</th>
                       <th>质量</th>
+                      <th>来源</th>
+                      <th>问题</th>
                     </tr>
                   </thead>
                   <tbody id="realtimeBoundaryRows"></tbody>

@@ -1,12 +1,12 @@
 import math
 import asyncio
+import os
 import time
 import unittest
 from pathlib import Path
-
 from backend.engine_compare import compare_engines
 from backend.engine_runner import normalize_engine_version, simulate_with_engine
-from backend.main import calibration_bsm1_mapping_endpoint, calibration_bsm1_report_endpoint, calibration_optimize_endpoint, calibration_preview_endpoint, calibration_stage_run_endpoint, calibration_stages_endpoint, cancel_simulation_job_endpoint, clear_project_csv_endpoint, create_project_endpoint, default_project_endpoint, delete_project_calibration_run_endpoint, get_project_calibration_run_endpoint, get_project_csv_endpoint, get_project_params_endpoint, create_simulation_job_endpoint, get_simulation_job_endpoint, get_simulation_job_result_endpoint, list_project_calibration_runs_endpoint, list_projects_endpoint, model_credibility_endpoint, model_initial_conditions_endpoint, model_metadata_endpoint, model_reference_case_compare_endpoint, model_reference_case_endpoint, model_reference_cases_endpoint, realtime_sources_endpoint, realtime_status_endpoint, reset_project_params_endpoint, save_project_csv_endpoint, save_project_params_endpoint, simulate_endpoint
+from backend.main import calibration_bsm1_mapping_endpoint, calibration_bsm1_report_endpoint, calibration_optimize_endpoint, calibration_preview_endpoint, calibration_stage_run_endpoint, calibration_stages_endpoint, cancel_simulation_job_endpoint, clear_project_csv_endpoint, configured_api_token, create_project_endpoint, default_project_endpoint, delete_project_calibration_run_endpoint, get_project_calibration_run_endpoint, get_project_csv_endpoint, get_project_params_endpoint, create_simulation_job_endpoint, get_simulation_job_endpoint, get_simulation_job_result_endpoint, list_project_calibration_runs_endpoint, list_projects_endpoint, model_credibility_endpoint, model_initial_conditions_endpoint, model_metadata_endpoint, model_reference_case_compare_endpoint, model_reference_case_endpoint, model_reference_cases_endpoint, realtime_sources_endpoint, realtime_status_endpoint, request_api_token, reset_project_params_endpoint, save_project_csv_endpoint, save_project_params_endpoint, simulate_endpoint
 from backend.model import DEFAULT_PARAMS, csv_values_at, normalize_csv_records, simulate, SimulationContext, sanitize_params
 from backend.schemas import Bsm1CalibrationReportRequest, Bsm1MappingRequest, CalibrationOptimizeRequest, CalibrationPreviewRequest, CalibrationStageRunRequest, InitialConditionRequest, ModelCredibilityRequest, ParamConfigRequest, ProjectCsvRequest, ProjectRequest, ReferenceComparisonRequest, SimulationRequest
 from backend.solver_benchmark import benchmark_v2_solvers, project_long_horizon_durations, step_consistency_report
@@ -170,6 +170,25 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(comparison["comparisonStatus"], "reference_only")
         self.assertTrue(any(row["metric"] == "effNh4" for row in comparison["rows"]))
         assert_finite_tree(self, comparison)
+
+    def test_optional_api_token_middleware(self):
+        previous = os.environ.get("ASM_API_TOKEN")
+        os.environ["ASM_API_TOKEN"] = "test-token"
+        try:
+            self.assertEqual(configured_api_token(), "test-token")
+
+            class FakeRequest:
+                def __init__(self, headers):
+                    self.headers = headers
+
+            self.assertEqual(request_api_token(FakeRequest({"authorization": "Bearer test-token"})), "test-token")
+            self.assertEqual(request_api_token(FakeRequest({"x-api-key": "test-token"})), "test-token")
+            self.assertEqual(request_api_token(FakeRequest({})), "")
+        finally:
+            if previous is None:
+                os.environ.pop("ASM_API_TOKEN", None)
+            else:
+                os.environ["ASM_API_TOKEN"] = previous
 
     def test_initial_condition_endpoint_returns_state_snapshot(self):
         snapshot = model_initial_conditions_endpoint(

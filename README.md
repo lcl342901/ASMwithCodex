@@ -28,6 +28,7 @@ It is intended as a learning and experimentation platform for ASM1-based process
 - CSV export for effluent/process results, boundary inputs, and unit-level series.
 - JSON export/import for simulation configuration.
 - Realtime MVP API with SQLite-backed input, model state, and latest result storage.
+- Optional API token protection for online deployment experiments.
 
 ## Files
 
@@ -40,6 +41,18 @@ It is intended as a learning and experimentation platform for ASM1-based process
 - `backend/model_trust.py`: model metadata, unit notes, initial-condition snapshots, credibility screening, and calibration preview helpers.
 - `backend/schemas.py`: API request schema.
 - `backend/requirements.txt`: backend Python dependencies.
+- `docs/PRODUCTION_READINESS.md`: production readiness notes for API token, database, workers, and user/project isolation.
+
+## API Token For Deployment Experiments
+
+Local development does not require authentication by default. If the backend environment variable `ASM_API_TOKEN` is set, every API route except `GET /api/health` requires one of:
+
+```text
+Authorization: Bearer <token>
+X-API-Key: <token>
+```
+
+See `docs/PRODUCTION_READINESS.md` before exposing the service beyond localhost.
 
 ## How To Run
 
