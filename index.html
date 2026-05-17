@@ -157,8 +157,15 @@
               <strong>校准任务</strong>
               <span>当前项目</span>
             </div>
+            <select id="calibrationStageSelect" aria-label="校准阶段">
+              <option value="nitrification">Nitrification / NH4</option>
+              <option value="denitrification_tn">Denitrification / TN</option>
+              <option value="cod_bod">COD / BOD</option>
+              <option value="clarifier_tss">Clarifier / TSS</option>
+            </select>
             <div class="realtime-actions">
               <button id="runQuickCalibration" class="secondary-button" type="button">运行校准</button>
+              <button id="runCalibrationStage" class="secondary-button" type="button">运行阶段</button>
               <button id="runBsm1CalibrationReport" class="secondary-button" type="button">BSM1 报告</button>
               <button id="refreshCalibrationRuns" class="secondary-button" type="button">刷新记录</button>
             </div>

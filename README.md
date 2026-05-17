@@ -182,6 +182,8 @@ POST /api/model/credibility
 POST /api/calibration/preview
 POST /api/calibration/bsm1/mapping
 POST /api/calibration/bsm1/report
+GET  /api/calibration/stages
+POST /api/calibration/stages/run
 POST /api/calibration/optimize
 ```
 
@@ -193,6 +195,7 @@ POST /api/calibration/optimize
 - `/api/calibration/preview` validates calibration targets, observations, and tunable parameters, and returns the weighted-RMSE setup that a later optimizer will use.
 - `/api/calibration/bsm1/mapping` returns a BSM1-to-current-AAO parameter mapping. It approximates BSM1's two anoxic and three aerobic tanks by using a minimal anaerobic selector, `2000 m3` anoxic volume, and `4000 m3` aerobic volume in the current three-zone model.
 - `/api/calibration/bsm1/report` runs a BSM1 baseline-vs-target report. It compares baseline effluent metrics with the BSM1 reference targets, runs a short coordinate-search calibration, and returns baseline/optimized/target rows for inspection.
+- `/api/calibration/stages` and `/api/calibration/stages/run` expose staged calibration presets for nitrification/NH4, denitrification/TN, COD/BOD, and clarifier/TSS.
 - `/api/calibration/optimize` runs a first-pass coordinate-search calibration against supplied observations or, when `useBsm1Mapping` is enabled, the BSM1 reference targets.
 
 Initial conditions can now be supplied as parameters, for example `initialAerobicNh4`, `initialAerobicNo3`, `initialXbh`, `initialXi`, and related `initial*` keys. If `aerobicDo` is provided but `initialAerobicDo` is omitted, the backend keeps the previous behavior by using the aerobic DO setting as the initial aerobic DO.
@@ -471,14 +474,14 @@ Main milestones:
 - Connected the frontend parameter panel to project selection and per-project parameter save/reset.
 - Extended project scope to CSV boundary data, realtime records, realtime state/results, and calculation logs.
 - Added ownership, permission, database migration, and deployment plans for the future online platform.
-- Added project-scoped calibration run archive, a minimal frontend calibration workspace, observation CSV upload for calibration targets, and a BSM1 baseline-vs-target calibration report.
+- Added project-scoped calibration run archive, a minimal frontend calibration workspace, observation CSV upload for calibration targets, a BSM1 baseline-vs-target calibration report, and staged calibration presets.
 
 ## Suggested Next Steps
 
 - Add CSV template download and stricter input validation.
 - Add model-state persistence for real-time data.
 - Expose initial-condition controls in the frontend advanced settings.
-- Add richer staged calibration UI.
+- Add before/after calibration result comparison.
 - Add export of simulation results as CSV.
 - Align the BSM1 five-tank layout against official dynamic input files and evaluation windows so the built-in BSM1 targets can become a comparable validation case instead of `reference_only`.
 - Implement authentication and project membership enforcement.

@@ -475,6 +475,17 @@ h2 {
   font-weight: 500;
 }
 
+.calibration-tools select {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
 .compact-file {
   padding: 8px;
 }

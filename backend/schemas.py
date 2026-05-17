@@ -90,3 +90,18 @@ class CalibrationOptimizeRequest(BaseModel):
     stepFraction: float = 0.1
     useBsm1Mapping: bool = False
     useBsm1Layout: bool = False
+
+
+class CalibrationStageRunRequest(BaseModel):
+    projectId: Optional[str] = "default"
+    name: str = ""
+    saveRun: bool = False
+    stageId: str
+    params: dict[str, Any] = Field(default_factory=dict)
+    observations: list[dict[str, Any]] = Field(default_factory=list)
+    csvText: Optional[str] = ""
+    csvFileName: Optional[str] = ""
+    maxIterations: int = 1
+    stepFraction: float = 0.1
+    useBsm1Mapping: bool = False
+    useBsm1Layout: bool = False

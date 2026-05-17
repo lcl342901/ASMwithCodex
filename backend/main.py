@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from .calibration import bsm1_calibration_report, bsm1_mapping_report, calibration_optimize
+from .calibration import bsm1_calibration_report, bsm1_mapping_report, calibration_optimize, calibration_stage_configs, run_calibration_stage
 from .engine_runner import normalize_engine_version, simulate_with_engine
 from .model_trust import (
     assess_result_credibility,
@@ -56,6 +56,7 @@ from .schemas import (
     CalibrationPreviewRequest,
     Bsm1CalibrationReportRequest,
     Bsm1MappingRequest,
+    CalibrationStageRunRequest,
     CalibrationOptimizeRequest,
     InitialConditionRequest,
     ModelCredibilityRequest,
@@ -354,6 +355,56 @@ def calibration_bsm1_report_endpoint(request: Bsm1CalibrationReportRequest) -> d
         return result
     except ValueError as exc:
         insert_calculation_log("calibration_bsm1_report", "failed", str(exc), {}, (perf_counter() - started) * 1000)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/calibration/stages")
+def calibration_stages_endpoint() -> dict:
+    return calibration_stage_configs()
+
+
+@app.post("/api/calibration/stages/run")
+def calibration_stage_run_endpoint(request: CalibrationStageRunRequest) -> dict:
+    started = perf_counter()
+    try:
+        request_payload = request.model_dump()
+        payload = run_calibration_stage(
+            stage_id=request.stageId,
+            params=request.params,
+            observations=request.observations,
+            csv_text=request.csvText or "",
+            csv_file_name=request.csvFileName or "",
+            max_iterations=request.maxIterations,
+            step_fraction=request.stepFraction,
+            use_bsm1_mapping=request.useBsm1Mapping,
+            use_bsm1_layout=request.useBsm1Layout,
+        )
+        result = payload["result"]
+        insert_calculation_log(
+            "calibration_stage_run",
+            "success",
+            "Calibration stage completed.",
+            {
+                "stageId": payload["stage"]["id"],
+                "bestObjective": result["bestObjective"],
+                "targetCount": len(result["targets"]),
+                "tunableCount": len(result["tunableParams"]),
+            },
+            (perf_counter() - started) * 1000,
+            request.projectId,
+        )
+        if request.saveRun:
+            saved = insert_calibration_run(
+                request.projectId or "default",
+                request.name or f"Calibration stage: {payload['stage']['name']}",
+                result["status"],
+                request_payload,
+                {**result, "stage": payload["stage"]},
+            )
+            payload["savedRun"] = {"id": saved["id"], "name": saved["name"], "projectId": saved["projectId"]}
+        return payload
+    except ValueError as exc:
+        insert_calculation_log("calibration_stage_run", "failed", str(exc), {}, (perf_counter() - started) * 1000, request.projectId)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 

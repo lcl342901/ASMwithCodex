@@ -18,6 +18,38 @@ BSM1_MAPPING_NOTE = (
 )
 
 
+CALIBRATION_STAGES = [
+    {
+        "id": "nitrification",
+        "name": "Nitrification / NH4",
+        "description": "Focuses on autotrophic growth and ammonia affinity.",
+        "targets": ["effNh4"],
+        "tunableParams": ["muA", "kNH", "kOA", "bA"],
+    },
+    {
+        "id": "denitrification_tn",
+        "name": "Denitrification / TN",
+        "description": "Focuses on nitrate, total nitrogen, anoxic kinetics, and carbon availability.",
+        "targets": ["effNo3", "effTn"],
+        "tunableParams": ["etaG", "kNO", "muH", "kS"],
+    },
+    {
+        "id": "cod_bod",
+        "name": "COD / BOD",
+        "description": "Focuses on organic removal and hydrolysis behavior.",
+        "targets": ["effCod", "bod5"],
+        "tunableParams": ["muH", "kH", "kS", "yH", "bH"],
+    },
+    {
+        "id": "clarifier_tss",
+        "name": "Clarifier / TSS",
+        "description": "Focuses on solids separation and Takacs settling parameters.",
+        "targets": ["effTss"],
+        "tunableParams": ["takacsRH", "takacsRP", "takacsV0", "takacsV0Max"],
+    },
+]
+
+
 def bsm1_mapped_params(overrides: dict[str, Any] | None = None) -> dict[str, Any]:
     params = {
         **DEFAULT_PARAMS,
@@ -80,6 +112,17 @@ def bsm1_mapping_report(overrides: dict[str, Any] | None = None) -> dict[str, An
             "wasQ": params["wasQ"],
         },
     }
+
+
+def calibration_stage_configs() -> dict[str, Any]:
+    return {"stages": CALIBRATION_STAGES}
+
+
+def get_calibration_stage(stage_id: str) -> dict[str, Any]:
+    for stage in CALIBRATION_STAGES:
+        if stage["id"] == stage_id:
+            return stage
+    raise ValueError(f"未知校准阶段：{stage_id}。")
 
 
 def finite_float(value: Any) -> float | None:
@@ -381,4 +424,34 @@ def bsm1_calibration_report(
         "warnings": warnings + optimized.get("warnings", []),
         "notes": baseline_comparison["notes"],
         "durationMs": (perf_counter() - started) * 1000,
+    }
+
+
+def run_calibration_stage(
+    stage_id: str,
+    params: dict[str, Any] | None = None,
+    observations: list[dict[str, Any]] | None = None,
+    csv_text: str = "",
+    csv_file_name: str = "",
+    max_iterations: int = 1,
+    step_fraction: float = 0.1,
+    use_bsm1_mapping: bool = False,
+    use_bsm1_layout: bool = False,
+) -> dict[str, Any]:
+    stage = get_calibration_stage(stage_id)
+    result = calibration_optimize(
+        params=params,
+        observations=observations,
+        tunable_params=stage["tunableParams"],
+        targets=stage["targets"],
+        csv_text=csv_text,
+        csv_file_name=csv_file_name,
+        max_iterations=max_iterations,
+        step_fraction=step_fraction,
+        use_bsm1_mapping=use_bsm1_mapping,
+        use_bsm1_layout=use_bsm1_layout,
+    )
+    return {
+        "stage": stage,
+        "result": result,
     }

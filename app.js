@@ -46,8 +46,10 @@ const clearLogs = document.getElementById("clearLogs");
 const logStatus = document.getElementById("logStatus");
 const logList = document.getElementById("logList");
 const runQuickCalibration = document.getElementById("runQuickCalibration");
+const runCalibrationStage = document.getElementById("runCalibrationStage");
 const runBsm1CalibrationReport = document.getElementById("runBsm1CalibrationReport");
 const refreshCalibrationRuns = document.getElementById("refreshCalibrationRuns");
+const calibrationStageSelect = document.getElementById("calibrationStageSelect");
 const calibrationObservationFileInput = document.getElementById("calibrationObservationFileInput");
 const clearCalibrationObservations = document.getElementById("clearCalibrationObservations");
 const calibrationObservationStatus = document.getElementById("calibrationObservationStatus");
@@ -228,6 +230,7 @@ let csvText = "";
 let calibrationObservations = [];
 let calibrationObservationFileName = "";
 let calibrationObservationTargets = [];
+let calibrationStages = [];
 let progressTimer = null;
 let progressValue = 0;
 let projects = [];
@@ -688,6 +691,22 @@ async function refreshProjectCalibrationRuns() {
   }
 }
 
+async function refreshCalibrationStages() {
+  try {
+    const payload = await calibrationRequest("/stages");
+    calibrationStages = payload.stages || [];
+    if (calibrationStages.length) {
+      const current = calibrationStageSelect.value;
+      calibrationStageSelect.innerHTML = calibrationStages
+        .map((stage) => `<option value="${escapeHtml(stage.id)}">${escapeHtml(stage.name)}</option>`)
+        .join("");
+      calibrationStageSelect.value = calibrationStages.some((stage) => stage.id === current) ? current : calibrationStages[0].id;
+    }
+  } catch (error) {
+    updateCalibrationStatus(`校准阶段加载失败：${error.message}`, true);
+  }
+}
+
 function calibrationTargetsFromObservations(rows) {
   const targets = ["effCod", "effNh4", "effNo3", "effTn", "effTss", "bod5"];
   return targets.filter((target) => rows.some((row) => Number.isFinite(Number(row[target]))));
@@ -767,6 +786,39 @@ async function runQuickNh4Calibration() {
     await refreshProjectCalibrationRuns();
   } catch (error) {
     updateCalibrationStatus(`校准失败：${error.message}`, true);
+  }
+}
+
+async function runSelectedCalibrationStage() {
+  const stageId = calibrationStageSelect.value || "nitrification";
+  const stage = calibrationStages.find((item) => item.id === stageId);
+  updateCalibrationStatus(`${stage?.name || stageId} 阶段校准中...`);
+  const quickHorizon = Math.min(Math.max(params.simulationDays || 1, 0.02), 0.1);
+  const observationHorizon = calibrationObservations.length
+    ? Math.max(...calibrationObservations.map((row) => row.time).filter(Number.isFinite))
+    : quickHorizon;
+  const horizon = calibrationObservations.length ? Math.max(params.simulationDays || 0, observationHorizon) : quickHorizon;
+  try {
+    const payload = await calibrationRequest("/stages/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId: activeProjectId,
+        name: `Stage calibration: ${stage?.name || stageId}`,
+        saveRun: true,
+        stageId,
+        params: { ...params, simulationDays: horizon, outputIntervalHours: Math.min(params.outputIntervalHours || 1, 1) },
+        observations: calibrationObservations,
+        maxIterations: 1,
+        stepFraction: 0.1,
+        useBsm1Layout: !calibrationObservations.length,
+      }),
+    });
+    renderCalibrationSummary({ ...payload.result, savedRun: payload.savedRun });
+    updateCalibrationStatus(`${payload.stage.name} 阶段完成，最优误差 ${formatChartValue(payload.result.bestObjective)}。`);
+    await refreshProjectCalibrationRuns();
+  } catch (error) {
+    updateCalibrationStatus(`阶段校准失败：${error.message}`, true);
   }
 }
 
@@ -2346,6 +2398,7 @@ document.querySelectorAll(".panel-tab").forEach((tab) => {
       refreshCalculationLogs();
     }
     if (activePanel === "calibration") {
+      refreshCalibrationStages();
       refreshProjectCalibrationRuns();
     }
   });
@@ -2394,7 +2447,10 @@ projectSelect.addEventListener("change", async () => {
   showDefaultBoundaryPreview();
   if (activePanel === "realtime") await refreshRealtimeLatest();
   if (activePanel === "logs") await refreshCalculationLogs();
-  if (activePanel === "calibration") await refreshProjectCalibrationRuns();
+  if (activePanel === "calibration") {
+    await refreshCalibrationStages();
+    await refreshProjectCalibrationRuns();
+  }
 });
 newProject.addEventListener("click", async () => {
   await createNewProject();
@@ -2404,6 +2460,9 @@ refreshLogs.addEventListener("click", async () => {
 });
 runQuickCalibration.addEventListener("click", async () => {
   await runQuickNh4Calibration();
+});
+runCalibrationStage.addEventListener("click", async () => {
+  await runSelectedCalibrationStage();
 });
 runBsm1CalibrationReport.addEventListener("click", async () => {
   await runBsm1Report();
