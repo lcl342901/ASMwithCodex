@@ -2322,10 +2322,22 @@ function renderDataCleaningDashboard(statusPayload, historyPayload) {
   const issueTotal = inputs.reduce((sum, record) => sum + qualityIssueCount(record.quality), 0);
 
   cleaningKpis.innerHTML = `
-    <div><span>总点位</span><strong>${totalPoints}</strong></div>
-    <div><span>正常</span><strong>${normalPoints}</strong></div>
-    <div><span>异常</span><strong>${abnormalPoints}</strong></div>
-    <div><span>最近清洗</span><strong>${shortDateTime(latestInput?.timestamp)}</strong></div>
+    <div>
+      <span class="kpi-icon blue"><svg><use href="#icon-database"></use></svg></span>
+      <p>总点位</p><strong>${totalPoints}</strong>
+    </div>
+    <div>
+      <span class="kpi-icon green"><svg><use href="#icon-check"></use></svg></span>
+      <p>正常</p><strong>${normalPoints}</strong>
+    </div>
+    <div>
+      <span class="kpi-icon red"><svg><use href="#icon-alert"></use></svg></span>
+      <p>异常</p><strong>${abnormalPoints}</strong>
+    </div>
+    <div>
+      <span class="kpi-icon blue"><svg><use href="#icon-clock"></use></svg></span>
+      <p>最近清洗</p><strong>${shortDateTime(latestInput?.timestamp)}</strong>
+    </div>
   `;
 
   cleaningPointRows.innerHTML = latestInput
@@ -2336,7 +2348,7 @@ function renderDataCleaningDashboard(statusPayload, historyPayload) {
           const acceptedValue = quality.acceptedValues?.[key] ?? boundaryValue(latestInput, key);
           return `
             <tr>
-              <td><strong>${shortName}</strong><span>${label}</span></td>
+              <td><span class="point-name"><i></i><strong>${shortName}</strong><em>${label}</em></span></td>
               <td>${formatChartValue(rawValue)} ${unit}</td>
               <td>${formatChartValue(acceptedValue)} ${unit}</td>
               <td><span class="quality-pill ${statusClass(field.status)}">${qualityStatusText(field.status)}</span></td>
@@ -2349,17 +2361,17 @@ function renderDataCleaningDashboard(statusPayload, historyPayload) {
         .join("")
     : `<tr><td colspan="7">暂无在线边界输入。可在“仿真结果 -> 实时结果”推送边界或启动 Mock。</td></tr>`;
 
-  const issueCounts = { missing_value: 0, out_of_range_clipped: 0, parse_error: 0, delay: 0 };
+  const issueCounts = { missing_value: 0, out_of_range_clipped: 0, delay: 0, parse_error: 0 };
   inputs.forEach((record) => {
     (record.quality?.issues || []).forEach((issue) => {
       issueCounts[issue.code] = (issueCounts[issue.code] || 0) + 1;
     });
   });
   const issueLabels = {
-    missing_value: "缺失补齐",
-    out_of_range_clipped: "越界裁剪",
-    parse_error: "解析失败",
+    missing_value: "缺失",
+    out_of_range_clipped: "越界",
     delay: "延迟",
+    parse_error: "解析失败",
   };
   const maxIssue = Math.max(1, ...Object.values(issueCounts));
   cleaningIssueBars.innerHTML = Object.entries(issueLabels)
@@ -2375,8 +2387,13 @@ function renderDataCleaningDashboard(statusPayload, historyPayload) {
     })
     .join("");
 
-  cleaningRuleChips.innerHTML = ["范围校验", "缺失补齐", "单位映射", "解析检查", "来源标记", "质量留痕"]
-    .map((rule) => `<span>${rule}</span>`)
+  cleaningRuleChips.innerHTML = [
+    ["范围校验", "检查指标是否在物理全理范围内，越界则进行裁剪或标记。"],
+    ["缺失补齐", "对缺失值进行前值填充、线性插值或模型当前值补齐。"],
+    ["尖峰过滤", "检测并过滤短时异常尖峰噪声，平滑数据波动。"],
+    ["单位转换", "统一单位到模型所需单位，确保数据一致性。"],
+  ]
+    .map(([rule, detail]) => `<article><span>${rule}</span><p>${detail}</p></article>`)
     .join("");
 
   const events = inputs
@@ -2386,12 +2403,12 @@ function renderDataCleaningDashboard(statusPayload, historyPayload) {
     ? events
         .map(({ record, issue }) => `
           <article>
-            <strong>${escapeHtml(issue.field || "边界数据")} · ${escapeHtml(fieldIssueType(issue.field, record.quality))}</strong>
+            <strong><span class="event-dot ${statusClass(issue.severity === "error" ? "bad" : "warning")}"></span>${escapeHtml(issue.field || "边界数据")} · ${escapeHtml(fieldIssueType(issue.field, record.quality))}</strong>
             <span>${shortDateTime(record.timestamp)} · ${escapeHtml(issue.message || issue.code)}</span>
           </article>
         `)
         .join("")
-    : `<article><strong>暂无异常事件</strong><span>最近 12 小时在线边界未触发清洗问题。</span></article>`;
+    : `<article><strong><span class="event-dot ok"></span>暂无异常事件</strong><span>最近 12 小时在线边界未触发清洗问题。</span></article>`;
 
   cleaningTrend.innerHTML = cleaningPointDefinitions
     .map(([key, shortName]) => {
