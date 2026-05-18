@@ -597,7 +597,8 @@ h2 {
 .realtime-tools,
 .log-tools,
 .calibration-tools,
-.evaluation-tools {
+.evaluation-tools,
+.data-cleaning-tools {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 10px;
@@ -607,7 +608,8 @@ h2 {
 .realtime-tools,
 .log-tools,
 .calibration-tools,
-.evaluation-tools {
+.evaluation-tools,
+.data-cleaning-tools {
   grid-template-columns: 1fr;
   max-height: calc(100vh - 190px);
   overflow: auto;
@@ -616,6 +618,47 @@ h2 {
 .evaluation-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cleaning-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.cleaning-kpis div {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdfb;
+}
+
+.cleaning-kpis span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.cleaning-kpis strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 18px;
+}
+
+.cleaning-workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.8fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.cleaning-main {
+  min-width: 0;
+}
+
+.cleaning-side {
+  display: grid;
   gap: 12px;
 }
 
@@ -723,7 +766,8 @@ h2 {
 .realtime-tools p,
 .log-tools p,
 .calibration-tools p,
-.evaluation-tools p {
+.evaluation-tools p,
+.data-cleaning-tools p {
   grid-column: 1 / -1;
   margin: 0;
   color: var(--muted);
@@ -735,7 +779,8 @@ h2 {
 .realtime-tools p.error,
 .log-tools p.error,
 .calibration-tools p.error,
-.evaluation-tools p.error {
+.evaluation-tools p.error,
+.data-cleaning-tools p.error {
   color: var(--red);
 }
 
@@ -875,6 +920,170 @@ h2 {
 .data-quality-summary p,
 .data-quality-summary .compact-list {
   grid-column: 1 / -1;
+}
+
+.quality-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.quality-pill.ok {
+  background: #e8f2ec;
+  color: var(--green-dark);
+}
+
+.quality-pill.warning {
+  background: #fff4df;
+  color: #84520e;
+}
+
+.quality-pill.bad {
+  background: #faeeee;
+  color: var(--red);
+}
+
+.quality-pill.idle {
+  background: #eef3ee;
+  color: var(--muted);
+}
+
+.cleaning-table td:first-child strong,
+.cleaning-table td:first-child span {
+  display: block;
+}
+
+.cleaning-table td:first-child span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.issue-bars {
+  display: grid;
+  gap: 8px;
+}
+
+.issue-bar-row {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.issue-bar-row div {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5ece6;
+}
+
+.issue-bar-row i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--green);
+}
+
+.issue-bar-row strong {
+  text-align: right;
+}
+
+.rule-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rule-chips span {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.cleaning-events {
+  display: grid;
+  gap: 8px;
+}
+
+.cleaning-events article {
+  padding: 8px;
+  border-left: 3px solid var(--green);
+  border-radius: 7px;
+  background: #fff;
+}
+
+.cleaning-events strong,
+.cleaning-events span {
+  display: block;
+}
+
+.cleaning-events strong {
+  font-size: 12px;
+}
+
+.cleaning-events span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.cleaning-trend {
+  display: grid;
+  gap: 8px;
+}
+
+.trend-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.trend-row strong {
+  font-size: 12px;
+}
+
+.trend-row div {
+  display: grid;
+  grid-template-columns: repeat(24, minmax(5px, 1fr));
+  gap: 3px;
+  min-height: 16px;
+}
+
+.trend-row span {
+  min-width: 5px;
+  height: 16px;
+  border-radius: 3px;
+  background: #e5ece6;
+}
+
+.trend-row span.ok {
+  background: var(--green);
+}
+
+.trend-row span.warning {
+  background: var(--amber);
+}
+
+.trend-row span.bad {
+  background: var(--red);
+}
+
+.trend-row span.idle {
+  background: #cfd8d1;
 }
 
 .compact-list {
@@ -1299,6 +1508,11 @@ h2 {
   }
 
   .evaluation-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cleaning-workbench,
+  .cleaning-kpis {
     grid-template-columns: 1fr;
   }
 

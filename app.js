@@ -20,7 +20,6 @@ const csvStatus = document.getElementById("csvStatus");
 const realtimeStatus = document.getElementById("realtimeStatus");
 const realtimeSummary = document.getElementById("realtimeSummary");
 const realtimeQualitySummary = document.getElementById("realtimeQualitySummary");
-const boundaryQualitySummary = document.getElementById("boundaryQualitySummary");
 const mockSummary = document.getElementById("mockSummary");
 const ingestRealtimeSample = document.getElementById("ingestRealtimeSample");
 const pushAndStepRealtime = document.getElementById("pushAndStepRealtime");
@@ -74,6 +73,15 @@ const credibilitySummary = document.getElementById("credibilitySummary");
 const initialConditionSummary = document.getElementById("initialConditionSummary");
 const referenceComparisonSummary = document.getElementById("referenceComparisonSummary");
 const evaluationStatus = document.getElementById("evaluationStatus");
+const dataCleaningTools = document.getElementById("dataCleaningTools");
+const refreshDataCleaning = document.getElementById("refreshDataCleaning");
+const cleaningKpis = document.getElementById("cleaningKpis");
+const cleaningPointRows = document.getElementById("cleaningPointRows");
+const cleaningIssueBars = document.getElementById("cleaningIssueBars");
+const cleaningRuleChips = document.getElementById("cleaningRuleChips");
+const cleaningEvents = document.getElementById("cleaningEvents");
+const cleaningTrend = document.getElementById("cleaningTrend");
+const dataCleaningStatus = document.getElementById("dataCleaningStatus");
 const workspaceTitle = document.getElementById("workspaceTitle");
 const workspaceEyebrow = document.getElementById("workspaceEyebrow");
 const workspacePages = Array.from(document.querySelectorAll(".workspace-page"));
@@ -284,6 +292,7 @@ const workspaceLabels = {
   process: ["工艺模型", "AAO 工艺流程"],
   params: ["仿真配置", "边界、模型与解算器"],
   results: ["仿真结果", "批量仿真与实时结果"],
+  cleaning: ["在线数据清洗", "质量治理仪表板"],
   evaluation: ["模型评估", "可信度与标准对比"],
   calibration: ["校准中心", "模型率定与报告"],
   logs: ["系统日志", "计算状态与失败日志"],
@@ -1198,6 +1207,7 @@ function renderForm() {
   logTools.hidden = activePanel !== "logs";
   calibrationTools.hidden = activePanel !== "calibration";
   evaluationTools.hidden = activePanel !== "evaluation";
+  dataCleaningTools.hidden = activePanel !== "cleaning";
   paramTabs.hidden = !showingParams;
   parameterForm.hidden = !showingParams || activeTab === "boundaryData";
   parameterForm.innerHTML = "";
@@ -2238,6 +2248,48 @@ function qualityStatusText(status) {
   return labels[status] || status || "--";
 }
 
+const cleaningPointDefinitions = [
+  ["influentQ", "Q", "进水流量", "m3/d"],
+  ["influentCod", "COD", "COD", "gCOD/m3"],
+  ["influentNh4", "NH4-N", "氨氮", "gN/m3"],
+  ["influentNo3", "NO3-N", "硝酸盐", "gN/m3"],
+  ["influentTss", "TSS", "悬浮物", "g/m3"],
+  ["aerobicDo", "DO", "溶解氧", "gO2/m3"],
+];
+
+function statusClass(status) {
+  if (status === "bad") return "bad";
+  if (status === "warning") return "warning";
+  if (status === "ok") return "ok";
+  return "idle";
+}
+
+function fieldIssueType(key, quality) {
+  const issues = quality?.issues || [];
+  const issue = issues.find((item) => item.field === key);
+  if (!issue) return "无";
+  const labels = {
+    missing_value: "缺失补齐",
+    out_of_range_clipped: "越界裁剪",
+    parse_error: "解析失败",
+  };
+  return labels[issue.code] || issue.code || "异常";
+}
+
+function fieldStrategy(key, quality) {
+  const field = quality?.fieldQuality?.[key];
+  if (!field) return "等待数据";
+  if (field.source === "fallback") return "使用当前参数补齐";
+  if (field.status === "warning") return "按允许范围裁剪";
+  if (field.status === "bad") return "阻断或人工复核";
+  return "直接进入模型";
+}
+
+function rawBoundaryValue(record, key) {
+  const raw = record?.values || {};
+  return raw[key] ?? raw[key.replace("influent", "").toUpperCase()] ?? raw[key.toLowerCase()];
+}
+
 function renderQualitySummary(target, quality, fallbackText = "暂无数据质量报告。") {
   if (!target) return;
   if (!quality) {
@@ -2257,6 +2309,121 @@ function renderQualitySummary(target, quality, fallbackText = "暂无数据质�
     ${correctedFields.length ? `<p>已处理：${escapeHtml(correctedFields.slice(0, 4).join("；"))}</p>` : "<p>原始边界值可直接用于计算。</p>"}
     ${issues ? `<ul class="compact-list">${issues}</ul>` : ""}
   `;
+}
+
+function renderDataCleaningDashboard(statusPayload, historyPayload) {
+  const latestInput = statusPayload?.latestInput || historyPayload?.inputs?.[0] || null;
+  const quality = latestInput?.quality || {};
+  const fieldQuality = quality.fieldQuality || {};
+  const inputs = historyPayload?.inputs || [];
+  const totalPoints = cleaningPointDefinitions.length;
+  const normalPoints = cleaningPointDefinitions.filter(([key]) => fieldQuality[key]?.status === "ok").length;
+  const abnormalPoints = cleaningPointDefinitions.filter(([key]) => ["warning", "bad"].includes(fieldQuality[key]?.status)).length;
+  const issueTotal = inputs.reduce((sum, record) => sum + qualityIssueCount(record.quality), 0);
+
+  cleaningKpis.innerHTML = `
+    <div><span>总点位</span><strong>${totalPoints}</strong></div>
+    <div><span>正常</span><strong>${normalPoints}</strong></div>
+    <div><span>异常</span><strong>${abnormalPoints}</strong></div>
+    <div><span>最近清洗</span><strong>${shortDateTime(latestInput?.timestamp)}</strong></div>
+  `;
+
+  cleaningPointRows.innerHTML = latestInput
+    ? cleaningPointDefinitions
+        .map(([key, shortName, label, unit]) => {
+          const field = fieldQuality[key] || {};
+          const rawValue = rawBoundaryValue(latestInput, key);
+          const acceptedValue = quality.acceptedValues?.[key] ?? boundaryValue(latestInput, key);
+          return `
+            <tr>
+              <td><strong>${shortName}</strong><span>${label}</span></td>
+              <td>${formatChartValue(rawValue)} ${unit}</td>
+              <td>${formatChartValue(acceptedValue)} ${unit}</td>
+              <td><span class="quality-pill ${statusClass(field.status)}">${qualityStatusText(field.status)}</span></td>
+              <td>${escapeHtml(fieldIssueType(key, quality))}</td>
+              <td>${shortDateTime(latestInput.timestamp)}</td>
+              <td>${escapeHtml(fieldStrategy(key, quality))}</td>
+            </tr>
+          `;
+        })
+        .join("")
+    : `<tr><td colspan="7">暂无在线边界输入。可在“仿真结果 -> 实时结果”推送边界或启动 Mock。</td></tr>`;
+
+  const issueCounts = { missing_value: 0, out_of_range_clipped: 0, parse_error: 0, delay: 0 };
+  inputs.forEach((record) => {
+    (record.quality?.issues || []).forEach((issue) => {
+      issueCounts[issue.code] = (issueCounts[issue.code] || 0) + 1;
+    });
+  });
+  const issueLabels = {
+    missing_value: "缺失补齐",
+    out_of_range_clipped: "越界裁剪",
+    parse_error: "解析失败",
+    delay: "延迟",
+  };
+  const maxIssue = Math.max(1, ...Object.values(issueCounts));
+  cleaningIssueBars.innerHTML = Object.entries(issueLabels)
+    .map(([key, label]) => {
+      const count = issueCounts[key] || 0;
+      return `
+        <div class="issue-bar-row">
+          <span>${label}</span>
+          <div><i style="width:${Math.max(4, (count / maxIssue) * 100)}%"></i></div>
+          <strong>${count}</strong>
+        </div>
+      `;
+    })
+    .join("");
+
+  cleaningRuleChips.innerHTML = ["范围校验", "缺失补齐", "单位映射", "解析检查", "来源标记", "质量留痕"]
+    .map((rule) => `<span>${rule}</span>`)
+    .join("");
+
+  const events = inputs
+    .flatMap((record) => (record.quality?.issues || []).map((issue) => ({ record, issue })))
+    .slice(0, 8);
+  cleaningEvents.innerHTML = events.length
+    ? events
+        .map(({ record, issue }) => `
+          <article>
+            <strong>${escapeHtml(issue.field || "边界数据")} · ${escapeHtml(fieldIssueType(issue.field, record.quality))}</strong>
+            <span>${shortDateTime(record.timestamp)} · ${escapeHtml(issue.message || issue.code)}</span>
+          </article>
+        `)
+        .join("")
+    : `<article><strong>暂无异常事件</strong><span>最近 12 小时在线边界未触发清洗问题。</span></article>`;
+
+  cleaningTrend.innerHTML = cleaningPointDefinitions
+    .map(([key, shortName]) => {
+      const records = inputs.slice(0, 24).reverse();
+      const cells = records.length
+        ? records
+            .map((record) => {
+              const status = record.quality?.fieldQuality?.[key]?.status || "unknown";
+              return `<span class="${statusClass(status)}" title="${shortName} ${shortDateTime(record.timestamp)} ${qualityStatusText(status)}"></span>`;
+            })
+            .join("")
+        : "<em>暂无数据</em>";
+      return `<div class="trend-row"><strong>${shortName}</strong><div>${cells}</div></div>`;
+    })
+    .join("");
+
+  dataCleaningStatus.textContent = `已加载 ${inputs.length} 条最近 12 小时在线边界记录，累计问题 ${issueTotal} 个。`;
+  dataCleaningStatus.classList.remove("error");
+}
+
+async function refreshDataCleaningDashboard() {
+  try {
+    dataCleaningStatus.textContent = "正在加载在线数据清洗仪表板...";
+    const [statusPayload, historyPayload] = await Promise.all([
+      realtimeRequest(withProjectQuery("/status")),
+      realtimeRequest(withProjectQuery("/history?hours=12&limit=200")),
+    ]);
+    renderDataCleaningDashboard(statusPayload, historyPayload);
+  } catch (error) {
+    dataCleaningStatus.textContent = `在线数据清洗加载失败：${error.message}`;
+    dataCleaningStatus.classList.add("error");
+  }
 }
 
 function renderRealtimeHistory(payload) {
@@ -2311,7 +2478,6 @@ async function refreshRealtimeHistory() {
   renderRealtimeHistory(payload);
   if (payload.inputs?.[0]?.quality) {
     renderQualitySummary(realtimeQualitySummary, payload.inputs[0].quality);
-    renderQualitySummary(boundaryQualitySummary, payload.inputs[0].quality, "尚无实时边界清洗报告。");
   }
 }
 
@@ -2319,7 +2485,6 @@ async function refreshRealtimeDataQuality() {
   const payload = await realtimeRequest(withProjectQuery("/status"));
   const quality = payload.latestInput?.quality;
   renderQualitySummary(realtimeQualitySummary, quality, "尚无实时边界清洗报告。");
-  renderQualitySummary(boundaryQualitySummary, quality, "尚无实时边界清洗报告。");
   return payload;
 }
 
@@ -2344,7 +2509,6 @@ async function ingestCurrentRealtimeBoundary() {
   });
   updateRealtimeStatus(`已推送实时边界输入 #${payload.id}。`);
   renderQualitySummary(realtimeQualitySummary, payload.quality);
-  renderQualitySummary(boundaryQualitySummary, payload.quality);
   await refreshRealtimeLatest();
   await refreshRealtimeHistory();
 }
@@ -2364,7 +2528,6 @@ async function stepRealtimeModel(pushCurrentBoundary = false) {
   updateRealtimeStatus(pushCurrentBoundary ? `已推送当前边界并完成一步计算，结果 #${payload.resultId}。` : `已使用最新边界推进一步，结果 #${payload.resultId}。`);
   renderRealtimeSummary(payload);
   renderQualitySummary(realtimeQualitySummary, payload.input?.quality || payload.result?.quality);
-  renderQualitySummary(boundaryQualitySummary, payload.input?.quality || payload.result?.quality);
   await refreshRealtimeHistory();
 }
 
@@ -2378,7 +2541,6 @@ async function refreshRealtimeLatest() {
   updateRealtimeStatus(`已刷新最新实时结果 #${payload.result.id}。`);
   renderRealtimeSummary(payload);
   renderQualitySummary(realtimeQualitySummary, payload.input?.quality || payload.result?.result?.quality);
-  renderQualitySummary(boundaryQualitySummary, payload.input?.quality || payload.result?.result?.quality);
   await refreshRealtimeHistory();
 }
 
@@ -2387,7 +2549,6 @@ async function resetRealtimeState() {
   updateRealtimeStatus("已重置实时输入、状态和结果。");
   renderRealtimeSummary(null);
   renderQualitySummary(realtimeQualitySummary, null);
-  renderQualitySummary(boundaryQualitySummary, null);
 }
 
 async function startRealtimeMock() {
@@ -2910,6 +3071,9 @@ document.querySelectorAll(".panel-tab").forEach((tab) => {
     if (activePanel === "evaluation") {
       refreshModelEvaluationPanel();
     }
+    if (activePanel === "cleaning") {
+      refreshDataCleaningDashboard();
+    }
   });
 });
 
@@ -2971,6 +3135,7 @@ projectSelect.addEventListener("change", async () => {
   showDefaultBoundaryPreview();
   if (activePanel === "results" && activeResultMode === "realtime") showRealtimeResults();
   if (activePanel === "logs") await refreshCalculationLogs();
+  if (activePanel === "cleaning") await refreshDataCleaningDashboard();
   if (activePanel === "calibration") {
     await refreshCalibrationStages();
     await refreshProjectCalibrationRuns();
@@ -2982,6 +3147,7 @@ newProject.addEventListener("click", async () => {
 refreshLogs.addEventListener("click", async () => {
   await refreshCalculationLogs();
 });
+refreshDataCleaning.addEventListener("click", refreshDataCleaningDashboard);
 runQuickCalibration.addEventListener("click", async () => {
   await runQuickNh4Calibration();
 });

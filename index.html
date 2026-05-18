@@ -26,6 +26,10 @@
             <span>仿真结果</span>
             <small>曲线与导出</small>
           </button>
+          <button class="nav-item panel-tab" data-panel="cleaning" type="button">
+            <span>在线数据清洗</span>
+            <small>质量与治理</small>
+          </button>
           <button class="nav-item panel-tab" data-panel="evaluation" type="button">
             <span>模型评估</span>
             <small>可信度与对比</small>
@@ -113,7 +117,76 @@
           </label>
           <button id="clearCsvData" class="secondary-button" type="button">清除数据</button>
           <p id="csvStatus">尚未加载历史数据。CSV 作为边界条件序列，仿真总时长和计算步长由“运行”页设置。可直接使用 sample-data.csv。</p>
-          <div id="boundaryQualitySummary" class="data-quality-summary"></div>
+        </div>
+      </section>
+
+      <section class="workspace-page stack-page" data-page="cleaning" aria-label="在线数据清洗">
+        <div class="panel-heading">
+          <div>
+            <h2>在线数据清洗</h2>
+            <p>所有在线边界数据先经过质量检查和清洗，再进入实时模型计算。</p>
+          </div>
+          <div class="panel-tools">
+            <button id="refreshDataCleaning" class="secondary-button" type="button">刷新清洗状态</button>
+          </div>
+        </div>
+        <div id="dataCleaningTools" class="data-cleaning-tools" hidden>
+          <div id="cleaningKpis" class="cleaning-kpis"></div>
+          <div class="cleaning-workbench">
+            <section class="tool-section cleaning-main">
+              <div class="tool-section-heading">
+                <strong>在线点位状态</strong>
+                <span>最新边界</span>
+              </div>
+              <div class="table-scroll">
+                <table class="data-table cleaning-table">
+                  <thead>
+                    <tr>
+                      <th>点位</th>
+                      <th>最新值</th>
+                      <th>清洗后值</th>
+                      <th>状态</th>
+                      <th>异常类型</th>
+                      <th>最近时间</th>
+                      <th>处理策略</th>
+                    </tr>
+                  </thead>
+                  <tbody id="cleaningPointRows"></tbody>
+                </table>
+              </div>
+            </section>
+            <aside class="cleaning-side">
+              <section class="tool-section">
+                <div class="tool-section-heading">
+                  <strong>异常分布</strong>
+                  <span>最近 12 小时</span>
+                </div>
+                <div id="cleaningIssueBars" class="issue-bars"></div>
+              </section>
+              <section class="tool-section">
+                <div class="tool-section-heading">
+                  <strong>清洗规则</strong>
+                  <span>当前启用</span>
+                </div>
+                <div id="cleaningRuleChips" class="rule-chips"></div>
+              </section>
+              <section class="tool-section">
+                <div class="tool-section-heading">
+                  <strong>最近事件</strong>
+                  <span>质量日志</span>
+                </div>
+                <div id="cleaningEvents" class="cleaning-events"></div>
+              </section>
+            </aside>
+          </div>
+          <section class="tool-section">
+            <div class="tool-section-heading">
+              <strong>最近 12 小时质量趋势</strong>
+              <span>按点位统计</span>
+            </div>
+            <div id="cleaningTrend" class="cleaning-trend"></div>
+          </section>
+          <p id="dataCleaningStatus">尚未加载在线数据清洗状态。</p>
         </div>
       </section>
 
@@ -334,13 +407,6 @@
               <div id="mockSummary" class="mock-summary"></div>
             </div>
             <p id="realtimeStatus">尚未接入实时数据。可先推送当前进水参数，再推进模型一步。</p>
-            <div class="tool-section">
-              <div class="tool-section-heading">
-                <strong>数据清洗状态</strong>
-                <span>最新边界</span>
-              </div>
-              <div id="realtimeQualitySummary" class="data-quality-summary"></div>
-            </div>
             <div id="realtimeSummary" class="realtime-summary"></div>
           </div>
 
