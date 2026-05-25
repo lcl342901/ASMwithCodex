@@ -11,6 +11,10 @@ DEFAULT_DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
 DEFAULT_DEEPSEEK_MODEL = "deepseek-chat"
 
 
+class EmptyDeepSeekAnalysis(RuntimeError):
+    pass
+
+
 def load_local_env() -> None:
     for path in (Path.cwd() / ".env", Path(__file__).resolve().parent / ".env"):
         if not path.exists():
@@ -107,15 +111,71 @@ def build_prompt(summary: dict[str, Any]) -> list[dict[str, str]]:
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
-def call_deepseek(messages: list[dict[str, str]], config: dict[str, Any]) -> str:
+def text_from_part(part: Any) -> str:
+    if isinstance(part, str):
+        return part
+    if isinstance(part, dict):
+        value = part.get("text") or part.get("content")
+        return value if isinstance(value, str) else ""
+    return ""
+
+
+def extract_deepseek_content(data: dict[str, Any]) -> str:
+    candidates: list[str] = []
+    choices = data.get("choices") or []
+    for choice in choices:
+        if not isinstance(choice, dict):
+            continue
+        message = choice.get("message") or {}
+        if isinstance(message, dict):
+            for key in ("content", "reasoning_content"):
+                value = message.get(key)
+                if isinstance(value, str):
+                    candidates.append(value)
+                elif isinstance(value, list):
+                    candidates.append("\n".join(text_from_part(part) for part in value))
+        value = choice.get("text")
+        if isinstance(value, str):
+            candidates.append(value)
+
+    output_text = data.get("output_text")
+    if isinstance(output_text, str):
+        candidates.append(output_text)
+
+    for output in data.get("output") or []:
+        if not isinstance(output, dict):
+            continue
+        content = output.get("content")
+        if isinstance(content, str):
+            candidates.append(content)
+        elif isinstance(content, list):
+            candidates.append("\n".join(text_from_part(part) for part in content))
+
+    return "\n".join(item.strip() for item in candidates if item and item.strip()).strip()
+
+
+def deepseek_response_diagnostic(data: dict[str, Any]) -> str:
+    choices = data.get("choices") or []
+    if not choices:
+        return "response did not include choices"
+    choice = choices[0] if isinstance(choices[0], dict) else {}
+    message = choice.get("message") if isinstance(choice, dict) else {}
+    message_keys = sorted(message.keys()) if isinstance(message, dict) else []
+    finish_reason = choice.get("finish_reason") if isinstance(choice, dict) else None
+    return f"finish_reason={finish_reason or 'unknown'}, message_keys={message_keys}"
+
+
+def call_deepseek(messages: list[dict[str, str]], config: dict[str, Any], model: str | None = None) -> tuple[str, str]:
     api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError("DEEPSEEK_API_KEY is not configured in the backend environment.")
+    model_name = model or config["model"]
     payload = {
-        "model": config["model"],
+        "model": model_name,
         "messages": messages,
         "temperature": 0.2,
         "max_tokens": 900,
+        "stream": False,
     }
     body = json.dumps(payload).encode("utf-8")
     req = request.Request(
@@ -136,21 +196,27 @@ def call_deepseek(messages: list[dict[str, str]], config: dict[str, Any]) -> str
     except error.URLError as exc:
         raise RuntimeError(f"DeepSeek API connection failed: {exc.reason}") from exc
 
-    choices = data.get("choices") or []
-    content = choices[0].get("message", {}).get("content") if choices else ""
+    content = extract_deepseek_content(data)
     if not content:
-        raise RuntimeError("DeepSeek API returned an empty analysis.")
-    return content.strip()
+        raise EmptyDeepSeekAnalysis(f"DeepSeek model {model_name} returned an empty analysis ({deepseek_response_diagnostic(data)}).")
+    return content.strip(), model_name
 
 
 def analyze_result(result: dict[str, Any], params: dict[str, Any], context: dict[str, Any] | None = None) -> dict[str, Any]:
     context = context or {}
     config = deepseek_config()
     summary = result_summary(result, params, context)
-    analysis = call_deepseek(build_prompt(summary), config)
+    messages = build_prompt(summary)
+    try:
+        analysis, model_used = call_deepseek(messages, config)
+    except EmptyDeepSeekAnalysis:
+        if config["model"] == DEFAULT_DEEPSEEK_MODEL:
+            raise
+        analysis, model_used = call_deepseek(messages, config, DEFAULT_DEEPSEEK_MODEL)
     return {
         "provider": config["provider"],
-        "model": config["model"],
+        "model": model_used,
+        "configuredModel": config["model"],
         "configured": config["configured"],
         "summary": summary,
         "analysis": analysis,

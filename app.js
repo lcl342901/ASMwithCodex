@@ -2490,7 +2490,8 @@ async function requestAiAnalysis() {
       throw new Error(message);
     }
     const payload = await response.json();
-    aiAnalysisMeta.textContent = `${payload.provider || "AI"} · ${payload.model || "--"} · 已生成`;
+    const modelNote = payload.configuredModel && payload.configuredModel !== payload.model ? `${payload.model}（从 ${payload.configuredModel} 自动兜底）` : payload.model || "--";
+    aiAnalysisMeta.textContent = `${payload.provider || "AI"} · ${modelNote} · 已生成`;
     setAiAnalysisStatus("AI 分析已生成。");
     aiAnalysisOutput.textContent = payload.analysis || "AI 未返回分析内容。";
   } catch (error) {
