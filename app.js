@@ -85,8 +85,39 @@ const dataCleaningStatus = document.getElementById("dataCleaningStatus");
 const workspaceTitle = document.getElementById("workspaceTitle");
 const workspaceEyebrow = document.getElementById("workspaceEyebrow");
 const workspacePages = Array.from(document.querySelectorAll(".workspace-page"));
+const appFrame = document.getElementById("appFrame");
+const sidebarToggle = document.getElementById("sidebarToggle");
+const loginScreen = document.getElementById("loginScreen");
+const environmentOptions = Array.from(document.querySelectorAll("[data-env-select]"));
+const enterEnvironment = document.getElementById("enterEnvironment");
+const environmentBadge = document.getElementById("environmentBadge");
+const switchEnvironment = document.getElementById("switchEnvironment");
+const environmentSelect = document.getElementById("environmentSelect");
+const logoutButton = document.getElementById("logoutButton");
+const panelTabs = Array.from(document.querySelectorAll(".panel-tab"));
+const resultModeTabsContainer = document.querySelector(".result-mode-tabs");
+const libraryProjectSelect = document.getElementById("libraryProjectSelect");
+const libraryNewProject = document.getElementById("libraryNewProject");
+const openScenarioEditor = document.getElementById("openScenarioEditor");
+const librarySolverLabel = document.getElementById("librarySolverLabel");
+const libraryScenarioStatus = document.getElementById("libraryScenarioStatus");
+const resultPanelTitle = document.getElementById("resultPanelTitle");
+const settingsSolverSummary = document.getElementById("settingsSolverSummary");
+const settingsModelSummary = document.getElementById("settingsModelSummary");
+const settingsMockSummary = document.getElementById("settingsMockSummary");
+const openSolverSettings = document.getElementById("openSolverSettings");
+const openModelSettings = document.getElementById("openModelSettings");
+const settingsStartMock = document.getElementById("settingsStartMock");
+const settingsStopMock = document.getElementById("settingsStopMock");
+const settingsRefreshMock = document.getElementById("settingsRefreshMock");
+const aiAnalysisPanel = document.getElementById("aiAnalysisPanel");
+const runAiAnalysis = document.getElementById("runAiAnalysis");
+const aiAnalysisStatus = document.getElementById("aiAnalysisStatus");
+const aiAnalysisOutput = document.getElementById("aiAnalysisOutput");
+const aiAnalysisMeta = document.getElementById("aiAnalysisMeta");
 const SIMULATION_API_URL = "http://127.0.0.1:8000/api/simulate";
 const REALTIME_API_URL = "http://127.0.0.1:8000/api/realtime";
+const AI_API_URL = "http://127.0.0.1:8000/api/ai";
 const PARAM_CONFIG_API_URL = "http://127.0.0.1:8000/api/config/params";
 const PROJECT_API_URL = "http://127.0.0.1:8000/api/projects";
 const LOG_API_URL = "http://127.0.0.1:8000/api/logs";
@@ -246,9 +277,11 @@ const fields = {
   ],
 };
 
-let activePanel = "process";
+let activePanel = "scenarioLibrary";
 let activeTab = "influent";
 let activeResultMode = "batch";
+let activeEnvironment = "lab";
+let pendingEnvironment = "lab";
 let selectedNode = null;
 let lastResult = null;
 let activeChart = "boundaries";
@@ -289,14 +322,178 @@ const C = {
 };
 
 const workspaceLabels = {
-  process: ["工艺模型", "AAO 工艺流程"],
-  params: ["仿真配置", "边界、模型与解算器"],
-  results: ["仿真结果", "批量仿真与实时结果"],
-  cleaning: ["在线数据清洗", "质量治理仪表板"],
-  evaluation: ["模型评估", "可信度与标准对比"],
-  calibration: ["校准中心", "模型率定与报告"],
-  logs: ["系统日志", "计算状态与失败日志"],
+  scenarioLibrary: ["模拟实验室", "方案库"],
+  process: ["模拟实验室", "工艺模型"],
+  params: ["模拟实验室", "方案编辑"],
+  results: ["模拟实验室", "结果查看"],
+  cleaning: ["实时仿真", "在线数据清洗"],
+  evaluation: ["模型管理", "模型评估"],
+  calibration: ["模型管理", "校准中心"],
+  settings: ["模型管理", "系统设置"],
+  logs: ["模型管理", "系统日志"],
 };
+
+const SIDEBAR_COLLAPSED_KEY = "aaoSidebarCollapsed";
+const ACTIVE_ENVIRONMENT_KEY = "aaoActiveEnvironment";
+const environmentConfigs = {
+  lab: {
+    label: "模拟实验室",
+    buttonLabel: "登录并进入模拟实验室",
+    defaultPanel: "scenarioLibrary",
+    defaultResultMode: "batch",
+  },
+  realtime: {
+    label: "实时仿真",
+    buttonLabel: "登录并进入实时仿真",
+    defaultPanel: "results",
+    defaultResultMode: "realtime",
+  },
+  management: {
+    label: "模型管理",
+    buttonLabel: "登录并进入模型管理",
+    defaultPanel: "evaluation",
+    defaultResultMode: "batch",
+  },
+};
+
+function readLocalStorage(key, fallback = null) {
+  try {
+    return window.localStorage?.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeLocalStorage(key, value) {
+  try {
+    window.localStorage?.setItem(key, value);
+  } catch {
+    // The UI still works when browser privacy settings block localStorage.
+  }
+}
+
+function elementSupportsEnvironment(element, environment) {
+  const supported = (element?.dataset?.env || "lab realtime").split(/\s+/).filter(Boolean);
+  return supported.includes(environment);
+}
+
+function isPanelAllowed(panel, environment = activeEnvironment) {
+  return panelTabs.some((tab) => tab.dataset.panel === panel && elementSupportsEnvironment(tab, environment));
+}
+
+function setPendingEnvironment(environment) {
+  if (!environmentConfigs[environment]) return;
+  pendingEnvironment = environment;
+  environmentOptions.forEach((option) => {
+    option.classList.toggle("active", option.dataset.envSelect === environment);
+  });
+  if (enterEnvironment) {
+    enterEnvironment.textContent = environmentConfigs[environment].buttonLabel;
+  }
+}
+
+function getWorkspaceLabel() {
+  if (activeEnvironment === "realtime") {
+    if (activePanel === "results") return ["实时仿真", "实时结果"];
+    if (activePanel === "logs") return ["实时仿真", "运行监控"];
+  }
+  return workspaceLabels[activePanel] || workspaceLabels.scenarioLibrary;
+}
+
+function updatePanelTabState() {
+  document.querySelectorAll(".nav-group-label[data-env]").forEach((label) => {
+    label.hidden = !elementSupportsEnvironment(label, activeEnvironment);
+  });
+  panelTabs.forEach((tab) => {
+    const visible = elementSupportsEnvironment(tab, activeEnvironment);
+    const modeMatches = !tab.dataset.resultModeTarget || tab.dataset.resultModeTarget === activeResultMode;
+    tab.hidden = !visible;
+    tab.classList.toggle("active", visible && tab.dataset.panel === activePanel && modeMatches);
+  });
+  resultModeTabs.forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.resultMode === activeResultMode);
+  });
+  if (environmentBadge) {
+    environmentBadge.textContent = environmentConfigs[activeEnvironment]?.label || "模拟实验室";
+  }
+  if (environmentSelect) {
+    environmentSelect.value = activeEnvironment;
+  }
+  if (switchEnvironment) {
+    const nextEnvironment = activeEnvironment === "lab" ? "实时仿真" : "模拟实验室";
+    switchEnvironment.textContent = `切到${nextEnvironment}`;
+    switchEnvironment.title = `直接切到${nextEnvironment}`;
+  }
+  document.body.dataset.environment = activeEnvironment;
+}
+
+function refreshActivePanelData() {
+  if (activePanel === "logs") {
+    refreshCalculationLogs();
+  }
+  if (activePanel === "results" && activeResultMode === "realtime") {
+    showRealtimeResults();
+  }
+  if (activePanel === "calibration") {
+    refreshCalibrationStages();
+    refreshProjectCalibrationRuns();
+  }
+  if (activePanel === "evaluation") {
+    refreshModelEvaluationPanel();
+  }
+  if (activePanel === "cleaning") {
+    refreshDataCleaningDashboard();
+  }
+  if (activePanel === "settings") {
+    refreshRealtimeMockStatus().catch(() => {});
+  }
+}
+
+function activatePanel(panel, options = {}) {
+  if (!isPanelAllowed(panel)) return;
+  activePanel = panel;
+  if (options.resultMode) {
+    activeResultMode = options.resultMode;
+  } else if (panel === "results") {
+    activeResultMode = environmentConfigs[activeEnvironment]?.defaultResultMode || "batch";
+  }
+  if (options.defaultTab) {
+    activeTab = options.defaultTab;
+    document.querySelectorAll(".param-tab").forEach((item) => item.classList.toggle("active", item.dataset.tab === activeTab));
+  }
+  updatePanelTabState();
+  renderForm();
+  refreshActivePanelData();
+}
+
+function openParameterTab(tabName) {
+  if (activeEnvironment !== "lab") {
+    applyEnvironment("lab", { showApp: true });
+  }
+  activeTab = tabName;
+  document.querySelectorAll(".param-tab").forEach((item) => item.classList.toggle("active", item.dataset.tab === activeTab));
+  activatePanel("params", { defaultTab: tabName });
+}
+
+function applyEnvironment(environment, options = {}) {
+  if (!environmentConfigs[environment]) return;
+  activeEnvironment = environment;
+  writeLocalStorage(ACTIVE_ENVIRONMENT_KEY, environment);
+  setPendingEnvironment(environment);
+  if (options.showApp) {
+    if (loginScreen) loginScreen.hidden = true;
+    if (appFrame) appFrame.hidden = false;
+  }
+  if (options.forceDefault || !isPanelAllowed(activePanel, environment)) {
+    activePanel = environmentConfigs[environment].defaultPanel;
+  }
+  if (activePanel === "results") {
+    activeResultMode = environmentConfigs[environment].defaultResultMode;
+  }
+  updatePanelTabState();
+  renderForm();
+  refreshActivePanelData();
+}
 
 const soluble = [C.S_I, C.S_S, C.S_O, C.S_NO, C.S_NH, C.S_ND, C.S_ALK];
 const particulate = [C.X_I, C.X_S, C.X_BH, C.X_BA, C.X_P, C.X_ND];
@@ -455,10 +652,8 @@ function selectNode(id) {
   };
   activeTab = tabByNode[id] || activeTab;
   document.querySelectorAll(".param-tab").forEach((item) => item.classList.toggle("active", item.dataset.tab === activeTab));
-  document.querySelectorAll(".panel-tab").forEach((item) => item.classList.toggle("active", item.dataset.panel === "params"));
-  activePanel = "params";
   drawNodes();
-  renderForm();
+  activatePanel("params");
 }
 
 function setActiveChart(chartName) {
@@ -530,10 +725,42 @@ async function projectRequest(path = "", options = {}) {
 }
 
 function renderProjectOptions() {
-  projectSelect.innerHTML = projects
+  const optionsHtml = projects
     .map((project) => `<option value="${project.id}"${project.id === activeProjectId ? " selected" : ""}>${escapeHtml(project.name)}</option>`)
     .join("");
+  projectSelect.innerHTML = optionsHtml;
   projectSelect.disabled = projects.length === 0;
+  if (libraryProjectSelect) {
+    libraryProjectSelect.innerHTML = optionsHtml;
+    libraryProjectSelect.disabled = projects.length === 0;
+  }
+}
+
+function renderSystemSettings() {
+  if (settingsSolverSummary) {
+    settingsSolverSummary.innerHTML = `
+      <div><dt>解算器</dt><dd>${escapeHtml(params.solverMethod || "RK4")}</dd></div>
+      <div><dt>相对误差</dt><dd>${params.solverRtol}</dd></div>
+      <div><dt>绝对误差</dt><dd>${params.solverAtol}</dd></div>
+      <div><dt>内部步长上限</dt><dd>${params.maxSolverStepHours} h</dd></div>
+    `;
+  }
+  if (settingsModelSummary) {
+    settingsModelSummary.innerHTML = `
+      <div><dt>ASM 温度</dt><dd>${params.temp} degC</dd></div>
+      <div><dt>二沉池层数</dt><dd>${params.clarifierLayers}</dd></div>
+      <div><dt>进水层</dt><dd>${params.clarifierFeedLayer}</dd></div>
+      <div><dt>Takacs v0</dt><dd>${params.takacsV0} m/d</dd></div>
+    `;
+  }
+  if (settingsMockSummary && !settingsMockSummary.innerHTML.trim()) {
+    settingsMockSummary.innerHTML = `
+      <div><span>状态</span><strong>未刷新</strong></div>
+      <div><span>间隔</span><strong>300 s</strong></div>
+      <div><span>最近结果</span><strong>--</strong></div>
+      <div><span>最近错误</span><strong>--</strong></div>
+    `;
+  }
 }
 
 async function loadProjects() {
@@ -1193,14 +1420,46 @@ function showRealtimeResults() {
 }
 
 function renderForm() {
+  if (!isPanelAllowed(activePanel)) {
+    activePanel = environmentConfigs[activeEnvironment]?.defaultPanel || "scenarioLibrary";
+  }
+  if (activePanel === "results") {
+    activeResultMode = environmentConfigs[activeEnvironment]?.defaultResultMode || "batch";
+  }
   const showingParams = activePanel === "params";
   const showingResults = activePanel === "results";
   workspacePages.forEach((page) => {
     page.classList.toggle("active", page.dataset.page === activePanel);
   });
-  const [eyebrow, title] = workspaceLabels[activePanel] || workspaceLabels.process;
+  const [eyebrow, title] = getWorkspaceLabel();
   workspaceEyebrow.textContent = eyebrow;
   workspaceTitle.textContent = title;
+  updatePanelTabState();
+  if (resultModeTabsContainer) {
+    resultModeTabsContainer.hidden = true;
+  }
+  if (runSimulationButton) {
+    runSimulationButton.hidden = activeEnvironment !== "lab";
+    if (!simulationRunning) {
+      runSimulationButton.textContent = "运行方案";
+    }
+  }
+  if (librarySolverLabel) {
+    librarySolverLabel.textContent = `${params.solverMethod || "RK4"} v2`;
+  }
+  if (libraryScenarioStatus) {
+    libraryScenarioStatus.textContent = csvText.trim() ? "已接入 CSV" : "使用手动边界";
+  }
+  renderSystemSettings();
+  if (resultPanelTitle) {
+    resultPanelTitle.textContent = activeResultMode === "realtime" ? "实时结果" : "方案结果";
+  }
+  if (showingResults && activeResultMode === "realtime") {
+    document.getElementById("resultSummary").textContent = "实时结果只展示在线边界、模型推进状态和最新出水结果；配置项已移出当前页面。";
+  }
+  if (aiAnalysisPanel) {
+    aiAnalysisPanel.hidden = !(showingResults && activeResultMode === "batch");
+  }
   dataTools.hidden = !(showingParams && activeTab === "boundaryData");
   realtimeTools.hidden = !(showingResults && activeResultMode === "realtime");
   batchResults.hidden = !(showingResults && activeResultMode === "batch");
@@ -2026,6 +2285,7 @@ function showDefaultBoundaryPreview() {
   document.getElementById("metricTss").textContent = "--";
   document.getElementById("resultSummary").textContent =
     "默认展示最近 48 h 边界输入预览，频率 5 分钟。点击运行后替换为真实仿真结果。";
+  resetAiAnalysis();
   renderWarnings(lastResult);
   drawChart(lastResult, activeChart);
 }
@@ -2156,6 +2416,91 @@ async function cancelSimulationJob(jobId) {
   return response.json();
 }
 
+function hasAnalyzableResult(result) {
+  return Boolean(
+    result &&
+      result.mode !== "boundaryPreview" &&
+      result.mode !== "running" &&
+      Array.isArray(result.time) &&
+      result.time.length &&
+      Array.isArray(result.effNh4) &&
+      result.effNh4.length,
+  );
+}
+
+function setAiAnalysisStatus(message, isError = false) {
+  if (!aiAnalysisStatus) return;
+  aiAnalysisStatus.textContent = message;
+  aiAnalysisStatus.classList.toggle("error", isError);
+}
+
+function resetAiAnalysis(message = "运行方案后可生成 AI 分析。") {
+  setAiAnalysisStatus(message);
+  if (aiAnalysisOutput) {
+    aiAnalysisOutput.innerHTML = "<p>暂无 AI 建议。</p>";
+  }
+}
+
+async function refreshAiStatus() {
+  if (!aiAnalysisMeta) return null;
+  try {
+    const response = await fetch(`${AI_API_URL}/status`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const status = await response.json();
+    aiAnalysisMeta.textContent = `${status.provider || "AI"} · ${status.model || "--"} · ${status.configured ? "已配置密钥" : "未配置密钥"}`;
+    return status;
+  } catch {
+    aiAnalysisMeta.textContent = "AI 服务未连接";
+    return null;
+  }
+}
+
+async function requestAiAnalysis() {
+  if (!hasAnalyzableResult(lastResult)) {
+    resetAiAnalysis("暂无可分析的方案仿真结果。请先运行方案。");
+    return;
+  }
+  if (!runAiAnalysis) return;
+  runAiAnalysis.disabled = true;
+  setAiAnalysisStatus("正在生成 AI 分析...");
+  aiAnalysisOutput.innerHTML = "<p>AI 正在读取当前仿真摘要并生成建议。</p>";
+  try {
+    await refreshAiStatus();
+    const response = await fetch(`${AI_API_URL}/analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId: activeProjectId,
+        params,
+        result: lastResult,
+        context: {
+          activeChart,
+          csvFileName,
+        },
+      }),
+    });
+    if (!response.ok) {
+      let message = `HTTP ${response.status}`;
+      try {
+        const error = await response.json();
+        message = error.detail || message;
+      } catch {
+        message = await response.text();
+      }
+      throw new Error(message);
+    }
+    const payload = await response.json();
+    aiAnalysisMeta.textContent = `${payload.provider || "AI"} · ${payload.model || "--"} · 已生成`;
+    setAiAnalysisStatus("AI 分析已生成。");
+    aiAnalysisOutput.textContent = payload.analysis || "AI 未返回分析内容。";
+  } catch (error) {
+    setAiAnalysisStatus(`AI 分析失败：${error.message}`, true);
+    aiAnalysisOutput.innerHTML = "<p>请确认后端服务已启动，并在后端本地环境配置 DEEPSEEK_API_KEY。</p>";
+  } finally {
+    runAiAnalysis.disabled = false;
+  }
+}
+
 async function realtimeRequest(path, options = {}) {
   let response;
   try {
@@ -2229,6 +2574,17 @@ function shortDateTime(value) {
   });
 }
 
+function shortTime(value) {
+  if (!value) return "--";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return value;
+  return date.toLocaleTimeString("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
 function boundaryValue(record, key) {
   const accepted = record.quality?.acceptedValues || {};
   const raw = record.values || {};
@@ -2272,6 +2628,7 @@ function fieldIssueType(key, quality) {
     missing_value: "缺失补齐",
     out_of_range_clipped: "越界裁剪",
     parse_error: "解析失败",
+    delay: "延迟",
   };
   return labels[issue.code] || issue.code || "异常";
 }
@@ -2279,10 +2636,32 @@ function fieldIssueType(key, quality) {
 function fieldStrategy(key, quality) {
   const field = quality?.fieldQuality?.[key];
   if (!field) return "等待数据";
-  if (field.source === "fallback") return "使用当前参数补齐";
+  if (field.source === "fallback" || field.source === "fallback_param") return "使用当前参数补齐";
+  if (field.source === "clipped_input") return "限幅到允许范围";
   if (field.status === "warning") return "按允许范围裁剪";
   if (field.status === "bad") return "阻断或人工复核";
   return "直接进入模型";
+}
+
+function fieldDisplayStatus(field, quality, key) {
+  const issueType = fieldIssueType(key, quality);
+  if (issueType === "越界裁剪") return "裁剪";
+  if (issueType === "缺失补齐") return "补齐";
+  if (issueType === "延迟") return "延迟";
+  return qualityStatusText(field?.status);
+}
+
+function issueColorClass(code) {
+  if (code === "out_of_range_clipped") return "bad";
+  if (code === "delay") return "blue";
+  if (code === "parse_error") return "idle";
+  return "";
+}
+
+function fieldTrendClass(record, key) {
+  const issue = (record.quality?.issues || []).find((item) => item.field === key);
+  if (issue?.code === "delay") return "delay";
+  return statusClass(record.quality?.fieldQuality?.[key]?.status || "unknown");
 }
 
 function rawBoundaryValue(record, key) {
@@ -2320,23 +2699,27 @@ function renderDataCleaningDashboard(statusPayload, historyPayload) {
   const normalPoints = cleaningPointDefinitions.filter(([key]) => fieldQuality[key]?.status === "ok").length;
   const abnormalPoints = cleaningPointDefinitions.filter(([key]) => ["warning", "bad"].includes(fieldQuality[key]?.status)).length;
   const issueTotal = inputs.reduce((sum, record) => sum + qualityIssueCount(record.quality), 0);
+  const correctedFields = cleaningPointDefinitions.filter(([key]) => {
+    const field = fieldQuality[key];
+    return field && (field.status !== "ok" || field.source !== "input");
+  }).length;
 
   cleaningKpis.innerHTML = `
-    <div>
+    <div class="cleaning-kpi-card">
       <span class="kpi-icon blue"><svg><use href="#icon-database"></use></svg></span>
-      <p>总点位</p><strong>${totalPoints}</strong>
+      <p>总点位</p><strong>${totalPoints}</strong><small>在线边界指标</small>
     </div>
-    <div>
+    <div class="cleaning-kpi-card">
       <span class="kpi-icon green"><svg><use href="#icon-check"></use></svg></span>
-      <p>正常</p><strong>${normalPoints}</strong>
+      <p>正常点位</p><strong>${normalPoints}</strong><small>无需人工处理</small>
     </div>
-    <div>
-      <span class="kpi-icon red"><svg><use href="#icon-alert"></use></svg></span>
-      <p>异常</p><strong>${abnormalPoints}</strong>
+    <div class="cleaning-kpi-card warning">
+      <span class="kpi-icon amber"><svg><use href="#icon-alert"></use></svg></span>
+      <p>异常点位</p><strong>${abnormalPoints}</strong><small>${correctedFields ? `${correctedFields} 个字段已清洗` : "当前无异常"}</small>
     </div>
-    <div>
+    <div class="cleaning-kpi-card">
       <span class="kpi-icon blue"><svg><use href="#icon-clock"></use></svg></span>
-      <p>最近清洗</p><strong>${shortDateTime(latestInput?.timestamp)}</strong>
+      <p>最近清洗</p><strong>${shortTime(latestInput?.timestamp)}</strong><small>最近边界写入时间</small>
     </div>
   `;
 
@@ -2346,13 +2729,15 @@ function renderDataCleaningDashboard(statusPayload, historyPayload) {
           const field = fieldQuality[key] || {};
           const rawValue = rawBoundaryValue(latestInput, key);
           const acceptedValue = quality.acceptedValues?.[key] ?? boundaryValue(latestInput, key);
+          const issueType = fieldIssueType(key, quality);
+          const displayStatus = fieldDisplayStatus(field, quality, key);
           return `
             <tr>
-              <td><span class="point-name"><i></i><strong>${shortName}</strong><em>${label}</em></span></td>
+              <td><span class="point-name"><i class="${statusClass(field.status)}"></i><strong>${shortName}</strong><em>${label}</em></span></td>
               <td>${formatChartValue(rawValue)} ${unit}</td>
               <td>${formatChartValue(acceptedValue)} ${unit}</td>
-              <td><span class="quality-pill ${statusClass(field.status)}">${qualityStatusText(field.status)}</span></td>
-              <td>${escapeHtml(fieldIssueType(key, quality))}</td>
+              <td><span class="quality-pill ${statusClass(field.status)}">${escapeHtml(displayStatus)}</span></td>
+              <td>${escapeHtml(issueType)}</td>
               <td>${shortDateTime(latestInput.timestamp)}</td>
               <td>${escapeHtml(fieldStrategy(key, quality))}</td>
             </tr>
@@ -2380,7 +2765,7 @@ function renderDataCleaningDashboard(statusPayload, historyPayload) {
       return `
         <div class="issue-bar-row">
           <span>${label}</span>
-          <div><i style="width:${Math.max(4, (count / maxIssue) * 100)}%"></i></div>
+          <div><i class="${issueColorClass(key)}" style="width:${Math.max(4, (count / maxIssue) * 100)}%"></i></div>
           <strong>${count}</strong>
         </div>
       `;
@@ -2388,12 +2773,13 @@ function renderDataCleaningDashboard(statusPayload, historyPayload) {
     .join("");
 
   cleaningRuleChips.innerHTML = [
-    ["范围校验", "检查指标是否在物理全理范围内，越界则进行裁剪或标记。"],
-    ["缺失补齐", "对缺失值进行前值填充、线性插值或模型当前值补齐。"],
-    ["尖峰过滤", "检测并过滤短时异常尖峰噪声，平滑数据波动。"],
-    ["单位转换", "统一单位到模型所需单位，确保数据一致性。"],
+    ["范围校验", ""],
+    ["变化率校验", ""],
+    ["缺失补齐", "warning"],
+    ["延迟检测", ""],
+    ["解析校验", ""],
   ]
-    .map(([rule, detail]) => `<article><span>${rule}</span><p>${detail}</p></article>`)
+    .map(([rule, cls]) => `<article><span class="${cls}">${rule}</span></article>`)
     .join("");
 
   const events = inputs
@@ -2411,19 +2797,39 @@ function renderDataCleaningDashboard(statusPayload, historyPayload) {
     : `<article><strong><span class="event-dot ok"></span>暂无异常事件</strong><span>最近 12 小时在线边界未触发清洗问题。</span></article>`;
 
   cleaningTrend.innerHTML = cleaningPointDefinitions
+    .slice(0, 4)
     .map(([key, shortName]) => {
       const records = inputs.slice(0, 24).reverse();
       const cells = records.length
         ? records
             .map((record) => {
-              const status = record.quality?.fieldQuality?.[key]?.status || "unknown";
-              return `<span class="${statusClass(status)}" title="${shortName} ${shortDateTime(record.timestamp)} ${qualityStatusText(status)}"></span>`;
+              const cls = fieldTrendClass(record, key);
+              return `<span class="${cls}" title="${shortName} ${shortDateTime(record.timestamp)} ${qualityStatusText(record.quality?.fieldQuality?.[key]?.status)}"></span>`;
             })
             .join("")
         : "<em>暂无数据</em>";
       return `<div class="trend-row"><strong>${shortName}</strong><div>${cells}</div></div>`;
     })
     .join("");
+
+  cleaningTrend.insertAdjacentHTML(
+    "afterbegin",
+    `
+      <div class="trend-legend">
+        <span><i style="background:var(--green)"></i>正常</span>
+        <span><i style="background:var(--amber)"></i>缺失补齐</span>
+        <span><i style="background:var(--red)"></i>越界</span>
+        <span><i style="background:var(--blue)"></i>延迟</span>
+      </div>
+      <div class="trend-point-tabs">
+        ${cleaningPointDefinitions.map(([, shortName], index) => `<span class="${index === 0 ? "active" : ""}">${shortName}</span>`).join("")}
+      </div>
+    `,
+  );
+  cleaningTrend.insertAdjacentHTML(
+    "beforeend",
+    `<div class="trend-axis"><span></span><span>01:00</span><span>04:00</span><span>07:00</span><span>10:00</span><span>13:00</span></div>`,
+  );
 
   dataCleaningStatus.textContent = `已加载 ${inputs.length} 条最近 12 小时在线边界记录，累计问题 ${issueTotal} 个。`;
   dataCleaningStatus.classList.remove("error");
@@ -2507,15 +2913,18 @@ async function refreshRealtimeDataQuality() {
 
 function renderMockSummary(status) {
   if (!status) {
-    mockSummary.innerHTML = "";
+    if (mockSummary) mockSummary.innerHTML = "";
+    if (settingsMockSummary) settingsMockSummary.innerHTML = "";
     return;
   }
-  mockSummary.innerHTML = `
+  const html = `
     <div><span>状态</span><strong>${status.running ? "运行中" : "已停止"}</strong></div>
     <div><span>间隔</span><strong>${status.intervalSeconds || 300} s</strong></div>
     <div><span>最近结果</span><strong>${status.lastResultId ?? "--"}</strong></div>
     <div><span>最近错误</span><strong>${status.lastError || "无"}</strong></div>
   `;
+  if (mockSummary) mockSummary.innerHTML = html;
+  if (settingsMockSummary) settingsMockSummary.innerHTML = html;
 }
 
 async function ingestCurrentRealtimeBoundary() {
@@ -3066,31 +3475,65 @@ function updateMetrics(result) {
   const stateText = result.statePersistence?.usedPreviousState ? "，已继承上次最终状态" : "，已保存本次最终状态";
   document.getElementById("resultSummary").textContent =
     `已完成 ${sourceText} 仿真${solverText}${durationText}${stateText}${warningText}。可点击任一单体并在下拉框选择 WEST 风格指标查看过程浓度。`;
+  setAiAnalysisStatus("已获得方案仿真结果，可生成 AI 分析。");
+  if (aiAnalysisOutput) {
+    aiAnalysisOutput.innerHTML = "<p>点击“生成 AI 建议”获取结果分析与工艺调整建议。</p>";
+  }
   renderWarnings(result);
 }
 
-document.querySelectorAll(".panel-tab").forEach((tab) => {
+function setSidebarCollapsed(collapsed) {
+  if (!appFrame || !sidebarToggle) return;
+  appFrame.classList.toggle("sidebar-collapsed", collapsed);
+  sidebarToggle.setAttribute("aria-expanded", String(!collapsed));
+  sidebarToggle.setAttribute("aria-label", collapsed ? "展开侧边栏" : "收起侧边栏");
+  sidebarToggle.title = collapsed ? "展开侧边栏" : "收起侧边栏";
+  writeLocalStorage(SIDEBAR_COLLAPSED_KEY, collapsed ? "true" : "false");
+  window.setTimeout(() => {
+    if (activePanel === "process") drawEdges();
+    if (activePanel === "results" && activeResultMode === "batch" && lastResult) {
+      drawChart(lastResult, activeChart);
+    }
+  }, 240);
+}
+
+setSidebarCollapsed(readLocalStorage(SIDEBAR_COLLAPSED_KEY) === "true");
+
+sidebarToggle?.addEventListener("click", () => {
+  setSidebarCollapsed(!appFrame.classList.contains("sidebar-collapsed"));
+});
+
+environmentOptions.forEach((option) => {
+  option.addEventListener("click", () => {
+    setPendingEnvironment(option.dataset.envSelect);
+  });
+});
+
+enterEnvironment?.addEventListener("click", () => {
+  applyEnvironment(pendingEnvironment, { showApp: true, forceDefault: true });
+});
+
+switchEnvironment?.addEventListener("click", () => {
+  const nextEnvironment = activeEnvironment === "lab" ? "realtime" : "lab";
+  applyEnvironment(nextEnvironment, { showApp: true, forceDefault: true });
+});
+
+environmentSelect?.addEventListener("change", () => {
+  applyEnvironment(environmentSelect.value, { showApp: true, forceDefault: true });
+});
+
+logoutButton?.addEventListener("click", () => {
+  if (appFrame) appFrame.hidden = true;
+  if (loginScreen) loginScreen.hidden = false;
+  setPendingEnvironment(activeEnvironment);
+});
+
+panelTabs.forEach((tab) => {
   tab.addEventListener("click", () => {
-    document.querySelectorAll(".panel-tab").forEach((item) => item.classList.remove("active"));
-    tab.classList.add("active");
-    activePanel = tab.dataset.panel;
-    renderForm();
-    if (activePanel === "logs") {
-      refreshCalculationLogs();
-    }
-    if (activePanel === "results" && activeResultMode === "realtime") {
-      showRealtimeResults();
-    }
-    if (activePanel === "calibration") {
-      refreshCalibrationStages();
-      refreshProjectCalibrationRuns();
-    }
-    if (activePanel === "evaluation") {
-      refreshModelEvaluationPanel();
-    }
-    if (activePanel === "cleaning") {
-      refreshDataCleaningDashboard();
-    }
+    activatePanel(tab.dataset.panel, {
+      resultMode: tab.dataset.resultModeTarget,
+      defaultTab: tab.dataset.defaultTab,
+    });
   });
 });
 
@@ -3160,6 +3603,19 @@ projectSelect.addEventListener("change", async () => {
 });
 newProject.addEventListener("click", async () => {
   await createNewProject();
+});
+libraryNewProject?.addEventListener("click", async () => {
+  await createNewProject();
+});
+libraryProjectSelect?.addEventListener("change", async () => {
+  activeProjectId = libraryProjectSelect.value || "default";
+  await loadProjectParams(activeProjectId);
+  await loadProjectCsv(activeProjectId);
+  renderForm();
+  showDefaultBoundaryPreview();
+});
+openScenarioEditor?.addEventListener("click", () => {
+  activatePanel("params");
 });
 refreshLogs.addEventListener("click", async () => {
   await refreshCalculationLogs();
@@ -3314,6 +3770,40 @@ refreshMockRealtime.addEventListener("click", async () => {
   }
 });
 
+openSolverSettings?.addEventListener("click", () => {
+  openParameterTab("solver");
+});
+
+openModelSettings?.addEventListener("click", () => {
+  openParameterTab("model");
+});
+
+settingsStartMock?.addEventListener("click", async () => {
+  try {
+    await startRealtimeMock();
+  } catch (error) {
+    updateRealtimeStatus(`启动 Mock 失败：${error.message}`, true);
+  }
+});
+
+settingsStopMock?.addEventListener("click", async () => {
+  try {
+    await stopRealtimeMock();
+  } catch (error) {
+    updateRealtimeStatus(`停止 Mock 失败：${error.message}`, true);
+  }
+});
+
+settingsRefreshMock?.addEventListener("click", async () => {
+  try {
+    await refreshRealtimeMockStatus();
+  } catch (error) {
+    updateRealtimeStatus(`刷新 Mock 状态失败：${error.message}`, true);
+  }
+});
+
+runAiAnalysis?.addEventListener("click", requestAiAnalysis);
+
 resultChart.addEventListener("mousemove", updateChartTooltip);
 resultChart.addEventListener("mouseleave", hideChartTooltip);
 
@@ -3370,12 +3860,14 @@ runSimulationButton.addEventListener("click", async () => {
   hideChartTooltip();
   lastResult = createRunningSimulationResult();
   updateMetricCards(lastResult);
-  activePanel = "results";
+  if (activeEnvironment !== "lab") {
+    activeEnvironment = "lab";
+    writeLocalStorage(ACTIVE_ENVIRONMENT_KEY, activeEnvironment);
+  }
   activeResultMode = "batch";
-  document.querySelectorAll(".panel-tab").forEach((item) => item.classList.toggle("active", item.dataset.panel === "results"));
-  resultModeTabs.forEach((item) => item.classList.toggle("active", item.dataset.resultMode === activeResultMode));
-  renderForm();
+  activatePanel("results", { resultMode: "batch" });
   document.getElementById("resultSummary").textContent = "仿真计算中，曲线会随已完成的输出时间点持续更新。";
+  resetAiAnalysis("仿真计算中，完成后可生成 AI 分析。");
   renderWarnings(lastResult);
   drawChart(lastResult, activeChart);
   try {
@@ -3391,7 +3883,7 @@ runSimulationButton.addEventListener("click", async () => {
   } finally {
     simulationRunning = false;
     runButton.disabled = false;
-    runButton.textContent = "运行仿真";
+    runButton.textContent = "运行方案";
     cancelSimulationButton.hidden = true;
     cancelSimulationButton.disabled = false;
     activeSimulationJobId = null;
@@ -3433,11 +3925,17 @@ window.addEventListener("resize", () => {
 });
 
 async function initializeApp() {
+  const savedEnvironment = environmentConfigs[readLocalStorage(ACTIVE_ENVIRONMENT_KEY, "lab")] ? readLocalStorage(ACTIVE_ENVIRONMENT_KEY, "lab") : "lab";
+  activeEnvironment = savedEnvironment;
+  setPendingEnvironment(savedEnvironment);
+  if (loginScreen) loginScreen.hidden = false;
+  if (appFrame) appFrame.hidden = true;
   await loadSavedParams();
   renderForm();
   renderMetricOptions();
   drawNodes();
   showDefaultBoundaryPreview();
+  refreshAiStatus();
 }
 
 initializeApp();

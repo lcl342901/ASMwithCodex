@@ -34,7 +34,11 @@ fi
 mkdir -p "$SERVICE_ROOT" "$FRONTEND_DIR" "$LAUNCH_AGENT_DIR"
 
 echo "Syncing backend code..."
-rsync -a --delete "$PROJECT_ROOT/backend/" "$SERVICE_ROOT/backend/"
+rsync -a --delete \
+  --exclude ".env" \
+  --exclude "realtime.db" \
+  "$PROJECT_ROOT/backend/" \
+  "$SERVICE_ROOT/backend/"
 
 echo "Syncing frontend files..."
 rsync -a --delete \

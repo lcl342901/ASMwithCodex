@@ -53,6 +53,13 @@ class ModelCredibilityRequest(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
 
 
+class AIAnalysisRequest(BaseModel):
+    projectId: Optional[str] = "default"
+    result: dict[str, Any] = Field(default_factory=dict)
+    params: dict[str, Any] = Field(default_factory=dict)
+    context: dict[str, Any] = Field(default_factory=dict)
+
+
 class ReferenceComparisonRequest(BaseModel):
     result: dict[str, Any] = Field(default_factory=dict)
 

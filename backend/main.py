@@ -11,6 +11,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from .ai_analysis import analyze_result, deepseek_config
 from .calibration import bsm1_calibration_report, bsm1_mapping_report, calibration_optimize, calibration_stage_configs, run_calibration_stage
 from .engine_runner import normalize_engine_version, simulate_with_engine
 from .model_trust import (
@@ -61,6 +62,7 @@ from .realtime import (
     stop_mock,
 )
 from .schemas import (
+    AIAnalysisRequest,
     CalibrationPreviewRequest,
     Bsm1CalibrationReportRequest,
     Bsm1MappingRequest,
@@ -116,6 +118,47 @@ async def optional_api_token_middleware(request: Request, call_next):
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/ai/status")
+def ai_status_endpoint() -> dict[str, Any]:
+    config = deepseek_config()
+    return {
+        "provider": config["provider"],
+        "configured": config["configured"],
+        "model": config["model"],
+    }
+
+
+@app.post("/api/ai/analyze")
+def ai_analyze_endpoint(request: AIAnalysisRequest) -> dict[str, Any]:
+    started = perf_counter()
+    project_id = request.projectId or "default"
+    try:
+        result = analyze_result(
+            result=request.result,
+            params=request.params,
+            context={**request.context, "projectId": project_id},
+        )
+        insert_calculation_log(
+            "ai_analysis",
+            "success",
+            "AI simulation analysis completed.",
+            {"projectId": project_id, "provider": result.get("provider"), "model": result.get("model")},
+            (perf_counter() - started) * 1000,
+            project_id,
+        )
+        return result
+    except RuntimeError as exc:
+        insert_calculation_log(
+            "ai_analysis",
+            "failed",
+            str(exc),
+            {"projectId": project_id},
+            (perf_counter() - started) * 1000,
+            project_id,
+        )
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 def job_public(job_id: str) -> dict[str, Any]:

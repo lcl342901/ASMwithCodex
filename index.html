@@ -22,44 +22,120 @@
       <symbol id="icon-alert" viewBox="0 0 24 24"><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5"/><path d="M12 17h.01"/></symbol>
       <symbol id="icon-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v6l4 2"/></symbol>
     </svg>
-    <div class="app-frame">
+    <section id="loginScreen" class="login-screen" aria-label="登录与环境选择">
+      <div class="login-shell">
+        <div class="login-hero">
+          <p class="eyebrow">A2O / AAO PROCESS SIMULATOR</p>
+          <h1>AAO 工艺数字孪生平台</h1>
+          <p>先选择工作环境，再进入对应工作台。实时仿真和模拟实验室的数据、状态与结果分开显示，避免在线运行和预案仿真互相混淆。</p>
+          <div class="login-flow">
+            <span>登录</span>
+            <strong></strong>
+            <span>选择环境</span>
+            <strong></strong>
+            <span>进入工作台</span>
+          </div>
+        </div>
+        <div class="login-card">
+          <div class="login-card-heading">
+            <div>
+              <p class="eyebrow">WELCOME</p>
+              <h2>进入平台</h2>
+            </div>
+            <span class="login-badge">MVP</span>
+          </div>
+          <label class="login-field">
+            <span>用户</span>
+            <input type="text" value="Demo Operator" aria-label="用户" />
+          </label>
+          <label class="login-field">
+            <span>密码</span>
+            <input type="password" value="demo-password" aria-label="密码" />
+          </label>
+          <div class="mode-select" aria-label="模式选择">
+            <button class="mode-card" data-env-select="realtime" type="button">
+              <svg><use href="#icon-chart"></use></svg>
+              <span>实时仿真</span>
+              <small>在线边界、状态、实时结果与数据治理。</small>
+            </button>
+            <button class="mode-card active" data-env-select="lab" type="button">
+              <svg><use href="#icon-config"></use></svg>
+              <span>模拟实验室</span>
+              <small>方案库、方案编辑、批量运行和结果分析。</small>
+            </button>
+            <button class="mode-card" data-env-select="management" type="button">
+              <svg><use href="#icon-settings"></use></svg>
+              <span>模型管理</span>
+              <small>模型评估、校准、系统设置和运行日志。</small>
+            </button>
+          </div>
+          <button id="enterEnvironment" class="primary-button login-submit" type="button">登录并进入模拟实验室</button>
+        </div>
+      </div>
+    </section>
+
+    <div id="appFrame" class="app-frame" hidden>
       <aside class="app-sidebar" aria-label="主导航">
-        <div class="brand-block">
-          <p class="eyebrow">A2O / AAO</p>
-          <h1>AAO 工艺在线仿真</h1>
+        <div class="sidebar-head">
+          <div class="brand-block">
+            <p class="eyebrow">A2O / AAO</p>
+            <h1>AAO 工艺在线仿真</h1>
+          </div>
+          <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-label="收起侧边栏" aria-expanded="true" title="收起侧边栏">
+            <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
         </div>
         <nav class="primary-nav">
-          <button class="nav-item panel-tab active" data-panel="process" type="button">
-            <svg><use href="#icon-model"></use></svg>
-            <span class="nav-text">工艺模型</span>
-            <small>流程图与单体</small>
-          </button>
-          <button class="nav-item panel-tab" data-panel="params" type="button">
-            <svg><use href="#icon-config"></use></svg>
-            <span class="nav-text">仿真配置</span>
-            <small>参数与尺寸</small>
-          </button>
-          <button class="nav-item panel-tab" data-panel="results" type="button">
+          <span class="nav-group-label" data-env="realtime">实时仿真</span>
+          <button class="nav-item panel-tab" data-env="realtime" data-panel="results" data-result-mode-target="realtime" type="button" title="实时结果">
             <svg><use href="#icon-chart"></use></svg>
-            <span class="nav-text">仿真结果</span>
-            <small>曲线与导出</small>
+            <span class="nav-text">实时结果</span>
+            <small>状态与出水</small>
           </button>
-          <button class="nav-item panel-tab" data-panel="cleaning" type="button">
+          <button class="nav-item panel-tab" data-env="realtime" data-panel="cleaning" type="button" title="在线数据清洗">
             <svg><use href="#icon-cleaning"></use></svg>
             <span class="nav-text">在线数据清洗</span>
             <small>质量与治理</small>
           </button>
-          <button class="nav-item panel-tab" data-panel="evaluation" type="button">
+
+          <span class="nav-group-label" data-env="lab">模拟实验室</span>
+          <button class="nav-item panel-tab active" data-env="lab" data-panel="scenarioLibrary" type="button" title="方案库">
+            <svg><use href="#icon-database"></use></svg>
+            <span class="nav-text">方案库</span>
+            <small>新建与打开</small>
+          </button>
+          <button class="nav-item panel-tab" data-env="lab" data-panel="process" type="button" title="工艺模型">
+            <svg><use href="#icon-model"></use></svg>
+            <span class="nav-text">工艺模型</span>
+            <small>流程图与单体</small>
+          </button>
+          <button class="nav-item panel-tab" data-env="lab" data-panel="params" type="button" title="方案编辑">
+            <svg><use href="#icon-config"></use></svg>
+            <span class="nav-text">方案编辑</span>
+            <small>边界与策略</small>
+          </button>
+          <button class="nav-item panel-tab" data-env="lab" data-panel="results" data-result-mode-target="batch" type="button" title="结果查看">
+            <svg><use href="#icon-chart"></use></svg>
+            <span class="nav-text">结果查看</span>
+            <small>曲线与导出</small>
+          </button>
+          <span class="nav-group-label" data-env="management">模型管理</span>
+          <button class="nav-item panel-tab" data-env="management" data-panel="evaluation" type="button" title="模型评估">
             <svg><use href="#icon-eval"></use></svg>
             <span class="nav-text">模型评估</span>
             <small>可信度与对比</small>
           </button>
-          <button class="nav-item panel-tab" data-panel="calibration" type="button">
+          <button class="nav-item panel-tab" data-env="management" data-panel="calibration" type="button" title="校准中心">
             <svg><use href="#icon-calibration"></use></svg>
             <span class="nav-text">校准中心</span>
             <small>率定与报告</small>
           </button>
-          <button class="nav-item panel-tab" data-panel="logs" type="button">
+          <button class="nav-item panel-tab" data-env="management" data-panel="settings" type="button" title="系统设置">
+            <svg><use href="#icon-settings"></use></svg>
+            <span class="nav-text">系统设置</span>
+            <small>解算器与模型</small>
+          </button>
+          <button class="nav-item panel-tab" data-env="management" data-panel="logs" type="button" title="系统日志">
             <svg><use href="#icon-log"></use></svg>
             <span class="nav-text">系统日志</span>
             <small>任务与失败</small>
@@ -77,6 +153,15 @@
             <h2 id="workspaceTitle">AAO 工艺流程</h2>
           </div>
           <div class="topbar-actions">
+            <div class="environment-switcher">
+              <span id="environmentBadge">模拟实验室</span>
+              <select id="environmentSelect" aria-label="切换工作环境">
+                <option value="realtime">实时仿真</option>
+                <option value="lab">模拟实验室</option>
+                <option value="management">模型管理</option>
+              </select>
+              <button id="logoutButton" class="secondary-button" type="button">退出登录</button>
+            </div>
             <div class="simulation-status" aria-live="polite">
               <span id="statusBadge" class="status-badge">待运行</span>
               <div class="progress-row" aria-label="计算进度">
@@ -91,7 +176,60 @@
           </div>
         </header>
 
-        <section class="canvas-panel workspace-page active" data-page="process" aria-label="AAO 工艺流程图">
+        <section class="workspace-page stack-page scenario-library-page active" data-page="scenarioLibrary" aria-label="方案库">
+          <div class="library-hero">
+            <div>
+              <p class="eyebrow">SIMULATION LAB</p>
+              <h2>方案库</h2>
+              <p>方案存放在本地 SQLite 项目库中。每个方案保存一套参数和可选 CSV 历史边界，打开后可进入方案编辑或直接运行。</p>
+            </div>
+            <div class="library-actions">
+              <select id="libraryProjectSelect" aria-label="当前方案"></select>
+              <button id="libraryNewProject" class="secondary-button" type="button">新建方案</button>
+              <button id="openScenarioEditor" class="primary-button" type="button">打开方案编辑</button>
+            </div>
+          </div>
+          <div class="scenario-grid">
+            <article class="scenario-card active">
+              <div>
+                <span class="scenario-tag">当前</span>
+                <h3>Default Project</h3>
+                <p>默认 AAO 方案，适合快速验证进水、池体、控制边界和解算器设置。</p>
+              </div>
+              <dl>
+                <div><dt>边界</dt><dd>手动 / CSV</dd></div>
+                <div><dt>解算器</dt><dd id="librarySolverLabel">RK4 v2</dd></div>
+                <div><dt>状态</dt><dd id="libraryScenarioStatus">可运行</dd></div>
+              </dl>
+            </article>
+            <article class="scenario-card">
+              <div>
+                <span class="scenario-tag muted">模板</span>
+                <h3>雨季高负荷</h3>
+                <p>用于后续保存高流量、高 COD 冲击负荷下的方案快照。</p>
+              </div>
+              <dl>
+                <div><dt>边界</dt><dd>从实时复制</dd></div>
+                <div><dt>输出</dt><dd>方案结果</dd></div>
+                <div><dt>状态</dt><dd>待创建</dd></div>
+              </dl>
+            </article>
+            <article class="scenario-card">
+              <div>
+                <span class="scenario-tag muted">模板</span>
+                <h3>低 DO 对照</h3>
+                <p>用于比较好氧池 DO 设定变化对氨氮、硝态氮和 MLSS 的影响。</p>
+              </div>
+              <dl>
+                <div><dt>变量</dt><dd>DO set</dd></div>
+                <div><dt>输出</dt><dd>对比曲线</dd></div>
+                <div><dt>状态</dt><dd>待创建</dd></div>
+              </dl>
+            </article>
+          </div>
+        </section>
+
+        <section class="canvas-panel workspace-page" data-page="process" aria-label="AAO 工艺流程图">
         <div class="panel-heading">
           <div>
             <h2>工艺流程</h2>
@@ -142,11 +280,60 @@
         </div>
       </section>
 
+      <section class="workspace-page stack-page settings-page" data-page="settings" aria-label="系统设置">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">SYSTEM SETTINGS</p>
+            <h2>后台计算配置</h2>
+            <p>全局解算器、模型参数和实时后台配置集中放在这里，避免和方案结果、实时结果展示混在一起。</p>
+          </div>
+        </div>
+        <div class="settings-grid">
+          <article class="settings-card">
+            <div class="settings-card-head">
+              <svg><use href="#icon-settings"></use></svg>
+              <div>
+                <h3>解算器配置</h3>
+                <p>控制方案仿真和实时推进使用的计算引擎、误差容限和内部步长。</p>
+              </div>
+            </div>
+            <dl id="settingsSolverSummary"></dl>
+            <button id="openSolverSettings" class="secondary-button" type="button">编辑解算器参数</button>
+          </article>
+          <article class="settings-card">
+            <div class="settings-card-head">
+              <svg><use href="#icon-model"></use></svg>
+              <div>
+                <h3>模型参数</h3>
+                <p>ASM1 动力学参数、二沉池层数和 Takacs 沉降参数。</p>
+              </div>
+            </div>
+            <dl id="settingsModelSummary"></dl>
+            <button id="openModelSettings" class="secondary-button" type="button">编辑模型参数</button>
+          </article>
+          <article class="settings-card">
+            <div class="settings-card-head">
+              <svg><use href="#icon-clock"></use></svg>
+              <div>
+                <h3>实时后台</h3>
+                <p>Mock 数据源、实时推进间隔和后台任务状态。</p>
+              </div>
+            </div>
+            <div id="settingsMockSummary" class="mock-summary"></div>
+            <div class="realtime-actions">
+              <button id="settingsStartMock" class="secondary-button" type="button">启动 Mock</button>
+              <button id="settingsStopMock" class="secondary-button" type="button">停止 Mock</button>
+              <button id="settingsRefreshMock" class="secondary-button" type="button">刷新状态</button>
+            </div>
+          </article>
+        </div>
+      </section>
+
       <section class="workspace-page stack-page" data-page="cleaning" aria-label="在线数据清洗">
         <div class="panel-heading">
           <div>
             <h2>在线数据清洗</h2>
-            <p>所有在线边界数据先经过质量检查和清洗，再进入实时模型计算。</p>
+            <p>所有在线边界数据先经过质量诊断、清洗和留痕，再进入动态模型。</p>
           </div>
           <div class="panel-tools">
             <button id="refreshDataCleaning" class="secondary-button icon-text-button" type="button">
@@ -165,7 +352,7 @@
             <section class="tool-section cleaning-main">
               <div class="tool-section-heading">
                 <strong>在线点位状态</strong>
-                <span>最新边界</span>
+                <span>最近 12 小时</span>
               </div>
               <div class="table-scroll">
                 <table class="data-table cleaning-table">
@@ -211,11 +398,11 @@
           <section class="tool-section">
             <div class="tool-section-heading">
               <strong>最近 12 小时质量趋势</strong>
-              <span>按点位统计</span>
+              <span>清洗后才进入模型边界</span>
             </div>
             <div id="cleaningTrend" class="cleaning-trend"></div>
           </section>
-          <p id="dataCleaningStatus">尚未加载在线数据清洗状态。</p>
+          <p id="dataCleaningStatus" class="data-cleaning-status-line">尚未加载在线数据清洗状态。</p>
         </div>
       </section>
 
@@ -338,7 +525,7 @@
       <section class="results-panel workspace-page" data-page="results" aria-label="仿真结果">
         <div class="panel-heading">
           <div>
-            <h2>仿真结果</h2>
+            <h2 id="resultPanelTitle">仿真结果</h2>
             <p id="resultSummary">点击运行后显示出水水质；点击流程单体后可选择指标查看浓度变化。</p>
           </div>
           <div class="metric-strip">
@@ -397,6 +584,23 @@
             <div id="chartTooltip" class="chart-tooltip" hidden></div>
           </div>
           <div id="legend" class="legend"></div>
+          <section id="aiAnalysisPanel" class="ai-analysis-panel" aria-label="AI 结果分析建议">
+            <div class="ai-analysis-head">
+              <div>
+                <p class="eyebrow">AI ADVISOR</p>
+                <h3>AI 结果分析与建议</h3>
+                <p>基于当前仿真结果生成工艺表现总结、风险判断和调整建议。API Key 仅由后端本地环境读取。</p>
+              </div>
+              <div class="ai-analysis-actions">
+                <span id="aiAnalysisMeta">DeepSeek · 本地密钥</span>
+                <button id="runAiAnalysis" class="secondary-button" type="button">生成 AI 建议</button>
+              </div>
+            </div>
+            <div id="aiAnalysisStatus" class="ai-analysis-status">运行方案后可生成 AI 分析。</div>
+            <div id="aiAnalysisOutput" class="ai-analysis-output">
+              <p>暂无 AI 建议。</p>
+            </div>
+          </section>
         </div>
 
         <div id="realtimeTools" class="realtime-tools" hidden>

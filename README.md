@@ -54,6 +54,24 @@ X-API-Key: <token>
 
 See `docs/PRODUCTION_READINESS.md` before exposing the service beyond localhost.
 
+## Local AI Analysis Key
+
+The result page can call a backend AI proxy to generate simulation analysis and operating suggestions. The frontend never stores or sends a third-party API key. Configure the key only in the backend runtime environment:
+
+```bash
+export DEEPSEEK_API_KEY="..."
+```
+
+For local development, you can also create `backend/.env`:
+
+```text
+DEEPSEEK_API_KEY=...
+DEEPSEEK_MODEL=deepseek-chat
+DEEPSEEK_API_URL=https://api.deepseek.com/chat/completions
+```
+
+`.env` and `backend/.env` are ignored by Git. The status endpoint `GET /api/ai/status` reports only whether a key is configured; it never returns the key.
+
 ## How To Run
 
 Start the backend first:
