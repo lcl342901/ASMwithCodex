@@ -156,3 +156,14 @@ class CalibrationStageRunRequest(BaseModel):
     stepFraction: float = 0.1
     useBsm1Mapping: bool = False
     useBsm1Layout: bool = False
+
+
+class HistoricalReplayRequest(BaseModel):
+    projectId: Optional[str] = "default"
+    name: str = ""
+    saveRun: bool = False
+    params: dict[str, Any] = Field(default_factory=dict)
+    csvText: str = ""
+    csvFileName: str = ""
+    observations: list[dict[str, Any]] = Field(default_factory=list)
+    targets: list[str] = Field(default_factory=list)

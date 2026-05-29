@@ -473,6 +473,21 @@
           </div>
           <div class="tool-section">
             <div class="tool-section-heading">
+              <strong>历史回放</strong>
+              <span>边界 CSV + 实测对比</span>
+            </div>
+            <label class="file-picker compact-file">
+              <span>上传边界 CSV</span>
+              <input id="replayBoundaryFileInput" type="file" accept=".csv,text/csv" />
+            </label>
+            <div class="realtime-actions">
+              <button id="useProjectCsvForReplay" class="secondary-button" type="button">使用方案 CSV</button>
+              <button id="runHistoricalReplay" class="secondary-button" type="button">运行历史回放</button>
+            </div>
+            <p id="historicalReplayStatus">尚未选择边界 CSV。可上传历史边界，或使用当前方案保存的 CSV。</p>
+          </div>
+          <div class="tool-section">
+            <div class="tool-section-heading">
               <strong>校准任务</strong>
               <span>当前项目</span>
             </div>

@@ -266,6 +266,14 @@ Set `saveRun: true` in `/api/calibration/optimize` to archive the request and re
 
 Observation CSV files in the calibration workspace should include a time column (`time`, `day`, `timestamp`, etc.) plus one or more effluent target columns such as `effNh4`, `effCod`, `effNo3`, `effTn`, `effTss`, or `BOD5`. When observation data is loaded, the frontend uses those rows as calibration targets; otherwise it falls back to a built-in NH4 quick-check target.
 
+P11.3 adds historical replay calibration:
+
+```http
+POST /api/calibration/historical-replay
+```
+
+The request combines a historical boundary CSV (`csvText`) and measured effluent observations (`observations`). The backend runs the model in a replay sandbox, compares predicted effluent against observations, and returns per-metric `MAE`, `RMSE`, bias, maximum absolute error, comparison rows, and calibration suggestions. Historical replay does not update realtime model state. Set `saveRun: true` to archive the replay report in the project calibration run list.
+
 For a closer BSM1 structural experiment, `POST /api/simulate` also accepts:
 
 ```json

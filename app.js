@@ -76,6 +76,10 @@ const exportCalibrationReport = document.getElementById("exportCalibrationReport
 const calibrationStageSelect = document.getElementById("calibrationStageSelect");
 const calibrationObservationFileInput = document.getElementById("calibrationObservationFileInput");
 const clearCalibrationObservations = document.getElementById("clearCalibrationObservations");
+const replayBoundaryFileInput = document.getElementById("replayBoundaryFileInput");
+const useProjectCsvForReplay = document.getElementById("useProjectCsvForReplay");
+const runHistoricalReplay = document.getElementById("runHistoricalReplay");
+const historicalReplayStatus = document.getElementById("historicalReplayStatus");
 const calibrationObservationStatus = document.getElementById("calibrationObservationStatus");
 const calibrationStatus = document.getElementById("calibrationStatus");
 const calibrationSummary = document.getElementById("calibrationSummary");
@@ -345,6 +349,8 @@ let csvText = "";
 let calibrationObservations = [];
 let calibrationObservationFileName = "";
 let calibrationObservationTargets = [];
+let replayBoundaryCsvText = "";
+let replayBoundaryCsvFileName = "";
 let calibrationStages = [];
 let lastCalibrationReport = null;
 let progressTimer = null;
@@ -1280,6 +1286,11 @@ function updateCalibrationObservationStatus(message, isError = false) {
   calibrationObservationStatus.classList.toggle("error", isError);
 }
 
+function updateHistoricalReplayStatus(message, isError = false) {
+  historicalReplayStatus.textContent = message;
+  historicalReplayStatus.classList.toggle("error", isError);
+}
+
 function renderCalibrationSummary(result) {
   if (!result) {
     calibrationSummary.innerHTML = "";
@@ -1314,6 +1325,72 @@ function renderCalibrationSummary(result) {
       <table class="calibration-report-table">
         <thead>
           <tr><th>指标</th><th>时间</th><th>观测</th><th>初始</th><th>校准后</th><th>误差改善</th></tr>
+        </thead>
+        <tbody>${comparisonRows}</tbody>
+      </table>
+    ` : ""}
+  `;
+}
+
+function renderHistoricalReplayReport(report) {
+  lastCalibrationReport = { type: "historical_replay", generatedAt: new Date().toISOString(), projectId: activeProjectId, report };
+  const metricRows = (report.metrics || [])
+    .map((row) => `
+      <tr>
+        <td>${escapeHtml(row.label || row.metric)}</td>
+        <td>${row.count || 0}</td>
+        <td>${formatChartValue(row.mae)} ${escapeHtml(row.unit || "")}</td>
+        <td>${formatChartValue(row.rmse)} ${escapeHtml(row.unit || "")}</td>
+        <td>${formatChartValue(row.bias)} ${escapeHtml(row.unit || "")}</td>
+        <td>${formatChartValue(row.maxAbsError)} ${escapeHtml(row.unit || "")}</td>
+      </tr>
+    `)
+    .join("");
+  const suggestionRows = (report.suggestions || [])
+    .map((item) => `
+      <article class="report-card ${escapeHtml(item.severity || "info")}">
+        <strong>${escapeHtml(item.title || item.metric || "建议")}</strong>
+        <p>${escapeHtml(item.reason || "")}</p>
+        <span>${escapeHtml(item.nextStep || "")}</span>
+      </article>
+    `)
+    .join("");
+  const comparisonRows = (report.comparisonRows || [])
+    .slice(0, 10)
+    .map((row) => `
+      <tr>
+        <td>${formatChartValue(row.time)}</td>
+        <td>${escapeHtml(row.metric)}</td>
+        <td>${formatChartValue(row.observed)}</td>
+        <td>${formatChartValue(row.predicted)}</td>
+        <td>${formatChartValue(row.residual)}</td>
+      </tr>
+    `)
+    .join("");
+  calibrationSummary.innerHTML = `
+    <div class="report-narrative">
+      <strong>历史回放结论</strong>
+      <p>使用 ${escapeHtml(report.csvFileName || "边界 CSV")} 驱动模型，匹配 ${report.matchedCount || 0} 个观测点，综合误差 ${formatChartValue(report.objective)}。本次回放不修改实时模型状态。</p>
+    </div>
+    <div><span>方法</span><strong>${escapeHtml(report.method || "historical_replay")}</strong></div>
+    <div><span>观测数</span><strong>${report.observationCount || 0}</strong></div>
+    <div><span>匹配点</span><strong>${report.matchedCount || 0}</strong></div>
+    <div><span>指标</span><strong>${escapeHtml((report.targets || []).join(", ") || "--")}</strong></div>
+    <div><span>末端时间</span><strong>${formatChartValue(report.simulation?.lastTime)} d</strong></div>
+    <div><span>耗时</span><strong>${formatChartValue(report.durationMs)} ms</strong></div>
+    ${metricRows ? `
+      <table class="calibration-report-table">
+        <thead>
+          <tr><th>指标</th><th>点数</th><th>MAE</th><th>RMSE</th><th>Bias</th><th>最大误差</th></tr>
+        </thead>
+        <tbody>${metricRows}</tbody>
+      </table>
+    ` : ""}
+    ${suggestionRows ? `<div class="report-card-grid">${suggestionRows}</div>` : ""}
+    ${comparisonRows ? `
+      <table class="calibration-report-table">
+        <thead>
+          <tr><th>时间 d</th><th>指标</th><th>实测</th><th>预测</th><th>残差</th></tr>
         </thead>
         <tbody>${comparisonRows}</tbody>
       </table>
@@ -1490,6 +1567,46 @@ async function runQuickNh4Calibration() {
     await refreshProjectCalibrationRuns();
   } catch (error) {
     updateCalibrationStatus(`校准失败：${error.message}`, true);
+  }
+}
+
+async function runHistoricalReplayWorkflow() {
+  const boundaryText = replayBoundaryCsvText.trim() ? replayBoundaryCsvText : csvText;
+  const boundaryName = replayBoundaryCsvText.trim() ? replayBoundaryCsvFileName : csvFileName;
+  if (!boundaryText.trim()) {
+    updateHistoricalReplayStatus("历史回放需要边界 CSV。请上传边界 CSV，或先在方案中保存 CSV。", true);
+    return;
+  }
+  if (!calibrationObservations.length) {
+    updateHistoricalReplayStatus("历史回放需要观测 CSV。请先上传出水实测观测数据。", true);
+    return;
+  }
+  const observationHorizon = Math.max(...calibrationObservations.map((row) => row.time).filter(Number.isFinite));
+  updateHistoricalReplayStatus("历史回放计算中...");
+  try {
+    const report = await calibrationRequest("/historical-replay", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId: activeProjectId,
+        name: `Historical replay: ${boundaryName || "boundary CSV"}`,
+        saveRun: true,
+        params: {
+          ...params,
+          simulationDays: Math.max(params.simulationDays || 0, observationHorizon || 0),
+          outputIntervalHours: Math.min(params.outputIntervalHours || 1, 1),
+        },
+        csvText: boundaryText,
+        csvFileName: boundaryName || "historical-boundary.csv",
+        observations: calibrationObservations,
+        targets: calibrationObservationTargets,
+      }),
+    });
+    renderHistoricalReplayReport(report);
+    updateHistoricalReplayStatus(`历史回放完成：匹配 ${report.matchedCount || 0} 个观测点，综合误差 ${formatChartValue(report.objective)}。`);
+    await refreshProjectCalibrationRuns();
+  } catch (error) {
+    updateHistoricalReplayStatus(`历史回放失败：${error.message}`, true);
   }
 }
 
@@ -5329,6 +5446,19 @@ runBsm1CalibrationReport.addEventListener("click", async () => {
 refreshCalibrationRuns.addEventListener("click", async () => {
   await refreshProjectCalibrationRuns();
 });
+runHistoricalReplay.addEventListener("click", async () => {
+  await runHistoricalReplayWorkflow();
+});
+useProjectCsvForReplay.addEventListener("click", () => {
+  if (!csvText.trim()) {
+    updateHistoricalReplayStatus("当前方案没有保存 CSV。请先在方案编辑中上传并保存，或直接上传边界 CSV。", true);
+    return;
+  }
+  replayBoundaryCsvText = "";
+  replayBoundaryCsvFileName = "";
+  replayBoundaryFileInput.value = "";
+  updateHistoricalReplayStatus(`已选择当前方案 CSV：${csvFileName || "历史边界"}。`);
+});
 exportCalibrationReport.addEventListener("click", exportLastCalibrationReport);
 refreshModelEvaluation.addEventListener("click", () => refreshModelEvaluationPanel());
 compareBsm1Reference.addEventListener("click", () => refreshModelEvaluationPanel({ compareReference: true }));
@@ -5378,6 +5508,21 @@ calibrationObservationFileInput.addEventListener("change", async () => {
     calibrationObservationFileName = "";
     calibrationObservationFileInput.value = "";
     updateCalibrationObservationStatus(`观测 CSV 解析失败：${error.message}`, true);
+  }
+});
+replayBoundaryFileInput.addEventListener("change", async () => {
+  const file = replayBoundaryFileInput.files?.[0];
+  if (!file) return;
+  try {
+    replayBoundaryCsvText = await file.text();
+    replayBoundaryCsvFileName = file.name;
+    const records = normalizeCsvRecords(replayBoundaryCsvText);
+    updateHistoricalReplayStatus(`已加载 ${file.name}：${records.length} 条历史边界记录。`);
+  } catch (error) {
+    replayBoundaryCsvText = "";
+    replayBoundaryCsvFileName = "";
+    replayBoundaryFileInput.value = "";
+    updateHistoricalReplayStatus(`边界 CSV 解析失败：${error.message}`, true);
   }
 });
 clearCalibrationObservations.addEventListener("click", () => {

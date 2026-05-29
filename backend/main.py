@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .ai_analysis import analyze_result, chat_with_deepseek, deepseek_config
-from .calibration import bsm1_calibration_report, bsm1_mapping_report, calibration_optimize, calibration_stage_configs, run_calibration_stage
+from .calibration import bsm1_calibration_report, bsm1_mapping_report, calibration_optimize, calibration_stage_configs, historical_replay_report, run_calibration_stage
 from .engine_runner import normalize_engine_version, simulate_with_engine
 from .model_trust import (
     assess_result_credibility,
@@ -77,6 +77,7 @@ from .schemas import (
     Bsm1CalibrationReportRequest,
     Bsm1MappingRequest,
     CalibrationStageRunRequest,
+    HistoricalReplayRequest,
     CleaningSettingsRequest,
     CalibrationOptimizeRequest,
     InitialConditionRequest,
@@ -633,6 +634,47 @@ def calibration_stage_run_endpoint(request: CalibrationStageRunRequest) -> dict:
         return payload
     except ValueError as exc:
         insert_calculation_log("calibration_stage_run", "failed", str(exc), {}, (perf_counter() - started) * 1000, request.projectId)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/calibration/historical-replay")
+def calibration_historical_replay_endpoint(request: HistoricalReplayRequest) -> dict:
+    started = perf_counter()
+    try:
+        request_payload = request.model_dump()
+        result = historical_replay_report(
+            params=request.params,
+            csv_text=request.csvText,
+            csv_file_name=request.csvFileName,
+            observations=request.observations,
+            targets=request.targets,
+        )
+        insert_calculation_log(
+            "historical_replay",
+            "success",
+            "Historical replay completed.",
+            {
+                "projectId": request.projectId,
+                "csvFileName": request.csvFileName,
+                "objective": result["objective"],
+                "observationCount": result["observationCount"],
+                "targetCount": len(result["targets"]),
+            },
+            (perf_counter() - started) * 1000,
+            request.projectId,
+        )
+        if request.saveRun:
+            saved = insert_calibration_run(
+                request.projectId or "default",
+                request.name or "Historical replay",
+                result["status"],
+                request_payload,
+                result,
+            )
+            result["savedRun"] = {"id": saved["id"], "name": saved["name"], "projectId": saved["projectId"]}
+        return result
+    except ValueError as exc:
+        insert_calculation_log("historical_replay", "failed", str(exc), {}, (perf_counter() - started) * 1000, request.projectId)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 

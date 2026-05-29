@@ -212,6 +212,161 @@ def observation_objective(result: dict[str, Any], observations: list[dict[str, A
     }
 
 
+def infer_observation_targets(observations: list[dict[str, Any]], targets: list[str] | None = None) -> list[str]:
+    selected = [target for target in (targets or []) if target in CALIBRATION_TARGETS or target == "bod5"]
+    if selected:
+        return selected
+    candidates = list(CALIBRATION_TARGETS.keys()) + ["bod5"]
+    inferred = [
+        target
+        for target in candidates
+        if any(finite_float(row.get(target)) is not None for row in observations)
+    ]
+    return inferred
+
+
+def metric_label(metric: str) -> str:
+    if metric == "bod5":
+        return "Effluent BOD5"
+    return CALIBRATION_TARGETS.get(metric, {}).get("label", metric)
+
+
+def metric_unit(metric: str) -> str:
+    if metric == "bod5":
+        return "g/m3"
+    return CALIBRATION_TARGETS.get(metric, {}).get("unit", "")
+
+
+def metric_error_summary(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    metrics = sorted({error["metric"] for error in errors})
+    for metric in metrics:
+        metric_errors = [error for error in errors if error["metric"] == metric]
+        residuals = [float(error["residual"]) for error in metric_errors]
+        abs_errors = [abs(value) for value in residuals]
+        if not residuals:
+            continue
+        rows.append(
+            {
+                "metric": metric,
+                "label": metric_label(metric),
+                "unit": metric_unit(metric),
+                "count": len(residuals),
+                "mae": sum(abs_errors) / len(abs_errors),
+                "rmse": math.sqrt(sum(value * value for value in residuals) / len(residuals)),
+                "bias": sum(residuals) / len(residuals),
+                "maxAbsError": max(abs_errors),
+            }
+        )
+    return rows
+
+
+def replay_suggestions(metric_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    suggestions: list[dict[str, Any]] = []
+    for row in metric_rows:
+        bias = row.get("bias") or 0.0
+        mae = row.get("mae") or 0.0
+        direction = "模型预测偏高" if bias > 0 else "模型预测偏低"
+        severity = "info" if mae < 1 else "warning" if mae < 5 else "critical"
+        metric = row["metric"]
+        if metric == "effNh4":
+            suggestions.append(
+                {
+                    "metric": metric,
+                    "severity": severity,
+                    "title": "复核硝化状态与参数",
+                    "reason": f"NH4-N 历史回放平均绝对误差 {mae:.2f} {row['unit']}，表现为{direction}。",
+                    "nextStep": "优先检查 DO、SRT、MLSS 与 muA/kNH/kOA 参数，再进入硝化阶段校准。",
+                }
+            )
+        elif metric in {"effTn", "effNo3"}:
+            suggestions.append(
+                {
+                    "metric": metric,
+                    "severity": severity,
+                    "title": "复核反硝化与内回流",
+                    "reason": f"{row['label']} 历史回放 MAE 为 {mae:.2f} {row['unit']}，表现为{direction}。",
+                    "nextStep": "检查内回流、缺氧池 NO3 与进水可利用碳源，必要时校准 etaG/kNO/kS。",
+                }
+            )
+        elif metric == "effTss":
+            suggestions.append(
+                {
+                    "metric": metric,
+                    "severity": severity,
+                    "title": "复核二沉池和排泥",
+                    "reason": f"TSS 历史回放 MAE 为 {mae:.2f} {row['unit']}，表现为{direction}。",
+                    "nextStep": "检查二沉池沉降参数、截留效率、WAS 排泥量和 MLSS，再校准 Takacs 参数。",
+                }
+            )
+        elif metric in {"effCod", "bod5"}:
+            suggestions.append(
+                {
+                    "metric": metric,
+                    "severity": severity,
+                    "title": "复核 COD 组分与水解",
+                    "reason": f"{row['label']} 历史回放 MAE 为 {mae:.2f} {row['unit']}，表现为{direction}。",
+                    "nextStep": "检查进水 COD 组分比例、惰性组分和水解参数 kH，再考虑 COD/BOD 阶段校准。",
+                }
+            )
+    if not suggestions:
+        suggestions.append(
+            {
+                "metric": "overall",
+                "severity": "info",
+                "title": "历史回放需要更多观测点",
+                "reason": "当前观测数据不足，尚不能形成稳定的校准判断。",
+                "nextStep": "补充覆盖多个负荷波动周期的历史边界和实测出水数据。",
+            }
+        )
+    return suggestions
+
+
+def historical_replay_report(
+    params: dict[str, Any] | None = None,
+    csv_text: str = "",
+    csv_file_name: str = "",
+    observations: list[dict[str, Any]] | None = None,
+    targets: list[str] | None = None,
+) -> dict[str, Any]:
+    started = perf_counter()
+    rows = observations or []
+    if not csv_text.strip():
+        raise ValueError("历史回放需要边界 CSV 数据。")
+    if not rows:
+        raise ValueError("历史回放需要实测出水观测数据。")
+    selected_targets = infer_observation_targets(rows, targets)
+    if not selected_targets:
+        raise ValueError("观测数据中没有识别到可对比的出水指标。")
+    validate_calibration_inputs([], selected_targets)
+    observation_horizon = max((finite_float(row.get("time", row.get("day"))) or 0.0) for row in rows)
+    replay_params = sanitize_params(params)
+    replay_params["simulationDays"] = max(float(replay_params.get("simulationDays", 0)), observation_horizon)
+    result = simulate_with_engine(replay_params, csv_text=csv_text, csv_file_name=csv_file_name)
+    objective = observation_objective(result, rows, selected_targets)
+    metric_rows = metric_error_summary(objective["errors"])
+    return {
+        "status": "completed",
+        "method": "historical_replay",
+        "csvFileName": csv_file_name,
+        "targets": selected_targets,
+        "observationCount": len(rows),
+        "matchedCount": objective["count"],
+        "objective": objective["objective"],
+        "metrics": metric_rows,
+        "comparisonRows": objective["errors"][-200:],
+        "suggestions": replay_suggestions(metric_rows),
+        "simulation": {
+            "engineVersion": result.get("engineVersion"),
+            "mode": result.get("mode"),
+            "pointCount": len(result.get("time", [])),
+            "lastTime": result.get("time", [None])[-1] if result.get("time") else None,
+            "warnings": result.get("warnings", []),
+        },
+        "durationMs": (perf_counter() - started) * 1000,
+    }
+
+
 def objective_comparison_rows(initial_objective: dict[str, Any], best_objective: dict[str, Any]) -> list[dict[str, Any]]:
     best_lookup = {
         (error["time"], error["metric"]): error

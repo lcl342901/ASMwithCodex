@@ -12,6 +12,7 @@ from backend.schemas import Bsm1CalibrationReportRequest, Bsm1MappingRequest, Ca
 from backend.solver_benchmark import benchmark_v2_solvers, project_long_horizon_durations, step_consistency_report
 from backend.engine_v2 import clarifier_layer_rhs, continuous_step, hybrid_step, initial_vector_state, pack_state, run_vector_simulation_v2, unpack_state, vector_snapshot
 from backend import realtime
+from backend.calibration import historical_replay_report
 
 
 REQUIRED_KEYS = {
@@ -474,6 +475,26 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(len(summary["current"]["pointScores"]), 6)
         self.assertGreaterEqual(summary["rolling"]["recordCount"], 1)
         self.assertTrue(summary["rolling"]["trend"])
+
+    def test_historical_replay_report_compares_observations(self):
+        csv_text = Path("sample-data.csv").read_text()
+        report = historical_replay_report(
+            params={**DEFAULT_PARAMS, "simulationDays": 2, "outputIntervalHours": 6},
+            csv_text=csv_text,
+            csv_file_name="sample-data.csv",
+            observations=[
+                {"time": 1, "effNh4": 2.5, "effTn": 15},
+                {"time": 2, "effNh4": 2.7, "effTn": 14.5},
+            ],
+            targets=["effNh4", "effTn"],
+        )
+
+        self.assertEqual(report["status"], "completed")
+        self.assertEqual(report["method"], "historical_replay")
+        self.assertEqual(report["observationCount"], 2)
+        self.assertEqual(report["matchedCount"], 4)
+        self.assertEqual({row["metric"] for row in report["metrics"]}, {"effNh4", "effTn"})
+        self.assertTrue(report["suggestions"])
 
     def test_realtime_cleaning_rules_can_disable_checks(self):
         realtime.save_cleaning_settings("default", ["missing_fill"])
