@@ -49,6 +49,12 @@ class RealtimeObservationRequest(BaseModel):
     source: str = "manual"
 
 
+class RealtimeMockObservationRequest(BaseModel):
+    projectId: Optional[str] = "default"
+    source: str = "mock-lab"
+    noiseFraction: float = 0.03
+
+
 class CleaningSettingsRequest(BaseModel):
     projectId: Optional[str] = "default"
     enabledRules: list[str] = Field(default_factory=list)

@@ -86,6 +86,74 @@ BOUNDARY_ALIASES = {
     "WAS_Q": "wasQ",
 }
 REALTIME_BOUNDARY_KEYS = ["influentQ", "influentCod", "influentNh4", "influentNo3", "influentTss", "aerobicDo"]
+DEFAULT_POINT_CONFIGS: list[dict[str, Any]] = [
+    {
+        "pointId": "IN_Q",
+        "name": "进水流量",
+        "modelKey": "influentQ",
+        "unit": "m3/d",
+        "source": "manual/mock/api",
+        "minValue": 1.0,
+        "maxValue": 100000.0,
+        "maxDelayMinutes": 15.0,
+        "maxRateChange": None,
+    },
+    {
+        "pointId": "IN_COD",
+        "name": "进水 COD",
+        "modelKey": "influentCod",
+        "unit": "mg/L",
+        "source": "manual/mock/api",
+        "minValue": 0.0,
+        "maxValue": 2000.0,
+        "maxDelayMinutes": 15.0,
+        "maxRateChange": None,
+    },
+    {
+        "pointId": "IN_NH4",
+        "name": "进水 NH4-N",
+        "modelKey": "influentNh4",
+        "unit": "mg/L",
+        "source": "manual/mock/api",
+        "minValue": 0.0,
+        "maxValue": 200.0,
+        "maxDelayMinutes": 15.0,
+        "maxRateChange": None,
+    },
+    {
+        "pointId": "IN_NO3",
+        "name": "进水 NO3-N",
+        "modelKey": "influentNo3",
+        "unit": "mg/L",
+        "source": "manual/mock/api",
+        "minValue": 0.0,
+        "maxValue": 50.0,
+        "maxDelayMinutes": 15.0,
+        "maxRateChange": None,
+    },
+    {
+        "pointId": "IN_TSS",
+        "name": "进水 TSS",
+        "modelKey": "influentTss",
+        "unit": "mg/L",
+        "source": "manual/mock/api",
+        "minValue": 0.0,
+        "maxValue": 2000.0,
+        "maxDelayMinutes": 15.0,
+        "maxRateChange": None,
+    },
+    {
+        "pointId": "OX_DO",
+        "name": "好氧池 DO",
+        "modelKey": "aerobicDo",
+        "unit": "gO2/m3",
+        "source": "manual/mock/api",
+        "minValue": 0.0,
+        "maxValue": 10.0,
+        "maxDelayMinutes": 15.0,
+        "maxRateChange": None,
+    },
+]
 MUNICIPAL_FORECAST_BOUNDS: dict[str, dict[str, float]] = {
     "influentCod": {"lower": 120.0, "upper": 650.0, "lowFactor": 0.75, "highFactor": 1.25},
     "influentNh4": {"lower": 15.0, "upper": 80.0, "lowFactor": 0.75, "highFactor": 1.25},
@@ -302,11 +370,109 @@ def init_db() -> None:
               source TEXT NOT NULL,
               created_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS realtime_point_configs (
+              project_id TEXT NOT NULL,
+              point_id TEXT NOT NULL,
+              name TEXT NOT NULL,
+              model_key TEXT NOT NULL,
+              unit TEXT NOT NULL,
+              source TEXT NOT NULL,
+              enabled INTEGER NOT NULL DEFAULT 1,
+              min_value REAL,
+              max_value REAL,
+              max_delay_minutes REAL,
+              max_rate_change REAL,
+              updated_at TEXT NOT NULL,
+              PRIMARY KEY (project_id, point_id)
+            );
             """
         )
         ensure_column(conn, "realtime_inputs", "project_id", f"TEXT NOT NULL DEFAULT '{DEFAULT_PROJECT_ID}'")
         ensure_column(conn, "realtime_results", "project_id", f"TEXT NOT NULL DEFAULT '{DEFAULT_PROJECT_ID}'")
         ensure_column(conn, "calculation_logs", "project_id", f"TEXT NOT NULL DEFAULT '{DEFAULT_PROJECT_ID}'")
+
+
+def point_config_from_row(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "projectId": row["project_id"],
+        "pointId": row["point_id"],
+        "name": row["name"],
+        "modelKey": row["model_key"],
+        "unit": row["unit"],
+        "source": row["source"],
+        "enabled": bool(row["enabled"]),
+        "minValue": row["min_value"],
+        "maxValue": row["max_value"],
+        "maxDelayMinutes": row["max_delay_minutes"],
+        "maxRateChange": row["max_rate_change"],
+        "updatedAt": row["updated_at"],
+    }
+
+
+def ensure_default_point_configs(project_id: str | None = None) -> None:
+    resolved_project_id = normalize_project_id(project_id)
+    updated_at = now_iso()
+    with connect() as conn:
+        count = conn.execute(
+            "SELECT COUNT(*) AS count FROM realtime_point_configs WHERE project_id = ?",
+            (resolved_project_id,),
+        ).fetchone()["count"]
+        if count:
+            return
+        for point in DEFAULT_POINT_CONFIGS:
+            conn.execute(
+                """
+                INSERT INTO realtime_point_configs (
+                  project_id, point_id, name, model_key, unit, source, enabled,
+                  min_value, max_value, max_delay_minutes, max_rate_change, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
+                """,
+                (
+                    resolved_project_id,
+                    point["pointId"],
+                    point["name"],
+                    point["modelKey"],
+                    point["unit"],
+                    point["source"],
+                    point["minValue"],
+                    point["maxValue"],
+                    point["maxDelayMinutes"],
+                    point["maxRateChange"],
+                    updated_at,
+                ),
+            )
+
+
+def list_point_configs(project_id: str | None = None) -> dict[str, Any]:
+    init_db()
+    resolved_project_id = normalize_project_id(project_id)
+    ensure_default_point_configs(resolved_project_id)
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM realtime_point_configs
+            WHERE project_id = ?
+            ORDER BY
+              CASE model_key
+                WHEN 'influentQ' THEN 1
+                WHEN 'influentCod' THEN 2
+                WHEN 'influentNh4' THEN 3
+                WHEN 'influentNo3' THEN 4
+                WHEN 'influentTss' THEN 5
+                WHEN 'aerobicDo' THEN 6
+                ELSE 99
+              END,
+              point_id
+            """,
+            (resolved_project_id,),
+        ).fetchall()
+    return {"projectId": resolved_project_id, "points": [point_config_from_row(row) for row in rows]}
+
+
+def point_configs_by_model_key(project_id: str | None = None) -> dict[str, dict[str, Any]]:
+    return {point["modelKey"]: point for point in list_point_configs(project_id)["points"]}
 
 
 def normalize_values(values: dict[str, Any], base_params: dict[str, float]) -> tuple[dict[str, float], list[str]]:
@@ -377,9 +543,11 @@ def assess_realtime_values(
     base_params: dict[str, float],
     quality: dict[str, Any] | None = None,
     project_id: str | None = None,
+    timestamp: str | None = None,
 ) -> dict[str, Any]:
     normalized, parse_warnings = normalize_values(values, base_params)
     cleaning_settings = get_cleaning_settings(project_id)
+    point_configs = list_point_configs(project_id)["points"]
     enabled_rules = set(cleaning_settings["enabledRules"])
     accepted: dict[str, float] = {}
     field_quality: dict[str, dict[str, Any]] = {}
@@ -391,45 +559,109 @@ def assess_realtime_values(
             status = combine_quality_status(status, "warning")
             issues.append({"severity": "warning", "code": "parse_error", "message": warning})
 
-    for key in REALTIME_BOUNDARY_KEYS:
+    record_age_seconds = age_seconds(timestamp)
+    for point in point_configs:
+        key = point["modelKey"]
+        if key not in REALTIME_BOUNDARY_KEYS:
+            continue
         source = "input"
         field_status = "ok"
+        field_issues: list[dict[str, Any]] = []
+        score = 100
         raw_value = normalized.get(key)
         value = raw_value
+
+        if not point["enabled"]:
+            value = base_params[key]
+            source = "disabled"
+            field_status = "idle"
+            score = 0
+            field_issues.append({"code": "disabled", "message": f"{point['name']} 未启用，模型使用当前参数值。"})
+            accepted[key] = float(value)
+            field_quality[key] = {
+                "pointId": point["pointId"],
+                "pointName": point["name"],
+                "modelKey": key,
+                "unit": point["unit"],
+                "enabled": point["enabled"],
+                "status": field_status,
+                "source": source,
+                "value": accepted[key],
+                "rawValue": raw_value,
+                "score": score,
+                "scoreLabel": "停用",
+                "issues": field_issues,
+            }
+            continue
 
         if value is None:
             value = base_params[key]
             source = "fallback_param"
             if "missing_fill" in enabled_rules:
                 field_status = "warning"
-                issues.append({"severity": "warning", "code": "missing_value", "field": key, "message": f"{key} 缺失，使用当前参数值。"})
+                score = min(score, 70)
+                issue = {"severity": "warning", "code": "missing_value", "field": key, "pointId": point["pointId"], "message": f"{point['name']} 缺失，使用当前参数值。"}
+                field_issues.append(issue)
+                issues.append(issue)
         else:
-            limits = PARAM_LIMITS.get(key)
+            minimum = point["minValue"] if point["minValue"] is not None else (PARAM_LIMITS.get(key) or (None, None))[0]
+            maximum = point["maxValue"] if point["maxValue"] is not None else (PARAM_LIMITS.get(key) or (None, None))[1]
+            limits = (minimum, maximum) if minimum is not None and maximum is not None else None
             if limits and "range_check" in enabled_rules:
-                minimum, maximum = limits
                 if value < minimum or value > maximum:
                     clipped = max(minimum, min(maximum, value))
-                    issues.append(
-                        {
-                            "severity": "warning",
-                            "code": "out_of_range_clipped",
-                            "field": key,
-                            "value": value,
-                            "clippedValue": clipped,
-                            "message": f"{key}={value:g} 超出范围，已裁剪到 {clipped:g}。",
-                        }
-                    )
+                    issue = {
+                        "severity": "warning",
+                        "code": "out_of_range_clipped",
+                        "field": key,
+                        "pointId": point["pointId"],
+                        "value": value,
+                        "clippedValue": clipped,
+                        "message": f"{point['name']}={value:g} 超出范围，已裁剪到 {clipped:g}。",
+                    }
+                    field_issues.append(issue)
+                    issues.append(issue)
                     value = clipped
                     source = "clipped_input"
                     field_status = "warning"
+                    score = min(score, 65)
+
+        if "delay_check" in enabled_rules and point["maxDelayMinutes"] and record_age_seconds is not None:
+            if record_age_seconds > float(point["maxDelayMinutes"]) * 60:
+                field_status = "warning" if field_status == "ok" else field_status
+                score = min(score, 75)
+                issue = {
+                    "severity": "warning",
+                    "code": "delay",
+                    "field": key,
+                    "pointId": point["pointId"],
+                    "ageSeconds": record_age_seconds,
+                    "message": f"{point['name']} 距最近时间超过 {point['maxDelayMinutes']:g} 分钟。",
+                }
+                field_issues.append(issue)
+                issues.append(issue)
 
         accepted[key] = float(value)
-        status = combine_quality_status(status, field_status)
+        if field_status in QUALITY_STATUS_ORDER:
+            status = combine_quality_status(status, field_status)
         field_quality[key] = {
+            "pointId": point["pointId"],
+            "pointName": point["name"],
+            "modelKey": key,
+            "unit": point["unit"],
+            "enabled": point["enabled"],
             "status": field_status,
             "source": source,
             "value": accepted[key],
+            "rawValue": raw_value,
+            "score": score,
+            "scoreLabel": "可信" if score >= 90 else "需关注" if score >= 70 else "低可信",
+            "issues": field_issues,
         }
+
+    for key in REALTIME_BOUNDARY_KEYS:
+        if key not in accepted:
+            accepted[key] = float(base_params[key])
 
     source_name = (quality or {}).get("source", "manual")
     source = resolve_source({"source": source_name})
@@ -443,6 +675,7 @@ def assess_realtime_values(
         "fieldQuality": field_quality,
         "issues": issues,
         "acceptedValues": accepted,
+        "pointConfigs": point_configs,
         "cleaningRules": cleaning_settings,
         "rawKeys": sorted(values.keys()),
     }
@@ -458,8 +691,9 @@ def ingest_input(timestamp: str | None, values: dict[str, Any], quality: dict[st
     resolved_project_id = normalize_project_id(project_id)
     saved = load_state(resolved_project_id)
     base_params = sanitize_params(saved["params"] if saved else get_saved_params()["params"])
-    enriched_quality = assess_realtime_values(values, base_params, quality, resolved_project_id)
-    return insert_input(timestamp, values, enriched_quality, resolved_project_id)
+    ts = timestamp or now_iso()
+    enriched_quality = assess_realtime_values(values, base_params, quality, resolved_project_id, ts)
+    return insert_input(ts, values, enriched_quality, resolved_project_id)
 
 
 def insert_input(timestamp: str | None, values: dict[str, Any], quality: dict[str, Any] | None = None, project_id: str | None = None) -> dict[str, Any]:
@@ -748,6 +982,12 @@ OBSERVATION_METRICS = {
     "effTn": {"label": "TN", "unit": "mg/L", "thresholds": {"good": 2.0, "watch": 5.0}},
     "effTss": {"label": "TSS", "unit": "mg/L", "thresholds": {"good": 2.0, "watch": 5.0}},
 }
+MOCK_OBSERVATION_BIAS = {
+    "effCod": 0.01,
+    "effNh4": 0.04,
+    "effTn": 0.02,
+    "effTss": 0.03,
+}
 
 
 def normalize_observation_values(values: dict[str, Any]) -> dict[str, float]:
@@ -790,6 +1030,37 @@ def insert_observation(
         "values": normalized,
         "source": source or "manual",
     }
+
+
+def generate_mock_observation(
+    project_id: str | None = None,
+    source: str = "mock-lab",
+    noise_fraction: float = 0.03,
+) -> dict[str, Any]:
+    latest_result = get_latest_result(project_id)
+    if not latest_result:
+        raise ValueError("No realtime result is available for mock observation generation.")
+    result = latest_result.get("result") or {}
+    bounded_noise = max(0.0, min(float(noise_fraction), 0.25))
+    values: dict[str, float] = {}
+    for metric in OBSERVATION_METRICS:
+        predicted = _finite(result.get(metric), math.nan)
+        if not math.isfinite(predicted):
+            continue
+        bias = MOCK_OBSERVATION_BIAS.get(metric, 0.0)
+        noise = random.uniform(-bounded_noise, bounded_noise)
+        values[metric] = max(0.0, predicted * (1 + bias + noise))
+    if not values:
+        raise ValueError("Latest realtime result does not contain observable effluent metrics.")
+    observation = insert_observation(
+        timestamp=result.get("modelTimestamp") or latest_result.get("timestamp"),
+        values=values,
+        source=source,
+        project_id=project_id,
+    )
+    observation["basisResultId"] = latest_result["id"]
+    observation["noiseFraction"] = bounded_noise
+    return observation
 
 
 def list_observations(project_id: str | None = None, hours: float = 24, limit: int = 200) -> dict[str, Any]:
@@ -849,6 +1120,68 @@ def _trust_grade(mae: float | None, metric: str) -> str:
     return "poor"
 
 
+def _trust_suggestions(metric_summary: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    suggestions: list[dict[str, Any]] = []
+    for row in metric_summary:
+        if not row["count"] or row["grade"] == "good":
+            continue
+        metric = row["metric"]
+        bias = row.get("bias")
+        direction = "模型预测偏高" if bias and bias > 0 else "模型预测偏低"
+        severity = "warning" if row["grade"] == "watch" else "critical"
+        if metric == "effNh4":
+            suggestions.append(
+                {
+                    "metric": metric,
+                    "severity": severity,
+                    "title": "复核硝化能力",
+                    "reason": f"NH4-N 误差已进入{ '关注' if row['grade'] == 'watch' else '校准' }区间，当前表现为{direction}。",
+                    "actions": ["核对好氧池 DO、SRT 和 MLSS", "检查硝化菌参数 muA / bA / kA", "优先用最近 24-72 小时 NH4 实测值做阶段校准"],
+                }
+            )
+        elif metric == "effTn":
+            suggestions.append(
+                {
+                    "metric": metric,
+                    "severity": severity,
+                    "title": "复核反硝化与内回流",
+                    "reason": f"TN 误差偏大，当前表现为{direction}。",
+                    "actions": ["核对内回流比和缺氧区 NO3", "检查可利用碳源和 COD 组分分配", "校准反硝化相关半饱和与水解参数"],
+                }
+            )
+        elif metric == "effTss":
+            suggestions.append(
+                {
+                    "metric": metric,
+                    "severity": severity,
+                    "title": "复核二沉池与排泥",
+                    "reason": f"TSS 误差偏大，当前表现为{direction}。",
+                    "actions": ["核对二沉池截留率、沉降参数和污泥层", "检查 WAS 排泥量与 MLSS", "优先校准 Takacs 沉降参数和截留效率"],
+                }
+            )
+        elif metric == "effCod":
+            suggestions.append(
+                {
+                    "metric": metric,
+                    "severity": severity,
+                    "title": "复核 COD 组分分配",
+                    "reason": f"COD 误差偏大，当前表现为{direction}。",
+                    "actions": ["核对进水 COD 在线仪表和实验室数据", "检查可溶/颗粒/惰性 COD 比例", "校准水解和异养菌相关参数"],
+                }
+            )
+    if not suggestions and any(row["count"] for row in metric_summary):
+        suggestions.append(
+            {
+                "metric": "overall",
+                "severity": "info",
+                "title": "保持观测闭环",
+                "reason": "最近观测与模型结果整体一致，暂不需要触发校准。",
+                "actions": ["继续积累实测出水数据", "保留关键指标的 24-72 小时误差趋势", "当连续偏差扩大时再进入校准中心"],
+            }
+        )
+    return suggestions
+
+
 def realtime_trust(project_id: str | None = None, hours: float = 24, max_lag_hours: float = 2.0) -> dict[str, Any]:
     resolved_project_id = normalize_project_id(project_id)
     history = realtime_history(resolved_project_id, hours, 500)
@@ -857,6 +1190,7 @@ def realtime_trust(project_id: str | None = None, hours: float = 24, max_lag_hou
     comparisons: list[dict[str, Any]] = []
     metric_errors: dict[str, list[float]] = {key: [] for key in OBSERVATION_METRICS}
     metric_biases: dict[str, list[float]] = {key: [] for key in OBSERVATION_METRICS}
+    trend: list[dict[str, Any]] = []
     for observation in observations:
         observation_time = parse_iso(observation.get("timestamp"))
         if observation_time is None:
@@ -881,6 +1215,20 @@ def realtime_trust(project_id: str | None = None, hours: float = 24, max_lag_hou
             }
             metric_errors[metric].append(abs(residual))
             metric_biases[metric].append(residual)
+            trend.append(
+                {
+                    "timestamp": observation["timestamp"],
+                    "resultTime": result.get("modelTimestamp") or matched.get("timestamp"),
+                    "source": observation.get("source"),
+                    "metric": metric,
+                    "label": OBSERVATION_METRICS[metric]["label"],
+                    "unit": OBSERVATION_METRICS[metric]["unit"],
+                    "observed": observed,
+                    "predicted": predicted,
+                    "residual": residual,
+                    "absoluteError": abs(residual),
+                }
+            )
         if metrics:
             comparisons.append(
                 {
@@ -932,6 +1280,8 @@ def realtime_trust(project_id: str | None = None, hours: float = 24, max_lag_hou
         "unmatchedCount": max(0, len(observations) - len(comparisons)),
         "metrics": metric_summary,
         "comparisons": comparisons[-50:],
+        "trend": trend[-200:],
+        "suggestions": _trust_suggestions(metric_summary),
         "statusText": {
             "good": "可信度良好",
             "watch": "需要关注",
@@ -1026,7 +1376,7 @@ def realtime_step(
     if not input_record:
         input_record = insert_input(timestamp, {}, quality, resolved_project_id)
 
-    quality_report = assess_realtime_values(input_record["values"], clean_params, input_record["quality"], resolved_project_id)
+    quality_report = assess_realtime_values(input_record["values"], clean_params, input_record["quality"], resolved_project_id, input_record["timestamp"])
     if input_record.get("id"):
         update_input_quality(input_record["id"], quality_report)
         input_record["quality"] = quality_report

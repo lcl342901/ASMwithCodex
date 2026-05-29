@@ -357,8 +357,10 @@
                   <thead>
                     <tr>
                       <th>点位</th>
+                      <th>模型变量</th>
                       <th>最新值</th>
                       <th>清洗后值</th>
+                      <th>质量分</th>
                       <th>状态</th>
                       <th>异常类型</th>
                       <th>最近时间</th>
@@ -663,6 +665,7 @@
               <div class="realtime-actions">
                 <button id="fillObservationFromLatest" class="secondary-button" type="button">填入最新预测</button>
                 <button id="saveRealtimeObservation" class="secondary-button" type="button">保存实测值</button>
+                <button id="generateMockObservation" class="secondary-button" type="button">生成模拟实测</button>
               </div>
               <p class="tool-note">用于模型可信度检查。真实项目中这里应接入在线仪表或化验室 LIMS 数据。</p>
             </section>
@@ -681,6 +684,22 @@
             </div>
             <div id="trustMetricGrid" class="trust-metric-grid"></div>
           </section>
+          <div class="evaluation-grid">
+            <section class="tool-section">
+              <div class="tool-section-heading">
+                <strong>误差趋势</strong>
+                <span>最近 24 小时</span>
+              </div>
+              <div id="trustTrendChart" class="trust-trend-chart"></div>
+            </section>
+            <section class="tool-section">
+              <div class="tool-section-heading">
+                <strong>校准建议</strong>
+                <span>按误差来源生成</span>
+              </div>
+              <div id="trustSuggestionList" class="trust-suggestion-list"></div>
+            </section>
+          </div>
           <section class="tool-section table-section">
             <div class="tool-section-heading">
               <strong>最近对比记录</strong>

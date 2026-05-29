@@ -45,6 +45,7 @@ from .realtime import (
     clear_calculation_logs,
     get_cleaning_settings,
     get_saved_params,
+    generate_mock_observation,
     ingest_input,
     insert_calculation_log,
     insert_observation,
@@ -52,6 +53,7 @@ from .realtime import (
     list_data_sources,
     list_calculation_logs,
     list_observations,
+    list_point_configs,
     load_simulation_state,
     mock_status,
     realtime_forecast,
@@ -87,6 +89,7 @@ from .schemas import (
     RealtimeForecastRequest,
     RealtimeStepRequest,
     RealtimeMockStartRequest,
+    RealtimeMockObservationRequest,
     RealtimeObservationRequest,
     SimulationRequest,
 )
@@ -924,6 +927,36 @@ def realtime_observations_endpoint(projectId: str = "default", hours: float = 24
     return list_observations(projectId, hours, limit)
 
 
+@app.post("/api/realtime/observations/mock")
+def realtime_mock_observation_endpoint(request: RealtimeMockObservationRequest) -> dict:
+    started = perf_counter()
+    try:
+        result = generate_mock_observation(
+            project_id=request.projectId,
+            source=request.source,
+            noise_fraction=request.noiseFraction,
+        )
+        insert_calculation_log(
+            "realtime_mock_observation",
+            "success",
+            f"Mock observation #{result['id']} generated.",
+            {"observationId": result["id"], "basisResultId": result.get("basisResultId"), "projectId": request.projectId},
+            (perf_counter() - started) * 1000,
+            request.projectId,
+        )
+        return result
+    except ValueError as exc:
+        insert_calculation_log(
+            "realtime_mock_observation",
+            "failed",
+            str(exc),
+            {"projectId": request.projectId},
+            (perf_counter() - started) * 1000,
+            request.projectId,
+        )
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.get("/api/realtime/trust")
 def realtime_trust_endpoint(projectId: str = "default", hours: float = 24, maxLagHours: float = 2.0) -> dict:
     return realtime_trust(projectId, hours, maxLagHours)
@@ -978,6 +1011,11 @@ def realtime_forecast_endpoint(request: RealtimeForecastRequest) -> dict:
 @app.get("/api/realtime/sources")
 def realtime_sources_endpoint() -> dict:
     return list_data_sources()
+
+
+@app.get("/api/realtime/points")
+def realtime_points_endpoint(projectId: str = "default") -> dict:
+    return list_point_configs(projectId)
 
 
 @app.get("/api/realtime/cleaning-settings")

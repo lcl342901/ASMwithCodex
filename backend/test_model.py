@@ -399,6 +399,17 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(nh4_summary["count"], 1)
         self.assertAlmostEqual(nh4_summary["mae"], 0.4)
 
+    def test_mock_observation_feeds_realtime_trust_trend(self):
+        realtime.realtime_step(values={"Q": 10000, "COD": 300, "NH4": 25, "NO3": 0.5, "TSS": 160}, step_hours=0.5)
+
+        observation = realtime.generate_mock_observation(noise_fraction=0)
+        trust = realtime.realtime_trust(hours=12)
+
+        self.assertEqual(observation["source"], "mock-lab")
+        self.assertEqual(trust["matchedCount"], 1)
+        self.assertGreaterEqual(len(trust["trend"]), 1)
+        self.assertGreaterEqual(len(trust["suggestions"]), 1)
+
     def test_realtime_forecast_uses_saved_state_without_advancing_realtime_state(self):
         step = realtime.realtime_step(values={"Q": 10000, "COD": 420, "NH4": 32, "NO3": 0.5, "TSS": 220}, step_hours=0.5)
         before = realtime.latest()["state"]["timestamp"]
@@ -425,6 +436,28 @@ class ModelTest(unittest.TestCase):
         self.assertIn("acceptedValues", record["quality"])
         self.assertTrue(any(issue["code"] == "parse_error" for issue in record["quality"]["issues"]))
         self.assertTrue(any(issue["code"] == "missing_value" for issue in record["quality"]["issues"]))
+
+    def test_realtime_point_configs_default_mapping(self):
+        configs = realtime.list_point_configs("default")
+
+        self.assertEqual(configs["projectId"], "default")
+        self.assertEqual(len(configs["points"]), 6)
+        self.assertEqual(configs["points"][0]["pointId"], "IN_Q")
+        self.assertEqual(configs["points"][0]["modelKey"], "influentQ")
+        self.assertTrue(all(point["enabled"] for point in configs["points"]))
+
+    def test_realtime_quality_report_includes_point_scores(self):
+        record = realtime.ingest_input(
+            None,
+            {"Q": -10, "COD": 420, "NH4": 32, "NO3": 0.5, "TSS": 220, "DO": 2},
+            {"source": "unit-test"},
+        )
+
+        q_field = record["quality"]["fieldQuality"]["influentQ"]
+        self.assertEqual(q_field["pointId"], "IN_Q")
+        self.assertEqual(q_field["pointName"], "进水流量")
+        self.assertLess(q_field["score"], 100)
+        self.assertEqual(record["quality"]["pointConfigs"][0]["modelKey"], "influentQ")
 
     def test_realtime_cleaning_rules_can_disable_checks(self):
         realtime.save_cleaning_settings("default", ["missing_fill"])

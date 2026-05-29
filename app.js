@@ -98,8 +98,11 @@ const trustObservedTss = document.getElementById("trustObservedTss");
 const trustObservationSource = document.getElementById("trustObservationSource");
 const fillObservationFromLatest = document.getElementById("fillObservationFromLatest");
 const saveRealtimeObservation = document.getElementById("saveRealtimeObservation");
+const generateMockObservation = document.getElementById("generateMockObservation");
 const trustSummary = document.getElementById("trustSummary");
 const trustMetricGrid = document.getElementById("trustMetricGrid");
+const trustTrendChart = document.getElementById("trustTrendChart");
+const trustSuggestionList = document.getElementById("trustSuggestionList");
 const trustComparisonRows = document.getElementById("trustComparisonRows");
 const realtimeTrustStatus = document.getElementById("realtimeTrustStatus");
 const dataCleaningTools = document.getElementById("dataCleaningTools");
@@ -3298,6 +3301,81 @@ function trustGradeClass(grade) {
   return "no-data";
 }
 
+const trustMetricColors = {
+  effCod: "#4d8a69",
+  effNh4: "#6f91c5",
+  effTn: "#7b6fc2",
+  effTss: "#b97855",
+};
+
+function renderTrustTrend(trend) {
+  if (!trustTrendChart) return;
+  const rows = (trend || []).filter((row) => Number.isFinite(Number(row.residual)));
+  if (!rows.length) {
+    trustTrendChart.innerHTML = `<div class="empty-state-inline">暂无误差趋势。保存实测值后会显示预测偏差变化。</div>`;
+    return;
+  }
+  const metrics = Array.from(new Set(rows.map((row) => row.metric)));
+  const width = 620;
+  const height = 220;
+  const pad = { left: 54, right: 18, top: 22, bottom: 38 };
+  const timestamps = rows.map((row) => new Date(row.timestamp).getTime()).filter(Number.isFinite);
+  const xMin = Math.min(...timestamps);
+  const xMax = Math.max(...timestamps);
+  const domain = niceYDomain([...rows.map((row) => Number(row.residual)), 0]);
+  const x = (timestamp) => pad.left + ((timestamp - xMin) / Math.max(xMax - xMin, 1)) * (width - pad.left - pad.right);
+  const y = (value) => pad.top + (1 - (value - domain.min) / Math.max(domain.max - domain.min, 1e-9)) * (height - pad.top - pad.bottom);
+  const zeroY = y(0);
+  const paths = metrics
+    .map((metric) => {
+      const metricRows = rows.filter((row) => row.metric === metric);
+      const d = metricRows
+        .map((row, index) => {
+          const timestamp = new Date(row.timestamp).getTime();
+          return `${index ? "L" : "M"} ${x(timestamp).toFixed(1)} ${y(Number(row.residual)).toFixed(1)}`;
+        })
+        .join(" ");
+      const label = metricRows[0]?.label || metric;
+      const color = trustMetricColors[metric] || "#4d8a69";
+      return { metric, label, color, d };
+    })
+    .filter((path) => path.d);
+  const tickValues = [domain.max, (domain.max + domain.min) / 2, domain.min];
+  trustTrendChart.innerHTML = `
+    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
+      <rect width="${width}" height="${height}" fill="#ffffff"></rect>
+      ${tickValues
+        .map((value) => `<line x1="${pad.left}" y1="${y(value)}" x2="${width - pad.right}" y2="${y(value)}" stroke="#e8eee9"></line><text x="${pad.left - 10}" y="${y(value) + 4}" text-anchor="end">${formatChartValue(value)}</text>`)
+        .join("")}
+      <line x1="${pad.left}" y1="${zeroY}" x2="${width - pad.right}" y2="${zeroY}" stroke="#c99b62" stroke-dasharray="5 6"></line>
+      ${paths.map((path) => `<path d="${path.d}" fill="none" stroke="${path.color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path>`).join("")}
+      <text x="${pad.left}" y="${height - 12}">${shortDateTime(rows[0].timestamp)}</text>
+      <text x="${width - pad.right}" y="${height - 12}" text-anchor="end">${shortDateTime(rows[rows.length - 1].timestamp)}</text>
+    </svg>
+    <div class="trust-trend-legend">
+      ${paths.map((path) => `<span><i style="background:${path.color}"></i>${escapeHtml(path.label)}</span>`).join("")}
+    </div>
+  `;
+}
+
+function renderTrustSuggestions(suggestions) {
+  if (!trustSuggestionList) return;
+  const rows = suggestions || [];
+  trustSuggestionList.innerHTML = rows.length
+    ? rows
+        .map(
+          (item) => `
+            <article class="trust-suggestion ${escapeHtml(item.severity || "info")}">
+              <div><strong>${escapeHtml(item.title || "建议")}</strong><span>${escapeHtml(item.severity || "info")}</span></div>
+              <p>${escapeHtml(item.reason || "")}</p>
+              <ul>${(item.actions || []).map((action) => `<li>${escapeHtml(action)}</li>`).join("")}</ul>
+            </article>
+          `,
+        )
+        .join("")
+    : `<div class="empty-state-inline">暂无校准建议。</div>`;
+}
+
 function renderRealtimeTrust(payload) {
   if (!trustSummary || !trustMetricGrid || !trustComparisonRows) return;
   const overall = payload?.overall || "no_data";
@@ -3353,6 +3431,8 @@ function renderRealtimeTrust(payload) {
       });
     });
   trustComparisonRows.innerHTML = rows.length ? rows.join("") : `<tr><td colspan="7">暂无可对比记录。</td></tr>`;
+  renderTrustTrend(payload?.trend || []);
+  renderTrustSuggestions(payload?.suggestions || []);
 }
 
 async function refreshRealtimeTrustPanel() {
@@ -3407,6 +3487,16 @@ async function saveTrustObservation() {
     }),
   });
   realtimeTrustStatus.textContent = `已保存实测记录 #${payload.id}。`;
+  await refreshRealtimeTrustPanel();
+}
+
+async function generateMockTrustObservation() {
+  const payload = await realtimeRequest("/observations/mock", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ projectId: activeProjectId, source: "mock-lab", noiseFraction: 0.03 }),
+  });
+  realtimeTrustStatus.textContent = `已生成模拟实测记录 #${payload.id}。`;
   await refreshRealtimeTrustPanel();
 }
 
@@ -3513,6 +3603,35 @@ const cleaningPointDefinitions = [
   ["aerobicDo", "DO", "溶解氧", "gO2/m3"],
 ];
 
+function cleaningPointMeta(key) {
+  const fallback = cleaningPointDefinitions.find(([modelKey]) => modelKey === key);
+  return {
+    modelKey: key,
+    shortName: fallback?.[1] || key,
+    name: fallback?.[2] || key,
+    unit: fallback?.[3] || "",
+  };
+}
+
+function cleaningPointsFromPayload(pointPayload, quality) {
+  const configured = pointPayload?.points?.length ? pointPayload.points : quality?.pointConfigs || [];
+  if (!configured.length) {
+    return cleaningPointDefinitions.map(([modelKey, shortName, name, unit]) => ({ modelKey, shortName, name, unit, pointId: shortName, enabled: true }));
+  }
+  return configured
+    .filter((point) => point.modelKey)
+    .map((point) => {
+      const meta = cleaningPointMeta(point.modelKey);
+      return {
+        ...meta,
+        ...point,
+        shortName: meta.shortName,
+        name: point.name || meta.name,
+        unit: point.unit || meta.unit,
+      };
+    });
+}
+
 function statusClass(status) {
   if (status === "bad") return "bad";
   if (status === "warning") return "warning";
@@ -3536,6 +3655,7 @@ function fieldIssueType(key, quality) {
 function fieldStrategy(key, quality) {
   const field = quality?.fieldQuality?.[key];
   if (!field) return "等待数据";
+  if (field.source === "disabled") return "点位停用，使用参数值";
   if (field.source === "fallback" || field.source === "fallback_param") return "使用当前参数补齐";
   if (field.source === "clipped_input") return "限幅到允许范围";
   if (field.status === "warning") return "按允许范围裁剪";
@@ -3545,6 +3665,7 @@ function fieldStrategy(key, quality) {
 
 function fieldDisplayStatus(field, quality, key) {
   const issueType = fieldIssueType(key, quality);
+  if (field?.status === "idle") return "停用";
   if (issueType === "越界裁剪") return "裁剪";
   if (issueType === "缺失补齐") return "补齐";
   if (issueType === "延迟") return "延迟";
@@ -3641,17 +3762,23 @@ function renderQualitySummary(target, quality, fallbackText = "暂无数据质�
   `;
 }
 
-function renderDataCleaningDashboard(statusPayload, historyPayload) {
+function renderDataCleaningDashboard(statusPayload, historyPayload, pointPayload) {
   const latestInput = statusPayload?.latestInput || historyPayload?.inputs?.[0] || null;
   const quality = latestInput?.quality || {};
   const fieldQuality = quality.fieldQuality || {};
   const inputs = historyPayload?.inputs || [];
-  const totalPoints = cleaningPointDefinitions.length;
-  const normalPoints = cleaningPointDefinitions.filter(([key]) => fieldQuality[key]?.status === "ok").length;
-  const abnormalPoints = cleaningPointDefinitions.filter(([key]) => ["warning", "bad"].includes(fieldQuality[key]?.status)).length;
+  const pointRows = cleaningPointsFromPayload(pointPayload, quality);
+  const activePoints = pointRows.filter((point) => point.enabled !== false);
+  const totalPoints = activePoints.length;
+  const normalPoints = activePoints.filter((point) => fieldQuality[point.modelKey]?.status === "ok").length;
+  const abnormalPoints = activePoints.filter((point) => ["warning", "bad"].includes(fieldQuality[point.modelKey]?.status)).length;
   const issueTotal = inputs.reduce((sum, record) => sum + qualityIssueCount(record.quality), 0);
-  const correctedFields = cleaningPointDefinitions.filter(([key]) => {
-    const field = fieldQuality[key];
+  const scoreValues = activePoints
+    .map((point) => Number(fieldQuality[point.modelKey]?.score))
+    .filter((score) => Number.isFinite(score));
+  const averageScore = scoreValues.length ? Math.round(scoreValues.reduce((sum, score) => sum + score, 0) / scoreValues.length) : null;
+  const correctedFields = activePoints.filter((point) => {
+    const field = fieldQuality[point.modelKey];
     return field && (field.status !== "ok" || field.source !== "input");
   }).length;
 
@@ -3670,23 +3797,27 @@ function renderDataCleaningDashboard(statusPayload, historyPayload) {
     </div>
     <div class="cleaning-kpi-card">
       <span class="kpi-icon blue"><svg><use href="#icon-clock"></use></svg></span>
-      <p>最近清洗</p><strong>${shortTime(latestInput?.timestamp)}</strong><small>最近边界写入时间</small>
+      <p>平均质量分</p><strong>${averageScore ?? "--"}</strong><small>${latestInput ? `最近写入 ${shortTime(latestInput.timestamp)}` : "等待边界写入"}</small>
     </div>
   `;
 
   cleaningPointRows.innerHTML = latestInput
-    ? cleaningPointDefinitions
-        .map(([key, shortName, label, unit]) => {
+    ? pointRows
+        .map((point) => {
+          const key = point.modelKey;
           const field = fieldQuality[key] || {};
           const rawValue = rawBoundaryValue(latestInput, key);
           const acceptedValue = quality.acceptedValues?.[key] ?? boundaryValue(latestInput, key);
           const issueType = fieldIssueType(key, quality);
           const displayStatus = fieldDisplayStatus(field, quality, key);
+          const score = Number.isFinite(Number(field.score)) ? Number(field.score).toFixed(0) : "--";
           return `
             <tr>
-              <td><span class="point-name"><i class="${statusClass(field.status)}"></i><strong>${shortName}</strong><em>${label}</em></span></td>
-              <td>${formatChartValue(rawValue)} ${unit}</td>
-              <td>${formatChartValue(acceptedValue)} ${unit}</td>
+              <td><span class="point-name"><i class="${statusClass(field.status)}"></i><strong>${escapeHtml(point.shortName)}</strong><em>${escapeHtml(point.name)}</em></span></td>
+              <td><span class="model-key-cell">${escapeHtml(point.pointId || "--")}<em>${escapeHtml(key)}</em></span></td>
+              <td>${formatChartValue(rawValue)} ${escapeHtml(point.unit || "")}</td>
+              <td>${formatChartValue(acceptedValue)} ${escapeHtml(point.unit || "")}</td>
+              <td><span class="score-pill ${statusClass(field.status)}">${score}</span></td>
               <td><span class="quality-pill ${statusClass(field.status)}">${escapeHtml(displayStatus)}</span></td>
               <td>${escapeHtml(issueType)}</td>
               <td>${shortDateTime(latestInput.timestamp)}</td>
@@ -3695,7 +3826,7 @@ function renderDataCleaningDashboard(statusPayload, historyPayload) {
           `;
         })
         .join("")
-    : `<tr><td colspan="7">暂无在线边界输入。可在“仿真结果 -> 实时结果”推送边界或启动 Mock。</td></tr>`;
+    : `<tr><td colspan="9">暂无在线边界输入。可在“实时推进”推送边界或启动 Mock。</td></tr>`;
 
   const issueCounts = { missing_value: 0, out_of_range_clipped: 0, delay: 0, parse_error: 0 };
   inputs.forEach((record) => {
@@ -3745,17 +3876,18 @@ function renderDataCleaningDashboard(statusPayload, historyPayload) {
     : `<article><strong><span class="event-dot ok"></span>暂无异常事件</strong><span>最近 12 小时在线边界未触发清洗问题。</span></article>`;
 
   const trendRecords = inputs.slice(0, 24).reverse();
-  cleaningTrend.innerHTML = cleaningPointDefinitions
-    .map(([key, shortName]) => {
+  cleaningTrend.innerHTML = pointRows
+    .map((point) => {
+      const key = point.modelKey;
       const cells = trendRecords.length
         ? trendRecords
             .map((record) => {
               const cls = fieldTrendClass(record, key);
-              return `<span class="${cls}" title="${shortName} ${shortDateTime(record.timestamp)} ${qualityStatusText(record.quality?.fieldQuality?.[key]?.status)}"></span>`;
+              return `<span class="${cls}" title="${point.shortName} ${shortDateTime(record.timestamp)} ${qualityStatusText(record.quality?.fieldQuality?.[key]?.status)}"></span>`;
             })
             .join("")
         : "<em>暂无数据</em>";
-      return `<div class="trend-row"><strong>${shortName}</strong><div>${cells}</div></div>`;
+      return `<div class="trend-row"><strong>${escapeHtml(point.shortName)}</strong><div>${cells}</div></div>`;
     })
     .join("");
 
@@ -4341,14 +4473,15 @@ async function refreshDataCleaningDashboard() {
     if (refreshDataCleaning) refreshDataCleaning.disabled = true;
     if (label) label.textContent = "刷新中";
     dataCleaningStatus.textContent = "正在加载在线数据清洗仪表板...";
-    const [settingsPayload, statusPayload, historyPayload] = await Promise.all([
+    const [settingsPayload, statusPayload, historyPayload, pointPayload] = await Promise.all([
       realtimeRequest(withProjectQuery("/cleaning-settings")),
       realtimeRequest(withProjectQuery("/status")),
       realtimeRequest(withProjectQuery("/history?hours=12&limit=200")),
+      realtimeRequest(withProjectQuery("/points")),
     ]);
     cleaningSettings = settingsPayload;
     renderCleaningRuleSettings();
-    renderDataCleaningDashboard(statusPayload, historyPayload);
+    renderDataCleaningDashboard(statusPayload, historyPayload, pointPayload);
     if (label) label.textContent = "已刷新";
   } catch (error) {
     dataCleaningStatus.textContent = `在线数据清洗加载失败：${error.message}`;
@@ -5211,6 +5344,14 @@ saveRealtimeObservation?.addEventListener("click", async () => {
     await saveTrustObservation();
   } catch (error) {
     realtimeTrustStatus.textContent = `保存实测值失败：${error.message}`;
+    realtimeTrustStatus.classList.add("error");
+  }
+});
+generateMockObservation?.addEventListener("click", async () => {
+  try {
+    await generateMockTrustObservation();
+  } catch (error) {
+    realtimeTrustStatus.textContent = `生成模拟实测失败：${error.message}`;
     realtimeTrustStatus.classList.add("error");
   }
 });

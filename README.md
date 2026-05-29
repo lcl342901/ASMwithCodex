@@ -296,9 +296,11 @@ POST /api/realtime/step
 GET  /api/realtime/latest
 GET  /api/realtime/history
 POST /api/realtime/observations
+POST /api/realtime/observations/mock
 GET  /api/realtime/observations
 GET  /api/realtime/trust
 GET  /api/realtime/sources
+GET  /api/realtime/points
 GET  /api/realtime/status
 POST /api/realtime/reset
 POST /api/realtime/mock/start
@@ -340,12 +342,18 @@ Realtime operation separates boundary input time from model time:
 Realtime model trust is project-scoped and compares online model outputs with measured effluent observations:
 
 - `POST /api/realtime/observations` stores measured effluent values such as `COD`, `NH4`, `TN`, and `TSS`.
-- `GET /api/realtime/trust?hours=24` matches observations to the nearest model result time, then returns per-metric `MAE`, `RMSE`, bias, and a simple trust grade.
+- `POST /api/realtime/observations/mock` generates a development-only mock lab observation from the latest realtime result, with small bias/noise for demo workflows.
+- `GET /api/realtime/trust?hours=24` matches observations to the nearest model result time, then returns per-metric `MAE`, `RMSE`, bias, a simple trust grade, residual trend rows, and calibration suggestions.
 - The frontend shows this in `实时仿真 > 模型可信度`. This is the online trust loop; the separate `模型管理 > 模型评估` page remains for offline/reference-model screening.
 
 Realtime inputs now carry a normalized quality report. The backend stores the raw payload, then derives `quality.status`,
 per-field `fieldQuality`, `issues`, and `acceptedValues`. Missing boundaries fall back to current model parameters, and
 out-of-range values are clipped to configured parameter limits before the realtime model advances.
+
+Realtime point configuration is stored in SQLite as backend engineering reference data. `GET /api/realtime/points` exposes
+the active mapping from online point IDs to model variables, units, enabled state, and basic quality thresholds. The frontend
+uses this mapping to display point status and quality scores in `在线数据清洗`, but ordinary users do not edit the mapping there.
+Future plant integrations should update this table through deployment/database configuration or a protected admin workflow.
 
 `GET /api/realtime/sources` returns the current realtime source registry (`manual`, `mock`, and a disabled external
 historian placeholder). `GET /api/realtime/status` returns the latest input/result/state, quality status, record counts,
