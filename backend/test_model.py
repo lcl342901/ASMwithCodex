@@ -459,6 +459,22 @@ class ModelTest(unittest.TestCase):
         self.assertLess(q_field["score"], 100)
         self.assertEqual(record["quality"]["pointConfigs"][0]["modelKey"], "influentQ")
 
+    def test_realtime_quality_score_summary_returns_current_and_trend(self):
+        realtime.ingest_input(
+            None,
+            {"Q": 10000, "COD": 420, "NH4": 32, "NO3": 0.5, "TSS": 220, "DO": 2},
+            {"source": "unit-test"},
+        )
+
+        summary = realtime.realtime_quality_score("default", hours=12)
+
+        self.assertEqual(summary["projectId"], "default")
+        self.assertEqual(summary["current"]["score"], 100.0)
+        self.assertEqual(summary["current"]["scoreLabel"], "可信")
+        self.assertEqual(len(summary["current"]["pointScores"]), 6)
+        self.assertGreaterEqual(summary["rolling"]["recordCount"], 1)
+        self.assertTrue(summary["rolling"]["trend"])
+
     def test_realtime_cleaning_rules_can_disable_checks(self):
         realtime.save_cleaning_settings("default", ["missing_fill"])
         record = realtime.ingest_input(

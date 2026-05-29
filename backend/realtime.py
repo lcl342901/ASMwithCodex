@@ -166,7 +166,7 @@ CLEANING_RULES: dict[str, dict[str, str]] = {
     "range_check": {"id": "range_check", "label": "范围校验", "description": "识别并裁剪超出模型允许范围的边界值。"},
     "rate_change": {"id": "rate_change", "label": "变化率校验", "description": "用于识别短时间突变。当前版本仅保存启用状态，检测逻辑待接入。"},
     "missing_fill": {"id": "missing_fill", "label": "缺失补齐", "description": "缺失值使用当前参数兜底，并记录质量事件。"},
-    "delay_check": {"id": "delay_check", "label": "延迟检测", "description": "用于识别长时间未更新点位。当前版本仅保存启用状态，检测逻辑待接入。"},
+    "delay_check": {"id": "delay_check", "label": "延迟检测", "description": "按点位配置的最大延迟阈值识别长时间未更新数据。"},
     "parse_check": {"id": "parse_check", "label": "解析校验", "description": "识别非数值、空值或无法解析的数据。"},
 }
 DEFAULT_ENABLED_CLEANING_RULES = ["range_check", "rate_change", "missing_fill", "delay_check", "parse_check"]
@@ -538,6 +538,47 @@ def combine_quality_status(current: str, candidate: str) -> str:
     return candidate if QUALITY_STATUS_ORDER[candidate] > QUALITY_STATUS_ORDER[current] else current
 
 
+def quality_score_label(score: float | None) -> str:
+    if score is None:
+        return "暂无评分"
+    if score >= 90:
+        return "可信"
+    if score >= 75:
+        return "需关注"
+    if score >= 60:
+        return "低可信"
+    return "不可用"
+
+
+def quality_score_band(score: float | None) -> str:
+    if score is None:
+        return "none"
+    if score >= 90:
+        return "good"
+    if score >= 75:
+        return "watch"
+    if score >= 60:
+        return "poor"
+    return "bad"
+
+
+def quality_score_from_report(quality: dict[str, Any] | None) -> float | None:
+    if not quality:
+        return None
+    scores = [
+        float(field["score"])
+        for field in (quality.get("fieldQuality") or {}).values()
+        if field.get("enabled", True) and isinstance(field.get("score"), (int, float))
+    ]
+    if scores:
+        average = sum(scores) / len(scores)
+        worst_sensitive_score = min(average, min(scores) + 20)
+        return round(worst_sensitive_score, 1)
+    if isinstance(quality.get("score"), (int, float)):
+        return float(quality["score"])
+    return None
+
+
 def assess_realtime_values(
     values: dict[str, Any],
     base_params: dict[str, float],
@@ -576,7 +617,7 @@ def assess_realtime_values(
             source = "disabled"
             field_status = "idle"
             score = 0
-            field_issues.append({"code": "disabled", "message": f"{point['name']} 未启用，模型使用当前参数值。"})
+            field_issues.append({"code": "disabled", "message": f"{point['name']} 未启用，模型使用当前参数值。", "scoreImpact": -100})
             accepted[key] = float(value)
             field_quality[key] = {
                 "pointId": point["pointId"],
@@ -589,7 +630,9 @@ def assess_realtime_values(
                 "value": accepted[key],
                 "rawValue": raw_value,
                 "score": score,
-                "scoreLabel": "停用",
+                "scoreLabel": quality_score_label(score),
+                "scoreBand": quality_score_band(score),
+                "scoreReasons": [issue["message"] for issue in field_issues],
                 "issues": field_issues,
             }
             continue
@@ -600,7 +643,7 @@ def assess_realtime_values(
             if "missing_fill" in enabled_rules:
                 field_status = "warning"
                 score = min(score, 70)
-                issue = {"severity": "warning", "code": "missing_value", "field": key, "pointId": point["pointId"], "message": f"{point['name']} 缺失，使用当前参数值。"}
+                issue = {"severity": "warning", "code": "missing_value", "field": key, "pointId": point["pointId"], "scoreImpact": -30, "message": f"{point['name']} 缺失，使用当前参数值。"}
                 field_issues.append(issue)
                 issues.append(issue)
         else:
@@ -617,6 +660,7 @@ def assess_realtime_values(
                         "pointId": point["pointId"],
                         "value": value,
                         "clippedValue": clipped,
+                        "scoreImpact": -35,
                         "message": f"{point['name']}={value:g} 超出范围，已裁剪到 {clipped:g}。",
                     }
                     field_issues.append(issue)
@@ -636,6 +680,7 @@ def assess_realtime_values(
                     "field": key,
                     "pointId": point["pointId"],
                     "ageSeconds": record_age_seconds,
+                    "scoreImpact": -25,
                     "message": f"{point['name']} 距最近时间超过 {point['maxDelayMinutes']:g} 分钟。",
                 }
                 field_issues.append(issue)
@@ -655,13 +700,17 @@ def assess_realtime_values(
             "value": accepted[key],
             "rawValue": raw_value,
             "score": score,
-            "scoreLabel": "可信" if score >= 90 else "需关注" if score >= 70 else "低可信",
+            "scoreLabel": quality_score_label(score),
+            "scoreBand": quality_score_band(score),
+            "scoreReasons": [issue["message"] for issue in field_issues] or ["数据解析、范围与延迟校验通过。"],
             "issues": field_issues,
         }
 
     for key in REALTIME_BOUNDARY_KEYS:
         if key not in accepted:
             accepted[key] = float(base_params[key])
+
+    overall_score = quality_score_from_report({"fieldQuality": field_quality})
 
     source_name = (quality or {}).get("source", "manual")
     source = resolve_source({"source": source_name})
@@ -672,6 +721,9 @@ def assess_realtime_values(
         "source": source_name,
         "sourceInfo": source,
         "status": status,
+        "score": overall_score,
+        "scoreLabel": quality_score_label(overall_score),
+        "scoreBand": quality_score_band(overall_score),
         "fieldQuality": field_quality,
         "issues": issues,
         "acceptedValues": accepted,
@@ -1346,6 +1398,80 @@ def realtime_history(project_id: str | None = None, hours: float = 12, limit: in
         "limit": safe_limit,
         "inputs": inputs,
         "results": results,
+    }
+
+
+def realtime_quality_score(project_id: str | None = None, hours: float = 12, limit: int = 200) -> dict[str, Any]:
+    resolved_project_id = normalize_project_id(project_id)
+    history = realtime_history(resolved_project_id, hours, limit)
+    points = list_point_configs(resolved_project_id)["points"]
+    latest_input = get_latest_input(resolved_project_id)
+    inputs = history["inputs"]
+    point_scores: list[dict[str, Any]] = []
+    current_quality = (latest_input or {}).get("quality") or {}
+    field_quality = current_quality.get("fieldQuality") or {}
+    for point in points:
+        field = field_quality.get(point["modelKey"]) or {}
+        score = field.get("score")
+        point_scores.append(
+            {
+                "pointId": point["pointId"],
+                "name": point["name"],
+                "modelKey": point["modelKey"],
+                "unit": point["unit"],
+                "enabled": point["enabled"],
+                "score": score if isinstance(score, (int, float)) else None,
+                "scoreLabel": field.get("scoreLabel") or quality_score_label(score if isinstance(score, (int, float)) else None),
+                "scoreBand": field.get("scoreBand") or quality_score_band(score if isinstance(score, (int, float)) else None),
+                "status": field.get("status", "unknown"),
+                "source": field.get("source", "unknown"),
+                "reasons": field.get("scoreReasons") or [],
+            }
+        )
+
+    issue_counts: dict[str, int] = {}
+    trend: list[dict[str, Any]] = []
+    scores: list[float] = []
+    for record in inputs:
+        quality = record.get("quality") or {}
+        score = quality_score_from_report(quality)
+        if score is not None:
+            scores.append(score)
+        trend.append(
+            {
+                "timestamp": record["timestamp"],
+                "score": score,
+                "scoreLabel": quality_score_label(score),
+                "scoreBand": quality_score_band(score),
+                "status": quality.get("status", "unknown"),
+                "issueCount": len(quality.get("issues") or []),
+            }
+        )
+        for issue in quality.get("issues") or []:
+            code = str(issue.get("code") or "unknown")
+            issue_counts[code] = issue_counts.get(code, 0) + 1
+
+    current_score = quality_score_from_report(current_quality)
+    return {
+        "projectId": resolved_project_id,
+        "hours": hours,
+        "limit": history["limit"],
+        "current": {
+            "timestamp": (latest_input or {}).get("timestamp"),
+            "score": current_score,
+            "scoreLabel": quality_score_label(current_score),
+            "scoreBand": quality_score_band(current_score),
+            "status": current_quality.get("status", "none") if latest_input else "none",
+            "issueCount": len(current_quality.get("issues") or []),
+            "pointScores": point_scores,
+        },
+        "rolling": {
+            "recordCount": len(inputs),
+            "averageScore": round(sum(scores) / len(scores), 1) if scores else None,
+            "minScore": min(scores) if scores else None,
+            "issueCounts": issue_counts,
+            "trend": trend[-200:],
+        },
     }
 
 

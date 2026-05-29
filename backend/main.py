@@ -58,6 +58,7 @@ from .realtime import (
     mock_status,
     realtime_forecast,
     realtime_history,
+    realtime_quality_score,
     realtime_step,
     realtime_status,
     realtime_trust,
@@ -1016,6 +1017,11 @@ def realtime_sources_endpoint() -> dict:
 @app.get("/api/realtime/points")
 def realtime_points_endpoint(projectId: str = "default") -> dict:
     return list_point_configs(projectId)
+
+
+@app.get("/api/realtime/quality-score")
+def realtime_quality_score_endpoint(projectId: str = "default", hours: float = 12, limit: int = 200) -> dict:
+    return realtime_quality_score(projectId, hours, limit)
 
 
 @app.get("/api/realtime/cleaning-settings")

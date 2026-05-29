@@ -3762,7 +3762,7 @@ function renderQualitySummary(target, quality, fallbackText = "暂无数据质�
   `;
 }
 
-function renderDataCleaningDashboard(statusPayload, historyPayload, pointPayload) {
+function renderDataCleaningDashboard(statusPayload, historyPayload, pointPayload, qualityScorePayload) {
   const latestInput = statusPayload?.latestInput || historyPayload?.inputs?.[0] || null;
   const quality = latestInput?.quality || {};
   const fieldQuality = quality.fieldQuality || {};
@@ -3776,7 +3776,9 @@ function renderDataCleaningDashboard(statusPayload, historyPayload, pointPayload
   const scoreValues = activePoints
     .map((point) => Number(fieldQuality[point.modelKey]?.score))
     .filter((score) => Number.isFinite(score));
-  const averageScore = scoreValues.length ? Math.round(scoreValues.reduce((sum, score) => sum + score, 0) / scoreValues.length) : null;
+  const averageScore = qualityScorePayload?.current?.score ?? (scoreValues.length ? Math.round(scoreValues.reduce((sum, score) => sum + score, 0) / scoreValues.length) : null);
+  const rollingScore = qualityScorePayload?.rolling?.averageScore;
+  const qualityLabel = qualityScorePayload?.current?.scoreLabel || quality.scoreLabel || "暂无评分";
   const correctedFields = activePoints.filter((point) => {
     const field = fieldQuality[point.modelKey];
     return field && (field.status !== "ok" || field.source !== "input");
@@ -3797,7 +3799,7 @@ function renderDataCleaningDashboard(statusPayload, historyPayload, pointPayload
     </div>
     <div class="cleaning-kpi-card">
       <span class="kpi-icon blue"><svg><use href="#icon-clock"></use></svg></span>
-      <p>平均质量分</p><strong>${averageScore ?? "--"}</strong><small>${latestInput ? `最近写入 ${shortTime(latestInput.timestamp)}` : "等待边界写入"}</small>
+      <p>综合质量分</p><strong>${averageScore ?? "--"}</strong><small>${escapeHtml(qualityLabel)}${Number.isFinite(Number(rollingScore)) ? ` · 12h均分 ${rollingScore}` : ""}</small>
     </div>
   `;
 
@@ -3811,13 +3813,14 @@ function renderDataCleaningDashboard(statusPayload, historyPayload, pointPayload
           const issueType = fieldIssueType(key, quality);
           const displayStatus = fieldDisplayStatus(field, quality, key);
           const score = Number.isFinite(Number(field.score)) ? Number(field.score).toFixed(0) : "--";
+          const scoreReasons = Array.isArray(field.scoreReasons) ? field.scoreReasons.join("；") : "";
           return `
             <tr>
               <td><span class="point-name"><i class="${statusClass(field.status)}"></i><strong>${escapeHtml(point.shortName)}</strong><em>${escapeHtml(point.name)}</em></span></td>
               <td><span class="model-key-cell">${escapeHtml(point.pointId || "--")}<em>${escapeHtml(key)}</em></span></td>
               <td>${formatChartValue(rawValue)} ${escapeHtml(point.unit || "")}</td>
               <td>${formatChartValue(acceptedValue)} ${escapeHtml(point.unit || "")}</td>
-              <td><span class="score-pill ${statusClass(field.status)}">${score}</span></td>
+              <td><span class="score-pill ${statusClass(field.status)}" title="${escapeHtml(scoreReasons)}">${score}</span></td>
               <td><span class="quality-pill ${statusClass(field.status)}">${escapeHtml(displayStatus)}</span></td>
               <td>${escapeHtml(issueType)}</td>
               <td>${shortDateTime(latestInput.timestamp)}</td>
@@ -4473,15 +4476,16 @@ async function refreshDataCleaningDashboard() {
     if (refreshDataCleaning) refreshDataCleaning.disabled = true;
     if (label) label.textContent = "刷新中";
     dataCleaningStatus.textContent = "正在加载在线数据清洗仪表板...";
-    const [settingsPayload, statusPayload, historyPayload, pointPayload] = await Promise.all([
+    const [settingsPayload, statusPayload, historyPayload, pointPayload, qualityScorePayload] = await Promise.all([
       realtimeRequest(withProjectQuery("/cleaning-settings")),
       realtimeRequest(withProjectQuery("/status")),
       realtimeRequest(withProjectQuery("/history?hours=12&limit=200")),
       realtimeRequest(withProjectQuery("/points")),
+      realtimeRequest(withProjectQuery("/quality-score?hours=12&limit=200")),
     ]);
     cleaningSettings = settingsPayload;
     renderCleaningRuleSettings();
-    renderDataCleaningDashboard(statusPayload, historyPayload, pointPayload);
+    renderDataCleaningDashboard(statusPayload, historyPayload, pointPayload, qualityScorePayload);
     if (label) label.textContent = "已刷新";
   } catch (error) {
     dataCleaningStatus.textContent = `在线数据清洗加载失败：${error.message}`;

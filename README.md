@@ -301,6 +301,7 @@ GET  /api/realtime/observations
 GET  /api/realtime/trust
 GET  /api/realtime/sources
 GET  /api/realtime/points
+GET  /api/realtime/quality-score
 GET  /api/realtime/status
 POST /api/realtime/reset
 POST /api/realtime/mock/start
@@ -354,6 +355,11 @@ Realtime point configuration is stored in SQLite as backend engineering referenc
 the active mapping from online point IDs to model variables, units, enabled state, and basic quality thresholds. The frontend
 uses this mapping to display point status and quality scores in `在线数据清洗`, but ordinary users do not edit the mapping there.
 Future plant integrations should update this table through deployment/database configuration or a protected admin workflow.
+
+`GET /api/realtime/quality-score?hours=12` returns the current composite quality score, per-point scores, score labels,
+deduction reasons, rolling average, issue counts, and score trend. This is the P11.3 data-quality scoring layer. It is based
+on the point configuration table and the enabled cleaning rules, so frontend displays and model ingestion use the same scoring
+logic.
 
 `GET /api/realtime/sources` returns the current realtime source registry (`manual`, `mock`, and a disabled external
 historian placeholder). `GET /api/realtime/status` returns the latest input/result/state, quality status, record counts,
