@@ -42,6 +42,8 @@ from .platform import (
     update_project,
 )
 from .realtime import (
+    apply_suggested_state_corrections,
+    clear_state_corrections,
     clear_calculation_logs,
     get_cleaning_settings,
     get_saved_params,
@@ -54,6 +56,7 @@ from .realtime import (
     list_calculation_logs,
     list_observations,
     list_point_configs,
+    list_state_corrections,
     load_simulation_state,
     mock_status,
     realtime_forecast,
@@ -65,9 +68,11 @@ from .realtime import (
     reset,
     reset_params_config,
     save_cleaning_settings,
+    save_state_corrections,
     save_params_config,
     save_simulation_state,
     start_mock,
+    suggest_state_corrections,
     stop_mock,
 )
 from .schemas import (
@@ -94,6 +99,8 @@ from .schemas import (
     RealtimeMockObservationRequest,
     RealtimeObservationRequest,
     SimulationRequest,
+    StateCorrectionClearRequest,
+    StateCorrectionRequest,
 )
 
 
@@ -1003,6 +1010,41 @@ def realtime_mock_observation_endpoint(request: RealtimeMockObservationRequest) 
 @app.get("/api/realtime/trust")
 def realtime_trust_endpoint(projectId: str = "default", hours: float = 24, maxLagHours: float = 2.0) -> dict:
     return realtime_trust(projectId, hours, maxLagHours)
+
+
+@app.get("/api/realtime/state-corrections")
+def realtime_state_corrections_endpoint(projectId: str = "default") -> dict:
+    return list_state_corrections(projectId)
+
+
+@app.get("/api/realtime/state-corrections/suggest")
+def realtime_state_corrections_suggest_endpoint(projectId: str = "default", hours: float = 24, maxLagHours: float = 2.0) -> dict:
+    return suggest_state_corrections(projectId, hours, maxLagHours)
+
+
+@app.post("/api/realtime/state-corrections/apply")
+def realtime_state_corrections_apply_endpoint(request: StateCorrectionRequest) -> dict:
+    started = perf_counter()
+    if request.corrections:
+        result = save_state_corrections(request.projectId, request.corrections, request.source)
+    else:
+        result = apply_suggested_state_corrections(request.projectId, request.hours, request.maxLagHours)
+    insert_calculation_log(
+        "state_correction",
+        "success",
+        "Realtime state correction updated.",
+        {"projectId": request.projectId, "source": request.source, "hasManualCorrections": bool(request.corrections)},
+        (perf_counter() - started) * 1000,
+        request.projectId,
+    )
+    return result
+
+
+@app.post("/api/realtime/state-corrections/clear")
+def realtime_state_corrections_clear_endpoint(request: StateCorrectionClearRequest) -> dict:
+    result = clear_state_corrections(request.projectId)
+    insert_calculation_log("state_correction", "success", "Realtime state corrections cleared.", {"projectId": request.projectId}, None, request.projectId)
+    return result
 
 
 @app.post("/api/realtime/forecast")

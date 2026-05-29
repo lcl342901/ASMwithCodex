@@ -386,6 +386,17 @@ def init_db() -> None:
               updated_at TEXT NOT NULL,
               PRIMARY KEY (project_id, point_id)
             );
+
+            CREATE TABLE IF NOT EXISTS realtime_state_corrections (
+              project_id TEXT NOT NULL,
+              metric TEXT NOT NULL,
+              bias REAL NOT NULL,
+              enabled INTEGER NOT NULL DEFAULT 1,
+              source TEXT NOT NULL,
+              reason TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              PRIMARY KEY (project_id, metric)
+            );
             """
         )
         ensure_column(conn, "realtime_inputs", "project_id", f"TEXT NOT NULL DEFAULT '{DEFAULT_PROJECT_ID}'")
@@ -1034,6 +1045,12 @@ OBSERVATION_METRICS = {
     "effTn": {"label": "TN", "unit": "mg/L", "thresholds": {"good": 2.0, "watch": 5.0}},
     "effTss": {"label": "TSS", "unit": "mg/L", "thresholds": {"good": 2.0, "watch": 5.0}},
 }
+STATE_CORRECTION_LIMITS = {
+    "effCod": 20.0,
+    "effNh4": 3.0,
+    "effTn": 6.0,
+    "effTss": 8.0,
+}
 MOCK_OBSERVATION_BIAS = {
     "effCod": 0.01,
     "effNh4": 0.04,
@@ -1113,6 +1130,173 @@ def generate_mock_observation(
     observation["basisResultId"] = latest_result["id"]
     observation["noiseFraction"] = bounded_noise
     return observation
+
+
+def correction_from_row(row: sqlite3.Row) -> dict[str, Any]:
+    meta = OBSERVATION_METRICS.get(row["metric"], {})
+    return {
+        "projectId": row["project_id"],
+        "metric": row["metric"],
+        "label": meta.get("label", row["metric"]),
+        "unit": meta.get("unit", ""),
+        "bias": row["bias"],
+        "enabled": bool(row["enabled"]),
+        "source": row["source"],
+        "reason": row["reason"],
+        "updatedAt": row["updated_at"],
+    }
+
+
+def list_state_corrections(project_id: str | None = None) -> dict[str, Any]:
+    init_db()
+    resolved_project_id = normalize_project_id(project_id)
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM realtime_state_corrections
+            WHERE project_id = ?
+            ORDER BY metric
+            """,
+            (resolved_project_id,),
+        ).fetchall()
+    corrections = [correction_from_row(row) for row in rows]
+    return {
+        "projectId": resolved_project_id,
+        "corrections": corrections,
+        "enabledCount": sum(1 for item in corrections if item["enabled"]),
+        "updatedAt": max((item["updatedAt"] for item in corrections), default=None),
+    }
+
+
+def clamp_state_correction(metric: str, bias: float) -> float:
+    limit = STATE_CORRECTION_LIMITS.get(metric, 0.0)
+    if limit <= 0:
+        return 0.0
+    return max(-limit, min(limit, bias))
+
+
+def suggest_state_corrections(project_id: str | None = None, hours: float = 24, max_lag_hours: float = 2.0) -> dict[str, Any]:
+    resolved_project_id = normalize_project_id(project_id)
+    trust = realtime_trust(resolved_project_id, hours, max_lag_hours)
+    suggestions: list[dict[str, Any]] = []
+    for row in trust.get("metrics", []):
+        metric = row.get("metric")
+        if metric not in STATE_CORRECTION_LIMITS or not row.get("count"):
+            continue
+        residual_bias = row.get("bias")
+        if not isinstance(residual_bias, (int, float)) or not math.isfinite(residual_bias):
+            continue
+        raw_bias = -0.7 * float(residual_bias)
+        if abs(raw_bias) < 0.05:
+            raw_bias = 0.0
+        bias = clamp_state_correction(metric, raw_bias)
+        suggestions.append(
+            {
+                "metric": metric,
+                "label": OBSERVATION_METRICS[metric]["label"],
+                "unit": OBSERVATION_METRICS[metric]["unit"],
+                "bias": bias,
+                "rawBias": raw_bias,
+                "modelBias": residual_bias,
+                "count": row["count"],
+                "mae": row.get("mae"),
+                "grade": row.get("grade"),
+                "reason": f"最近 {row['count']} 个匹配点中，模型平均偏差 {residual_bias:.3g} {OBSERVATION_METRICS[metric]['unit']}，建议输出偏置 {bias:.3g}。",
+            }
+        )
+    return {
+        "projectId": resolved_project_id,
+        "hours": hours,
+        "maxLagHours": max_lag_hours,
+        "overall": trust.get("overall"),
+        "statusText": trust.get("statusText"),
+        "suggestions": suggestions,
+        "active": list_state_corrections(resolved_project_id),
+    }
+
+
+def save_state_corrections(project_id: str | None = None, corrections: dict[str, Any] | None = None, source: str = "manual") -> dict[str, Any]:
+    init_db()
+    resolved_project_id = normalize_project_id(project_id)
+    values = corrections or {}
+    updated_at = now_iso()
+    with connect() as conn:
+        for metric, payload in values.items():
+            if metric not in STATE_CORRECTION_LIMITS:
+                continue
+            if isinstance(payload, dict):
+                bias_value = payload.get("bias", 0.0)
+                enabled = bool(payload.get("enabled", True))
+                reason = str(payload.get("reason", "Manual state correction."))
+            else:
+                bias_value = payload
+                enabled = True
+                reason = "Manual state correction."
+            try:
+                bias = clamp_state_correction(metric, float(bias_value))
+            except (TypeError, ValueError):
+                continue
+            conn.execute(
+                """
+                INSERT INTO realtime_state_corrections (project_id, metric, bias, enabled, source, reason, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(project_id, metric) DO UPDATE SET
+                  bias = excluded.bias,
+                  enabled = excluded.enabled,
+                  source = excluded.source,
+                  reason = excluded.reason,
+                  updated_at = excluded.updated_at
+                """,
+                (resolved_project_id, metric, bias, 1 if enabled else 0, source, reason, updated_at),
+            )
+    return list_state_corrections(resolved_project_id)
+
+
+def apply_suggested_state_corrections(project_id: str | None = None, hours: float = 24, max_lag_hours: float = 2.0) -> dict[str, Any]:
+    suggestion_payload = suggest_state_corrections(project_id, hours, max_lag_hours)
+    corrections = {
+        item["metric"]: {"bias": item["bias"], "enabled": True, "reason": item["reason"]}
+        for item in suggestion_payload["suggestions"]
+        if item["bias"] != 0
+    }
+    active = save_state_corrections(project_id, corrections, "trust_bias") if corrections else list_state_corrections(project_id)
+    return {**suggestion_payload, "active": active, "appliedCount": len(corrections)}
+
+
+def clear_state_corrections(project_id: str | None = None) -> dict[str, Any]:
+    init_db()
+    resolved_project_id = normalize_project_id(project_id)
+    with connect() as conn:
+        conn.execute("DELETE FROM realtime_state_corrections WHERE project_id = ?", (resolved_project_id,))
+    return list_state_corrections(resolved_project_id)
+
+
+def apply_state_corrections_to_snapshot(snapshot: dict[str, Any], project_id: str | None = None) -> dict[str, Any]:
+    corrections = [item for item in list_state_corrections(project_id)["corrections"] if item["enabled"]]
+    if not corrections or snapshot.get("stateCorrection", {}).get("applied"):
+        return snapshot
+    applied: list[dict[str, Any]] = []
+    for item in corrections:
+        metric = item["metric"]
+        value = snapshot.get(metric)
+        if not isinstance(value, (int, float)) or not math.isfinite(value):
+            continue
+        corrected = max(0.0, float(value) + float(item["bias"]))
+        snapshot[metric] = corrected
+        applied.append(
+            {
+                "metric": metric,
+                "label": item["label"],
+                "unit": item["unit"],
+                "bias": item["bias"],
+                "rawValue": value,
+                "correctedValue": corrected,
+                "source": item["source"],
+            }
+        )
+    if applied:
+        snapshot["stateCorrection"] = {"applied": True, "corrections": applied, "updatedAt": now_iso()}
+    return snapshot
 
 
 def list_observations(project_id: str | None = None, hours: float = 24, limit: int = 200) -> dict[str, Any]:
@@ -1517,6 +1701,7 @@ def realtime_step(
     model_timestamp = add_hours_to_iso(base_timestamp, step)
     stepped = ctx.step_realtime_state(state, boundary_values, step)
     result = stepped["snapshot"]
+    apply_state_corrections_to_snapshot(result, resolved_project_id)
     result["mode"] = "realtime"
     result["projectId"] = resolved_project_id
     result["timestamp"] = model_timestamp
@@ -1748,6 +1933,7 @@ def realtime_status(project_id: str | None = None) -> dict[str, Any]:
         "latestResult": latest_result,
         "latestState": latest_state,
         "qualityStatus": quality_status,
+        "stateCorrections": list_state_corrections(resolved_project_id),
         "scheduler": scheduler,
         "counts": realtime_counts(resolved_project_id),
     }
@@ -2039,7 +2225,7 @@ def realtime_forecast(project_id: str | None = None, horizon_hours: int = 8, ste
         for scenario_name, boundary_values in item["scenarios"].items():
             stepped = scenario_contexts[scenario_name].step_realtime_state(scenario_states[scenario_name], boundary_values, safe_step)
             scenario_states[scenario_name] = stepped["state"]
-            snapshots[scenario_name] = stepped["snapshot"]
+            snapshots[scenario_name] = apply_state_corrections_to_snapshot(stepped["snapshot"], resolved_project_id)
         metrics = {
             metric: _range_from_snapshots(metric, snapshots["low"], snapshots["median"], snapshots["high"])
             for metric in FORECAST_METRICS

@@ -411,6 +411,27 @@ class ModelTest(unittest.TestCase):
         self.assertGreaterEqual(len(trust["trend"]), 1)
         self.assertGreaterEqual(len(trust["suggestions"]), 1)
 
+    def test_state_correction_suggests_and_applies_bias(self):
+        step = realtime.realtime_step(values={"Q": 10000, "COD": 420, "NH4": 32, "NO3": 0.5, "TSS": 220, "DO": 2}, step_hours=0.5)
+        model_time = step["result"]["modelTimestamp"]
+        predicted_nh4 = step["result"]["effNh4"]
+        realtime.insert_observation(model_time, {"NH4": predicted_nh4 + 2.0}, "unit-test")
+
+        suggestion = realtime.suggest_state_corrections("default", hours=12)
+        nh4 = next(item for item in suggestion["suggestions"] if item["metric"] == "effNh4")
+        self.assertGreater(nh4["bias"], 0)
+
+        applied = realtime.apply_suggested_state_corrections("default", hours=12)
+        self.assertGreaterEqual(applied["appliedCount"], 1)
+        corrected = realtime.realtime_step(step_hours=0.5)
+        correction = corrected["result"].get("stateCorrection", {})
+
+        self.assertTrue(correction.get("applied"))
+        self.assertTrue(any(item["metric"] == "effNh4" for item in correction["corrections"]))
+
+        cleared = realtime.clear_state_corrections("default")
+        self.assertEqual(cleared["enabledCount"], 0)
+
     def test_realtime_forecast_uses_saved_state_without_advancing_realtime_state(self):
         step = realtime.realtime_step(values={"Q": 10000, "COD": 420, "NH4": 32, "NO3": 0.5, "TSS": 220}, step_hours=0.5)
         before = realtime.latest()["state"]["timestamp"]

@@ -55,6 +55,18 @@ class RealtimeMockObservationRequest(BaseModel):
     noiseFraction: float = 0.03
 
 
+class StateCorrectionRequest(BaseModel):
+    projectId: Optional[str] = "default"
+    corrections: dict[str, Any] = Field(default_factory=dict)
+    source: str = "manual"
+    hours: float = 24
+    maxLagHours: float = 2.0
+
+
+class StateCorrectionClearRequest(BaseModel):
+    projectId: Optional[str] = "default"
+
+
 class CleaningSettingsRequest(BaseModel):
     projectId: Optional[str] = "default"
     enabledRules: list[str] = Field(default_factory=list)

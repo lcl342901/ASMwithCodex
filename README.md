@@ -307,6 +307,10 @@ POST /api/realtime/observations
 POST /api/realtime/observations/mock
 GET  /api/realtime/observations
 GET  /api/realtime/trust
+GET  /api/realtime/state-corrections
+GET  /api/realtime/state-corrections/suggest
+POST /api/realtime/state-corrections/apply
+POST /api/realtime/state-corrections/clear
 GET  /api/realtime/sources
 GET  /api/realtime/points
 GET  /api/realtime/quality-score
@@ -354,6 +358,12 @@ Realtime model trust is project-scoped and compares online model outputs with me
 - `POST /api/realtime/observations/mock` generates a development-only mock lab observation from the latest realtime result, with small bias/noise for demo workflows.
 - `GET /api/realtime/trust?hours=24` matches observations to the nearest model result time, then returns per-metric `MAE`, `RMSE`, bias, a simple trust grade, residual trend rows, and calibration suggestions.
 - The frontend shows this in `实时仿真 > 模型可信度`. This is the online trust loop; the separate `模型管理 > 模型评估` page remains for offline/reference-model screening.
+
+P11.4 adds a lightweight realtime state correction layer. `GET /api/realtime/state-corrections/suggest` derives bounded
+output-bias corrections from recent trust residuals. `POST /api/realtime/state-corrections/apply` stores suggested or manual
+corrections in SQLite, and subsequent realtime steps and forecasts apply those corrections to effluent outputs such as
+`effNh4`, `effTn`, `effTss`, and `effCod`. This is intentionally not ASM1 parameter calibration; it is a reversible online
+state/output bias correction. `POST /api/realtime/state-corrections/clear` removes the active corrections.
 
 Realtime inputs now carry a normalized quality report. The backend stores the raw payload, then derives `quality.status`,
 per-field `fieldQuality`, `issues`, and `acceptedValues`. Missing boundaries fall back to current model parameters, and

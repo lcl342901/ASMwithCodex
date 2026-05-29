@@ -107,6 +107,9 @@ const trustSummary = document.getElementById("trustSummary");
 const trustMetricGrid = document.getElementById("trustMetricGrid");
 const trustTrendChart = document.getElementById("trustTrendChart");
 const trustSuggestionList = document.getElementById("trustSuggestionList");
+const stateCorrectionPanel = document.getElementById("stateCorrectionPanel");
+const applyStateCorrection = document.getElementById("applyStateCorrection");
+const clearStateCorrection = document.getElementById("clearStateCorrection");
 const trustComparisonRows = document.getElementById("trustComparisonRows");
 const realtimeTrustStatus = document.getElementById("realtimeTrustStatus");
 const dataCleaningTools = document.getElementById("dataCleaningTools");
@@ -3493,6 +3496,44 @@ function renderTrustSuggestions(suggestions) {
     : `<div class="empty-state-inline">暂无校准建议。</div>`;
 }
 
+function renderStateCorrectionPanel(payload) {
+  if (!stateCorrectionPanel) return;
+  const suggestions = payload?.suggestions || [];
+  const active = payload?.active?.corrections || [];
+  const activeHtml = active.length
+    ? active
+        .map((item) => `
+          <article>
+            <span>${escapeHtml(item.label || item.metric)}</span>
+            <strong>${formatChartValue(item.bias)} ${escapeHtml(item.unit || "")}</strong>
+            <small>${escapeHtml(item.reason || item.source || "")}</small>
+          </article>
+        `)
+        .join("")
+    : `<p class="empty-state-inline">当前未启用状态校正。</p>`;
+  const suggestionHtml = suggestions.length
+    ? suggestions
+        .map((item) => `
+          <article>
+            <span>${escapeHtml(item.label || item.metric)}</span>
+            <strong>${formatChartValue(item.bias)} ${escapeHtml(item.unit || "")}</strong>
+            <small>${escapeHtml(item.reason || "")}</small>
+          </article>
+        `)
+        .join("")
+    : `<p class="empty-state-inline">暂无可应用的校正建议。需要先保存实测并形成偏差。</p>`;
+  stateCorrectionPanel.innerHTML = `
+    <div class="state-correction-group">
+      <h4>建议校正</h4>
+      ${suggestionHtml}
+    </div>
+    <div class="state-correction-group">
+      <h4>当前启用</h4>
+      ${activeHtml}
+    </div>
+  `;
+}
+
 function renderRealtimeTrust(payload) {
   if (!trustSummary || !trustMetricGrid || !trustComparisonRows) return;
   const overall = payload?.overall || "no_data";
@@ -3557,8 +3598,12 @@ async function refreshRealtimeTrustPanel() {
   try {
     realtimeTrustStatus.textContent = "正在加载模型可信度...";
     realtimeTrustStatus.classList.remove("error");
-    const payload = await realtimeRequest(withProjectQuery("/trust?hours=24&limit=200"));
+    const [payload, correctionPayload] = await Promise.all([
+      realtimeRequest(withProjectQuery("/trust?hours=24&limit=200")),
+      realtimeRequest(withProjectQuery("/state-corrections/suggest?hours=24&maxLagHours=2")),
+    ]);
     renderRealtimeTrust(payload);
+    renderStateCorrectionPanel(correctionPayload);
     realtimeTrustStatus.textContent = `已加载 ${payload.observationCount || 0} 条实测记录，匹配 ${payload.matchedCount || 0} 条模型结果。`;
   } catch (error) {
     realtimeTrustStatus.textContent = `模型可信度加载失败：${error.message}`;
@@ -5486,6 +5531,38 @@ generateMockObservation?.addEventListener("click", async () => {
     await generateMockTrustObservation();
   } catch (error) {
     realtimeTrustStatus.textContent = `生成模拟实测失败：${error.message}`;
+    realtimeTrustStatus.classList.add("error");
+  }
+});
+applyStateCorrection?.addEventListener("click", async () => {
+  try {
+    const payload = await realtimeRequest("/state-corrections/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId: activeProjectId, hours: 24, maxLagHours: 2, source: "trust_bias" }),
+    });
+    renderStateCorrectionPanel(payload);
+    realtimeTrustStatus.textContent = `已应用 ${payload.appliedCount || payload.enabledCount || 0} 项状态校正。后续实时推进和预测会叠加该校正。`;
+    realtimeTrustStatus.classList.remove("error");
+    await refreshRealtimeTrustPanel();
+  } catch (error) {
+    realtimeTrustStatus.textContent = `状态校正失败：${error.message}`;
+    realtimeTrustStatus.classList.add("error");
+  }
+});
+clearStateCorrection?.addEventListener("click", async () => {
+  try {
+    const payload = await realtimeRequest("/state-corrections/clear", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId: activeProjectId }),
+    });
+    renderStateCorrectionPanel({ active: payload, suggestions: [] });
+    realtimeTrustStatus.textContent = "已清除状态校正。";
+    realtimeTrustStatus.classList.remove("error");
+    await refreshRealtimeTrustPanel();
+  } catch (error) {
+    realtimeTrustStatus.textContent = `清除状态校正失败：${error.message}`;
     realtimeTrustStatus.classList.add("error");
   }
 });

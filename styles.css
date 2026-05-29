@@ -2327,6 +2327,44 @@ h2 {
   background: #fff6f4;
 }
 
+.state-correction-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.state-correction-group {
+  display: grid;
+  gap: 7px;
+}
+
+.state-correction-group h4 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.state-correction-group article {
+  display: grid;
+  gap: 3px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdfb;
+}
+
+.state-correction-group article span,
+.state-correction-group article small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.state-correction-group article strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
 .trust-metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
