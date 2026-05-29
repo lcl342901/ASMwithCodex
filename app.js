@@ -5,6 +5,7 @@ const activeNodeLabel = document.getElementById("activeNodeLabel");
 const statusBadge = document.getElementById("statusBadge");
 const progressBar = document.getElementById("progressBar");
 const progressPercent = document.getElementById("progressPercent");
+const simulationStatus = document.querySelector(".simulation-status");
 const resultChart = document.getElementById("resultChart");
 const legend = document.getElementById("legend");
 const unitMetricSelect = document.getElementById("unitMetricSelect");
@@ -12,6 +13,7 @@ const chartTooltip = document.getElementById("chartTooltip");
 const paramTabs = document.getElementById("paramTabs");
 const dataTools = document.getElementById("dataTools");
 const realtimeTools = document.getElementById("realtimeTools");
+const realtimeOpsMount = document.getElementById("realtimeOpsMount");
 const logTools = document.getElementById("logTools");
 const calibrationTools = document.getElementById("calibrationTools");
 const csvFileInput = document.getElementById("csvFileInput");
@@ -29,6 +31,7 @@ const resetRealtime = document.getElementById("resetRealtime");
 const startMockRealtime = document.getElementById("startMockRealtime");
 const stopMockRealtime = document.getElementById("stopMockRealtime");
 const refreshMockRealtime = document.getElementById("refreshMockRealtime");
+const mockProfileRealtime = document.getElementById("mockProfileRealtime");
 const warningPanel = document.getElementById("warningPanel");
 const exportResultsCsv = document.getElementById("exportResultsCsv");
 const exportBoundariesCsv = document.getElementById("exportBoundariesCsv");
@@ -41,6 +44,18 @@ const batchResults = document.getElementById("batchResults");
 const resultModeTabs = Array.from(document.querySelectorAll(".result-mode-tab"));
 const realtimeBoundaryRows = document.getElementById("realtimeBoundaryRows");
 const realtimeResultRows = document.getElementById("realtimeResultRows");
+const refreshRealtimeForecast = document.getElementById("refreshRealtimeForecast");
+const forecastRunMeta = document.getElementById("forecastRunMeta");
+const dashboardUpdatedAt = document.getElementById("dashboardUpdatedAt");
+const dashboardOverviewCards = document.getElementById("dashboardOverviewCards");
+const forecastCards = document.getElementById("forecastCards");
+const forecastTrend = document.getElementById("forecastTrend");
+const forecastTrendLegend = document.getElementById("forecastTrendLegend");
+const forecastAdviceCards = document.getElementById("forecastAdviceCards");
+const forecastMonitorRows = document.getElementById("forecastMonitorRows");
+const forecastRiskBadge = document.getElementById("forecastRiskBadge");
+const forecastRiskNotes = document.getElementById("forecastRiskNotes");
+const forecastMetricTabs = Array.from(document.querySelectorAll("[data-forecast-metric]"));
 const metricPicker = document.getElementById("metricPicker");
 const exportMenuButton = document.getElementById("exportMenuButton");
 const exportMenu = document.getElementById("exportMenu");
@@ -73,8 +88,27 @@ const credibilitySummary = document.getElementById("credibilitySummary");
 const initialConditionSummary = document.getElementById("initialConditionSummary");
 const referenceComparisonSummary = document.getElementById("referenceComparisonSummary");
 const evaluationStatus = document.getElementById("evaluationStatus");
+const realtimeTrustTools = document.getElementById("realtimeTrustTools");
+const refreshRealtimeTrust = document.getElementById("refreshRealtimeTrust");
+const trustObservationTime = document.getElementById("trustObservationTime");
+const trustObservedCod = document.getElementById("trustObservedCod");
+const trustObservedNh4 = document.getElementById("trustObservedNh4");
+const trustObservedTn = document.getElementById("trustObservedTn");
+const trustObservedTss = document.getElementById("trustObservedTss");
+const trustObservationSource = document.getElementById("trustObservationSource");
+const fillObservationFromLatest = document.getElementById("fillObservationFromLatest");
+const saveRealtimeObservation = document.getElementById("saveRealtimeObservation");
+const trustSummary = document.getElementById("trustSummary");
+const trustMetricGrid = document.getElementById("trustMetricGrid");
+const trustComparisonRows = document.getElementById("trustComparisonRows");
+const realtimeTrustStatus = document.getElementById("realtimeTrustStatus");
 const dataCleaningTools = document.getElementById("dataCleaningTools");
 const refreshDataCleaning = document.getElementById("refreshDataCleaning");
+const openCleaningSettings = document.getElementById("openCleaningSettings");
+const cleaningSettingsDialog = document.getElementById("cleaningSettingsDialog");
+const cleaningRuleSettings = document.getElementById("cleaningRuleSettings");
+const cleaningSettingsStatus = document.getElementById("cleaningSettingsStatus");
+const saveCleaningSettings = document.getElementById("saveCleaningSettings");
 const cleaningKpis = document.getElementById("cleaningKpis");
 const cleaningPointRows = document.getElementById("cleaningPointRows");
 const cleaningIssueBars = document.getElementById("cleaningIssueBars");
@@ -96,11 +130,9 @@ const environmentSelect = document.getElementById("environmentSelect");
 const logoutButton = document.getElementById("logoutButton");
 const panelTabs = Array.from(document.querySelectorAll(".panel-tab"));
 const resultModeTabsContainer = document.querySelector(".result-mode-tabs");
-const libraryProjectSelect = document.getElementById("libraryProjectSelect");
 const libraryNewProject = document.getElementById("libraryNewProject");
-const openScenarioEditor = document.getElementById("openScenarioEditor");
-const librarySolverLabel = document.getElementById("librarySolverLabel");
-const libraryScenarioStatus = document.getElementById("libraryScenarioStatus");
+const scenarioList = document.getElementById("scenarioList");
+const scenarioLibraryStatus = document.getElementById("scenarioLibraryStatus");
 const resultPanelTitle = document.getElementById("resultPanelTitle");
 const settingsSolverSummary = document.getElementById("settingsSolverSummary");
 const settingsModelSummary = document.getElementById("settingsModelSummary");
@@ -110,11 +142,23 @@ const openModelSettings = document.getElementById("openModelSettings");
 const settingsStartMock = document.getElementById("settingsStartMock");
 const settingsStopMock = document.getElementById("settingsStopMock");
 const settingsRefreshMock = document.getElementById("settingsRefreshMock");
+const settingsMockProfile = document.getElementById("settingsMockProfile");
 const aiAnalysisPanel = document.getElementById("aiAnalysisPanel");
 const runAiAnalysis = document.getElementById("runAiAnalysis");
+const aiModelSelect = document.getElementById("aiModelSelect");
 const aiAnalysisStatus = document.getElementById("aiAnalysisStatus");
 const aiAnalysisOutput = document.getElementById("aiAnalysisOutput");
 const aiAnalysisMeta = document.getElementById("aiAnalysisMeta");
+const systemChatToggle = document.getElementById("systemChatToggle");
+const systemChatPanel = document.getElementById("systemChatPanel");
+const systemChatClose = document.getElementById("systemChatClose");
+const systemChatMessages = document.getElementById("systemChatMessages");
+const systemChatForm = document.getElementById("systemChatForm");
+const systemChatInput = document.getElementById("systemChatInput");
+const systemChatSend = document.getElementById("systemChatSend");
+const systemChatNew = document.getElementById("systemChatNew");
+const systemChatSearch = document.getElementById("systemChatSearch");
+const systemChatSessionList = document.getElementById("systemChatSessionList");
 const SIMULATION_API_URL = "http://127.0.0.1:8000/api/simulate";
 const REALTIME_API_URL = "http://127.0.0.1:8000/api/realtime";
 const AI_API_URL = "http://127.0.0.1:8000/api/ai";
@@ -125,6 +169,10 @@ const CALIBRATION_API_URL = "http://127.0.0.1:8000/api/calibration";
 const MODEL_API_URL = "http://127.0.0.1:8000/api/model";
 const MAX_SOLVER_STEP_DAYS = 0.0005;
 const EPSILON_DAYS = 1e-12;
+
+if (realtimeOpsMount && realtimeTools) {
+  realtimeOpsMount.appendChild(realtimeTools);
+}
 
 const nodes = [
   { id: "influent", title: "进水", subtitle: "Q, COD, NH4-N", icon: "IN", type: "source", x: 30, y: 150 },
@@ -301,8 +349,18 @@ let progressValue = 0;
 let simulationRunning = false;
 let activeSimulationJobId = null;
 let simulationCancelRequested = false;
+let aiAnalysisState = "idle";
+let systemChatSessions = [];
+let activeSystemChatId = "";
+let systemChatBusy = false;
+let systemChatSearchTerm = "";
+let cleaningSettings = null;
 let projects = [];
 let activeProjectId = "default";
+let realtimeForecast = null;
+let realtimeDashboardHistory = null;
+let activeForecastMetric = "NH4";
+const hiddenForecastTrendParts = new Set();
 const hiddenDatasets = new Set();
 
 const C = {
@@ -326,6 +384,9 @@ const workspaceLabels = {
   process: ["模拟实验室", "工艺模型"],
   params: ["模拟实验室", "方案编辑"],
   results: ["模拟实验室", "结果查看"],
+  realtimeDashboard: ["实时仿真", "运行驾驶舱"],
+  realtimeOps: ["实时仿真", "实时推进"],
+  realtimeTrust: ["实时仿真", "模型可信度"],
   cleaning: ["实时仿真", "在线数据清洗"],
   evaluation: ["模型管理", "模型评估"],
   calibration: ["模型管理", "校准中心"],
@@ -335,6 +396,9 @@ const workspaceLabels = {
 
 const SIDEBAR_COLLAPSED_KEY = "aaoSidebarCollapsed";
 const ACTIVE_ENVIRONMENT_KEY = "aaoActiveEnvironment";
+const AI_MODEL_KEY = "aaoAiAnalysisModel";
+const SYSTEM_CHAT_SESSIONS_KEY = "aaoSystemChatSessions";
+const SYSTEM_CHAT_ACTIVE_KEY = "aaoSystemChatActiveSession";
 const environmentConfigs = {
   lab: {
     label: "模拟实验室",
@@ -345,7 +409,7 @@ const environmentConfigs = {
   realtime: {
     label: "实时仿真",
     buttonLabel: "登录并进入实时仿真",
-    defaultPanel: "results",
+    defaultPanel: "realtimeDashboard",
     defaultResultMode: "realtime",
   },
   management: {
@@ -394,6 +458,9 @@ function setPendingEnvironment(environment) {
 
 function getWorkspaceLabel() {
   if (activeEnvironment === "realtime") {
+    if (activePanel === "realtimeDashboard") return ["实时仿真", "运行驾驶舱"];
+    if (activePanel === "realtimeOps") return ["实时仿真", "实时推进"];
+    if (activePanel === "realtimeTrust") return ["实时仿真", "模型可信度"];
     if (activePanel === "results") return ["实时仿真", "实时结果"];
     if (activePanel === "logs") return ["实时仿真", "运行监控"];
   }
@@ -433,6 +500,18 @@ function refreshActivePanelData() {
   }
   if (activePanel === "results" && activeResultMode === "realtime") {
     showRealtimeResults();
+  }
+  if (activePanel === "realtimeDashboard") {
+    refreshRealtimeDashboard();
+  }
+  if (activePanel === "realtimeOps") {
+    refreshRealtimeLatest();
+    refreshRealtimeMockStatus();
+    refreshRealtimeHistory();
+    refreshRealtimeDataQuality();
+  }
+  if (activePanel === "realtimeTrust") {
+    refreshRealtimeTrustPanel();
   }
   if (activePanel === "calibration") {
     refreshCalibrationStages();
@@ -483,6 +562,7 @@ function applyEnvironment(environment, options = {}) {
   if (options.showApp) {
     if (loginScreen) loginScreen.hidden = true;
     if (appFrame) appFrame.hidden = false;
+    if (systemChatToggle) systemChatToggle.hidden = false;
   }
   if (options.forceDefault || !isPanelAllowed(activePanel, environment)) {
     activePanel = environmentConfigs[environment].defaultPanel;
@@ -690,6 +770,19 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+function formatLocalDateTime(value) {
+  if (!value) return "--";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return value;
+  return date.toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function applyParamValues(values) {
   Object.entries(values).forEach(([key, value]) => {
     if (key === "solverMethod" && key in params) {
@@ -730,10 +823,61 @@ function renderProjectOptions() {
     .join("");
   projectSelect.innerHTML = optionsHtml;
   projectSelect.disabled = projects.length === 0;
-  if (libraryProjectSelect) {
-    libraryProjectSelect.innerHTML = optionsHtml;
-    libraryProjectSelect.disabled = projects.length === 0;
+  renderScenarioLibrary();
+}
+
+function scenarioBoundaryLabel(project) {
+  if (project.id !== activeProjectId) return "手动 / CSV";
+  return csvText.trim() ? `CSV：${csvFileName || "历史边界"}` : "手动边界";
+}
+
+function scenarioStatusLabel(project) {
+  if (project.id === activeProjectId && lastResult && hasAnalyzableResult(lastResult)) return "已有结果";
+  return project.id === activeProjectId ? "当前方案" : "可打开";
+}
+
+function renderScenarioLibrary() {
+  if (!scenarioList) return;
+  if (!projects.length) {
+    scenarioList.innerHTML = `<article class="scenario-card"><p>暂无方案。点击“新建方案”创建第一个方案。</p></article>`;
+    if (scenarioLibraryStatus) scenarioLibraryStatus.textContent = "0 个方案";
+    return;
   }
+  if (scenarioLibraryStatus) {
+    scenarioLibraryStatus.textContent = `${projects.length} 个方案 · 当前：${projects.find((project) => project.id === activeProjectId)?.name || activeProjectId}`;
+  }
+  scenarioList.innerHTML = projects
+    .map((project) => {
+      const isActive = project.id === activeProjectId;
+      const cannotDelete = project.id === "default";
+      return `
+        <article class="scenario-card ${isActive ? "active" : ""}" data-project-id="${escapeHtml(project.id)}">
+          <div>
+            <div class="scenario-card-title">
+              <span class="scenario-tag ${isActive ? "" : "muted"}">${isActive ? "当前" : "方案"}</span>
+              <button class="scenario-select" data-scenario-action="select" data-project-id="${escapeHtml(project.id)}" type="button">${escapeHtml(project.name)}</button>
+            </div>
+            <p>${escapeHtml(project.description || "AAO 方案，保存独立参数和可选 CSV 历史边界。")}</p>
+          </div>
+          <dl>
+            <div><dt>创建时间</dt><dd>${escapeHtml(formatLocalDateTime(project.createdAt))}</dd></div>
+            <div><dt>更新时间</dt><dd>${escapeHtml(formatLocalDateTime(project.updatedAt))}</dd></div>
+            <div><dt>边界</dt><dd>${escapeHtml(scenarioBoundaryLabel(project))}</dd></div>
+            <div><dt>解算器</dt><dd>${escapeHtml(project.id === activeProjectId ? `${params.solverMethod || "RK4"} v2` : "打开后加载")}</dd></div>
+            <div><dt>状态</dt><dd>${escapeHtml(scenarioStatusLabel(project))}</dd></div>
+          </dl>
+          <div class="scenario-actions">
+            <button class="secondary-button" data-scenario-action="edit" data-project-id="${escapeHtml(project.id)}" type="button">编辑</button>
+            <button class="secondary-button" data-scenario-action="rename" data-project-id="${escapeHtml(project.id)}" type="button">重命名</button>
+            <button class="secondary-button" data-scenario-action="run" data-project-id="${escapeHtml(project.id)}" type="button">计算</button>
+            <button class="secondary-button" data-scenario-action="result" data-project-id="${escapeHtml(project.id)}" type="button">结果</button>
+            <button class="secondary-button" data-scenario-action="logs" data-project-id="${escapeHtml(project.id)}" type="button">日志</button>
+            <button class="secondary-button danger-lite" data-scenario-action="delete" data-project-id="${escapeHtml(project.id)}" type="button" ${cannotDelete ? "disabled" : ""}>删除</button>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
 }
 
 function renderSystemSettings() {
@@ -801,6 +945,16 @@ async function loadProjectCsv(projectId = activeProjectId) {
   }
 }
 
+async function switchProject(projectId, options = {}) {
+  activeProjectId = projectId || "default";
+  await loadProjectParams(activeProjectId);
+  await loadProjectCsv(activeProjectId);
+  renderProjectOptions();
+  if (options.resetPreview !== false) {
+    showDefaultBoundaryPreview();
+  }
+}
+
 async function saveProjectCsv() {
   if (!csvText.trim()) return;
   await projectRequest(`/${encodeURIComponent(activeProjectId)}/csv`, {
@@ -862,7 +1016,7 @@ async function resetToDefaultParams() {
 }
 
 async function createNewProject() {
-  const name = window.prompt("项目名称", `AAO 项目 ${projects.length + 1}`);
+  const name = window.prompt("方案名称", `AAO 方案 ${projects.length + 1}`);
   if (!name || !name.trim()) return;
   try {
     const project = await projectRequest("", {
@@ -877,7 +1031,89 @@ async function createNewProject() {
     renderForm();
     updateParamStorageStatus(`${project.name}：已创建并切换`);
   } catch (error) {
-    updateParamStorageStatus(`新建项目失败：${error.message}`, true);
+    updateParamStorageStatus(`新建方案失败：${error.message}`, true);
+  }
+}
+
+async function renameProject(projectId) {
+  const project = projects.find((item) => item.id === projectId);
+  if (!project) return;
+  const name = window.prompt("方案名称", project.name);
+  if (!name || !name.trim() || name.trim() === project.name) return;
+  try {
+    const updated = await projectRequest(`/${encodeURIComponent(projectId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim() }),
+    });
+    await loadProjects();
+    if (activeProjectId === projectId) {
+      updateParamStorageStatus(`${updated.name}：方案名称已更新`);
+    }
+    renderScenarioLibrary();
+  } catch (error) {
+    updateParamStorageStatus(`重命名方案失败：${error.message}`, true);
+  }
+}
+
+async function deleteScenarioProject(projectId) {
+  const project = projects.find((item) => item.id === projectId);
+  if (!project || project.id === "default") return;
+  const confirmed = window.confirm(`删除方案“${project.name}”？该方案的参数、CSV、实时状态和日志也会删除。`);
+  if (!confirmed) return;
+  try {
+    await projectRequest(`/${encodeURIComponent(projectId)}`, { method: "DELETE" });
+    await loadProjects();
+    const nextProject = projects[0]?.id || "default";
+    await switchProject(nextProject);
+    activatePanel("scenarioLibrary");
+    updateParamStorageStatus(`${project.name}：已删除`);
+  } catch (error) {
+    updateParamStorageStatus(`删除方案失败：${error.message}`, true);
+  }
+}
+
+async function runScenarioProject(projectId) {
+  await switchProject(projectId);
+  if (activeEnvironment !== "lab") {
+    applyEnvironment("lab", { showApp: true });
+  }
+  runSimulationButton?.click();
+}
+
+async function handleScenarioAction(action, projectId) {
+  if (!projectId) return;
+  if (action === "select") {
+    await switchProject(projectId);
+    renderScenarioLibrary();
+    return;
+  }
+  if (action === "edit") {
+    await switchProject(projectId);
+    activatePanel("params");
+    return;
+  }
+  if (action === "rename") {
+    await renameProject(projectId);
+    return;
+  }
+  if (action === "run") {
+    await runScenarioProject(projectId);
+    return;
+  }
+  if (action === "result") {
+    await switchProject(projectId, { resetPreview: false });
+    activatePanel("results", { resultMode: "batch" });
+    return;
+  }
+  if (action === "logs") {
+    await switchProject(projectId, { resetPreview: false });
+    applyEnvironment("management", { showApp: true });
+    activatePanel("logs");
+    return;
+  }
+  if (action === "delete") {
+    await deleteScenarioProject(projectId);
   }
 }
 
@@ -1411,12 +1647,36 @@ function appendParamSection(title, description, fieldList) {
   parameterForm.appendChild(section);
 }
 
-function showRealtimeResults() {
+async function showRealtimeResults() {
   if (activePanel !== "results" || activeResultMode !== "realtime") return;
-  refreshRealtimeLatest();
-  refreshRealtimeMockStatus();
-  refreshRealtimeHistory();
-  refreshRealtimeDataQuality();
+  try {
+    const payload = await realtimeRequest(withProjectQuery("/history?hours=12&limit=200"));
+    lastResult = buildRealtimeResultSeries(payload);
+    if (activeChart === "boundaries" || activeChart === "unit") {
+      setActiveChart("effluent");
+    }
+    if (!lastResult.time.length) {
+      updateMetricCards(lastResult);
+      document.getElementById("resultSummary").textContent = "最近 12 小时暂无实时推进结果。请先在“实时推进”页面推送边界并推进模型。";
+      resetAiAnalysis("暂无可分析的实时结果。");
+      renderWarnings(lastResult);
+      drawChart(lastResult, activeChart);
+      return;
+    }
+    updateMetricCards(lastResult);
+    document.getElementById("resultSummary").textContent = `已加载最近 12 小时实时结果，共 ${lastResult.time.length} 个推进点。可查看曲线并生成 AI 工艺分析。`;
+    if (aiAnalysisState === "running") {
+      renderAiWorkingState();
+    } else if (aiAnalysisState !== "success") {
+      setAiAnalysisStatus("已获得实时结果，可生成 AI 分析。");
+      aiAnalysisOutput.innerHTML = "<p>点击“生成 AI 建议”获取实时结果分析与运行建议。</p>";
+    }
+    renderWarnings(lastResult);
+    drawChart(lastResult, activeChart);
+  } catch (error) {
+    document.getElementById("resultSummary").textContent = `实时结果加载失败：${error.message}`;
+    resetAiAnalysis("实时结果加载失败，暂不能生成 AI 分析。");
+  }
 }
 
 function renderForm() {
@@ -1428,6 +1688,7 @@ function renderForm() {
   }
   const showingParams = activePanel === "params";
   const showingResults = activePanel === "results";
+  const showingRealtimeOps = activePanel === "realtimeOps";
   workspacePages.forEach((page) => {
     page.classList.toggle("active", page.dataset.page === activePanel);
   });
@@ -1444,28 +1705,34 @@ function renderForm() {
       runSimulationButton.textContent = "运行方案";
     }
   }
-  if (librarySolverLabel) {
-    librarySolverLabel.textContent = `${params.solverMethod || "RK4"} v2`;
+  if (simulationStatus) {
+    simulationStatus.hidden = activeEnvironment !== "lab";
   }
-  if (libraryScenarioStatus) {
-    libraryScenarioStatus.textContent = csvText.trim() ? "已接入 CSV" : "使用手动边界";
+  if (cancelSimulationButton && activeEnvironment !== "lab") {
+    cancelSimulationButton.hidden = true;
   }
   renderSystemSettings();
   if (resultPanelTitle) {
     resultPanelTitle.textContent = activeResultMode === "realtime" ? "实时结果" : "方案结果";
   }
   if (showingResults && activeResultMode === "realtime") {
-    document.getElementById("resultSummary").textContent = "实时结果只展示在线边界、模型推进状态和最新出水结果；配置项已移出当前页面。";
+    document.getElementById("resultSummary").textContent = "展示最近 12 小时实时推进结果曲线，并可基于最新实时结果生成工艺分析建议。";
   }
   if (aiAnalysisPanel) {
-    aiAnalysisPanel.hidden = !(showingResults && activeResultMode === "batch");
+    aiAnalysisPanel.hidden = !showingResults;
+  }
+  if (showingResults && aiAnalysisState === "running") {
+    renderAiWorkingState();
+  } else {
+    syncAiAnalysisButton();
   }
   dataTools.hidden = !(showingParams && activeTab === "boundaryData");
-  realtimeTools.hidden = !(showingResults && activeResultMode === "realtime");
-  batchResults.hidden = !(showingResults && activeResultMode === "batch");
+  realtimeTools.hidden = !showingRealtimeOps;
+  batchResults.hidden = !showingResults;
   logTools.hidden = activePanel !== "logs";
   calibrationTools.hidden = activePanel !== "calibration";
   evaluationTools.hidden = activePanel !== "evaluation";
+  if (realtimeTrustTools) realtimeTrustTools.hidden = activePanel !== "realtimeTrust";
   dataCleaningTools.hidden = activePanel !== "cleaning";
   paramTabs.hidden = !showingParams;
   parameterForm.hidden = !showingParams || activeTab === "boundaryData";
@@ -1474,7 +1741,7 @@ function renderForm() {
     if (activePanel === "process") {
       drawEdges();
     }
-    if (activePanel === "results" && activeResultMode === "batch" && lastResult) {
+    if (activePanel === "results" && lastResult) {
       drawChart(lastResult, activeChart);
     }
     return;
@@ -2294,7 +2561,7 @@ function setProgress(value, failed = false) {
   progressValue = clamp(value, 0, 100);
   progressBar.style.width = `${progressValue.toFixed(0)}%`;
   progressPercent.textContent = `${progressValue.toFixed(0)}%`;
-  progressBar.closest(".simulation-status").classList.toggle("failed", failed);
+  simulationStatus?.classList.toggle("failed", failed);
 }
 
 function startProgress() {
@@ -2434,11 +2701,252 @@ function setAiAnalysisStatus(message, isError = false) {
   aiAnalysisStatus.classList.toggle("error", isError);
 }
 
-function resetAiAnalysis(message = "运行方案后可生成 AI 分析。") {
+function syncAiAnalysisButton() {
+  if (!runAiAnalysis) return;
+  const running = aiAnalysisState === "running";
+  runAiAnalysis.disabled = running;
+  runAiAnalysis.textContent = running ? "生成中..." : "生成 AI 建议";
+}
+
+function resetAiAnalysis(message = "运行仿真或加载实时结果后可生成 AI 分析。") {
+  aiAnalysisState = "idle";
   setAiAnalysisStatus(message);
   if (aiAnalysisOutput) {
     aiAnalysisOutput.innerHTML = "<p>暂无 AI 建议。</p>";
   }
+  syncAiAnalysisButton();
+}
+
+function latestFinite(values) {
+  if (!Array.isArray(values)) return null;
+  for (let index = values.length - 1; index >= 0; index -= 1) {
+    const value = Number(values[index]);
+    if (Number.isFinite(value)) return value;
+  }
+  return null;
+}
+
+function metricStatus(value, target) {
+  if (!Number.isFinite(value) || !Number.isFinite(target) || target <= 0) return "unknown";
+  if (value <= target) return "ok";
+  if (value <= target * 1.25) return "watch";
+  return "risk";
+}
+
+function doSetpointStatus(value, target) {
+  if (!Number.isFinite(value) || !Number.isFinite(target) || target <= 0) return "unknown";
+  const deviation = (value - target) / target;
+  if (Math.abs(deviation) <= 0.15) return "ok";
+  return deviation < 0 ? "low" : "high";
+}
+
+function metricStatusLabel(status, mode = "limit") {
+  if (mode === "setpoint") {
+    return {
+      ok: "接近设定",
+      low: "低于设定",
+      high: "高于设定",
+      unknown: "待补充",
+    }[status] || "待补充";
+  }
+  return {
+    ok: "受控",
+    watch: "接近上限",
+    risk: "偏高",
+    unknown: "待补充",
+  }[status] || "待补充";
+}
+
+function sparklineSvg(values, color = "#1f7a4f") {
+  const numbers = (Array.isArray(values) ? values : [])
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value));
+  if (numbers.length < 2) {
+    return `<svg viewBox="0 0 180 42" aria-hidden="true"><path d="M6 30 H174" fill="none" stroke="#d8e2db" stroke-width="2"/></svg>`;
+  }
+  const sample = numbers.slice(Math.max(0, numbers.length - 36));
+  const min = Math.min(...sample);
+  const max = Math.max(...sample);
+  const range = Math.max(max - min, 1e-9);
+  const points = sample
+    .map((value, index) => {
+      const x = 6 + (index / Math.max(sample.length - 1, 1)) * 168;
+      const y = 34 - ((value - min) / range) * 26;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  return `<svg viewBox="0 0 180 42" aria-hidden="true"><polyline points="${points}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 36 H174" fill="none" stroke="#d8e2db" stroke-width="1"/></svg>`;
+}
+
+function aiVisualMetrics() {
+  if (!lastResult) return [];
+  return [
+    { label: "出水 NH4-N", unit: "gN/m3", value: latestFinite(lastResult.effNh4), target: 5, values: lastResult.effNh4, color: "#1f7a4f", mode: "limit", referenceLabel: "参考" },
+    { label: "出水 TN", unit: "gN/m3", value: latestFinite(lastResult.effTn), target: 15, values: lastResult.effTn, color: "#2767b1", mode: "limit", referenceLabel: "参考" },
+    { label: "出水 TSS", unit: "g/m3", value: latestFinite(lastResult.effTss), target: 10, values: lastResult.effTss, color: "#b56b16", mode: "limit", referenceLabel: "参考" },
+    { label: "好氧池 DO", unit: "gO2/m3", value: latestFinite(lastResult.aerobicDo), target: Number(params.aerobicDo) || 2, values: lastResult.aerobicDo, color: "#2b8a8a", mode: "setpoint", referenceLabel: "设定" },
+  ];
+}
+
+function normalizeReportList(value) {
+  return Array.isArray(value) ? value.filter((item) => item !== null && item !== undefined) : [];
+}
+
+function displayAiModelName(model) {
+  return String(model || "--").replace("deepseek/", "");
+}
+
+function renderAiWorkingState() {
+  if (!aiAnalysisOutput) return;
+  setAiAnalysisStatus("正在生成工艺分析...");
+  aiAnalysisOutput.innerHTML = `
+    <div class="ai-working-state" role="status" aria-live="polite">
+      <div class="ai-engineer-scene" aria-hidden="true">
+        <div class="ai-engineer">
+          <span class="helmet"></span>
+          <span class="head"></span>
+          <span class="body"></span>
+          <span class="arm"></span>
+        </div>
+        <div class="ai-desk">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <div class="ai-data-lines">
+          <i></i>
+          <i></i>
+          <i></i>
+        </div>
+      </div>
+      <div>
+        <strong>正在生成工艺分析</strong>
+        <p>读取仿真结果、识别风险项，并整理可执行的运行建议。</p>
+        <ol>
+          <li>提取出水与池内关键指标</li>
+          <li>比对参考线和控制设定</li>
+          <li>形成风险判断与验证计划</li>
+        </ol>
+      </div>
+    </div>
+  `;
+  syncAiAnalysisButton();
+}
+
+function cleanReportText(value, fallback = "") {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return fallback;
+  if (text.startsWith("{") || text.includes('"executiveSummary"') || text.includes("我们被要求")) {
+    return fallback;
+  }
+  return text.length > 180 ? `${text.slice(0, 180)}...` : text;
+}
+
+function renderAiReport(payload) {
+  if (!aiAnalysisOutput) return;
+  const report = payload.report || null;
+  const metrics = aiVisualMetrics();
+  const riskItems = normalizeReportList(report?.riskItems);
+  const criticalCount = riskItems.filter((item) => item?.level === "critical").length;
+  const warningCount = riskItems.filter((item) => item?.level === "warning").length;
+  const infoCount = Math.max(riskItems.length - criticalCount - warningCount, 0);
+  const totalRisk = Math.max(riskItems.length, 1);
+  const riskStyle = `--critical:${(criticalCount / totalRisk) * 100}%; --warning:${((criticalCount + warningCount) / totalRisk) * 100}%`;
+  const summaryItems = normalizeReportList(report?.executiveSummary);
+  const actionItems = normalizeReportList(report?.recommendedActions);
+  const verificationItems = normalizeReportList(report?.verificationPlan);
+
+  const metricCards = metrics
+    .map((metric) => {
+      const status = metric.mode === "setpoint" ? doSetpointStatus(metric.value, metric.target) : metricStatus(metric.value, metric.target);
+      const width =
+        status === "unknown"
+          ? 0
+          : metric.mode === "setpoint"
+            ? Math.min((1 - Math.min(Math.abs(metric.value - metric.target) / Math.max(metric.target, 1e-9), 1)) * 100, 100)
+            : Math.min((metric.value / Math.max(metric.target, 1e-9)) * 100, 150);
+      return `
+        <article class="ai-metric-card ${status} ${metric.mode}">
+          <div>
+            <span>${escapeHtml(metric.label)}</span>
+            <strong>${Number.isFinite(metric.value) ? formatChartValue(metric.value) : "--"}</strong>
+            <small>${escapeHtml(metric.unit)} · ${escapeHtml(metric.referenceLabel || "参考")} ${formatChartValue(metric.target)}</small>
+          </div>
+          <div class="ai-sparkline">${sparklineSvg(metric.values, metric.color)}</div>
+          <div class="ai-meter"><i style="width:${width}%"></i></div>
+          <em>${metricStatusLabel(status, metric.mode)}</em>
+        </article>
+      `;
+    })
+    .join("");
+
+  const summaryHtml = summaryItems.length
+    ? summaryItems.map((item) => `<li>${escapeHtml(cleanReportText(item, "该项需要结合现场数据复核。"))}</li>`).join("")
+    : "<li>本次返回未形成可读的结构化摘要。建议重新生成，或切换到 pro 模型复核。</li>";
+  const riskHtml = riskItems.length
+    ? riskItems
+        .map(
+          (item) => `
+            <li class="${escapeHtml(item.level || "info")}">
+              <strong>${escapeHtml(cleanReportText(item.item, "关注项"))}</strong>
+              <span>${escapeHtml(cleanReportText(item.evidence, "暂无数据依据"))}</span>
+              <small>${escapeHtml(cleanReportText(item.impact, "建议结合现场数据复核"))}</small>
+            </li>
+          `,
+        )
+        .join("")
+    : "<li><strong>暂无明显异常</strong><span>当前报告未列出风险项。</span><small>仍建议结合在线数据复核。</small></li>";
+  const actionHtml = actionItems.length
+    ? actionItems
+        .map(
+          (item) => `
+            <li>
+              <b>${escapeHtml(item.priority || "medium")}</b>
+              <strong>${escapeHtml(cleanReportText(item.action, "建议复核运行参数"))}</strong>
+              <span>${escapeHtml(cleanReportText(item.reason, "结合在线数据和实验室数据复核。"))}</span>
+              <small>${escapeHtml(cleanReportText(item.expectedEffect, "确认调整方向后再扩大应用。"))}</small>
+            </li>
+          `,
+        )
+        .join("")
+    : "<li><b>medium</b><strong>维持当前参数并复核关键边界</strong><span>报告未返回明确调整项。</span><small>补充现场趋势后再判断。</small></li>";
+  const verificationHtml = verificationItems.length
+    ? verificationItems.map((item) => `<li>${escapeHtml(cleanReportText(item, "补充现场数据后复核。"))}</li>`).join("")
+    : "<li>补充在线边界与实际出水数据后复核。</li>";
+
+  aiAnalysisOutput.innerHTML = `
+    <div class="ai-report">
+      <div class="ai-report-lead">
+        <div>
+          <span>分析结论</span>
+          <strong>${escapeHtml(cleanReportText(report?.headline, "仿真结果已生成，建议结合现场数据复核。"))}</strong>
+        </div>
+        <div class="ai-risk-donut" style="${riskStyle}">
+          <i>${riskItems.length}</i>
+          <span>风险项</span>
+        </div>
+      </div>
+      <div class="ai-metric-grid">${metricCards}</div>
+      <div class="ai-report-grid">
+        <section>
+          <h4>结果判断</h4>
+          <ul class="ai-plain-list">${summaryHtml}</ul>
+        </section>
+        <section>
+          <h4>风险与异常</h4>
+          <ul class="ai-risk-list">${riskHtml}</ul>
+        </section>
+        <section>
+          <h4>调整建议</h4>
+          <ul class="ai-action-list">${actionHtml}</ul>
+        </section>
+        <section>
+          <h4>验证计划</h4>
+          <ul class="ai-plain-list">${verificationHtml}</ul>
+        </section>
+      </div>
+    </div>
+  `;
 }
 
 async function refreshAiStatus() {
@@ -2447,7 +2955,14 @@ async function refreshAiStatus() {
     const response = await fetch(`${AI_API_URL}/status`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const status = await response.json();
-    aiAnalysisMeta.textContent = `${status.provider || "AI"} · ${status.model || "--"} · ${status.configured ? "已配置密钥" : "未配置密钥"}`;
+    if (aiModelSelect && Array.isArray(status.models) && status.models.length) {
+      const storedModel = readLocalStorage(AI_MODEL_KEY, aiModelSelect.value);
+      aiModelSelect.innerHTML = status.models
+        .map((model) => `<option value="${escapeHtml(model)}"${model === storedModel ? " selected" : ""}>${escapeHtml(model.replace("deepseek/", ""))}</option>`)
+        .join("");
+    }
+    const selectedModel = aiModelSelect?.value || status.model || "--";
+    aiAnalysisMeta.textContent = `${status.provider || "AI"} · ${displayAiModelName(selectedModel)} · ${status.configured ? "已配置密钥" : "未配置密钥"}`;
     return status;
   } catch {
     aiAnalysisMeta.textContent = "AI 服务未连接";
@@ -2457,13 +2972,18 @@ async function refreshAiStatus() {
 
 async function requestAiAnalysis() {
   if (!hasAnalyzableResult(lastResult)) {
-    resetAiAnalysis("暂无可分析的方案仿真结果。请先运行方案。");
+    resetAiAnalysis("暂无可分析的结果。请先运行方案，或加载实时推进结果。");
     return;
   }
   if (!runAiAnalysis) return;
-  runAiAnalysis.disabled = true;
-  setAiAnalysisStatus("正在生成 AI 分析...");
-  aiAnalysisOutput.innerHTML = "<p>AI 正在读取当前仿真摘要并生成建议。</p>";
+  if (aiAnalysisState === "running") {
+    renderAiWorkingState();
+    return;
+  }
+  aiAnalysisState = "running";
+  const selectedModel = aiModelSelect?.value || "deepseek/deepseek-v4-flash";
+  writeLocalStorage(AI_MODEL_KEY, selectedModel);
+  renderAiWorkingState();
   try {
     await refreshAiStatus();
     const response = await fetch(`${AI_API_URL}/analyze`, {
@@ -2471,6 +2991,7 @@ async function requestAiAnalysis() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         projectId: activeProjectId,
+        model: selectedModel,
         params,
         result: lastResult,
         context: {
@@ -2491,14 +3012,241 @@ async function requestAiAnalysis() {
     }
     const payload = await response.json();
     const modelNote = payload.configuredModel && payload.configuredModel !== payload.model ? `${payload.model}（从 ${payload.configuredModel} 自动兜底）` : payload.model || "--";
-    aiAnalysisMeta.textContent = `${payload.provider || "AI"} · ${modelNote} · 已生成`;
-    setAiAnalysisStatus("AI 分析已生成。");
-    aiAnalysisOutput.textContent = payload.analysis || "AI 未返回分析内容。";
+    aiAnalysisMeta.textContent = `${payload.provider || "AI"} · ${displayAiModelName(modelNote)} · 已生成`;
+    aiAnalysisState = "success";
+    setAiAnalysisStatus("工艺分析已生成。");
+    renderAiReport(payload);
   } catch (error) {
-    setAiAnalysisStatus(`AI 分析失败：${error.message}`, true);
+    aiAnalysisState = "error";
+    setAiAnalysisStatus(`分析生成失败：${error.message}`, true);
     aiAnalysisOutput.innerHTML = "<p>请确认后端服务已启动，并在后端本地环境配置 DEEPSEEK_API_KEY。</p>";
   } finally {
-    runAiAnalysis.disabled = false;
+    syncAiAnalysisButton();
+  }
+}
+
+function compactResultForChat(result) {
+  if (!hasAnalyzableResult(result)) return {};
+  return {
+    mode: result.mode,
+    sourceName: result.sourceName,
+    solverMethod: result.solverMethod,
+    engineVersion: result.engineVersion,
+    time: result.time || [],
+    effCod: result.effCod || [],
+    effNh4: result.effNh4 || [],
+    effNo3: result.effNo3 || [],
+    effTn: result.effTn || [],
+    effTss: result.effTss || [],
+    anaerobicNo3: result.anaerobicNo3 || [],
+    anoxicNo3: result.anoxicNo3 || [],
+    aerobicNo3: result.aerobicNo3 || [],
+    aerobicDo: result.aerobicDo || [],
+    aerobicMlss: result.aerobicMlss || [],
+    rasMlss: result.rasMlss || [],
+    warnings: result.warnings || result.validation?.warnings || [],
+    validation: result.validation || {},
+  };
+}
+
+function chatContextPayload() {
+  const project = projects.find((item) => item.id === activeProjectId);
+  return {
+    environment: activeEnvironment,
+    panel: activePanel,
+    projectId: activeProjectId,
+    projectName: project?.name || activeProjectId,
+    activeChart,
+    csvFileName,
+  };
+}
+
+function systemChatGreeting() {
+  return {
+    role: "assistant",
+    content: "我是系统助手，可以解释平台功能、帮你找操作入口，也可以基于当前仿真或实时结果做简要分析。",
+  };
+}
+
+function createSystemChatSession(title = "新会话") {
+  const now = new Date().toISOString();
+  return {
+    id: `chat-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    title,
+    createdAt: now,
+    updatedAt: now,
+    messages: [systemChatGreeting()],
+  };
+}
+
+function loadSystemChatSessions() {
+  let parsed = null;
+  try {
+    parsed = JSON.parse(readLocalStorage(SYSTEM_CHAT_SESSIONS_KEY, "[]"));
+  } catch {
+    parsed = null;
+  }
+  systemChatSessions = Array.isArray(parsed)
+    ? parsed
+        .filter((session) => session && typeof session.id === "string")
+        .map((session) => ({
+          ...session,
+          title: session.title || "未命名会话",
+          createdAt: session.createdAt || new Date().toISOString(),
+          updatedAt: session.updatedAt || session.createdAt || new Date().toISOString(),
+          messages: Array.isArray(session.messages) && session.messages.length ? session.messages : [systemChatGreeting()],
+        }))
+    : [];
+  if (!systemChatSessions.length) {
+    systemChatSessions = [createSystemChatSession("默认会话")];
+  }
+  const storedActiveId = readLocalStorage(SYSTEM_CHAT_ACTIVE_KEY, "");
+  activeSystemChatId = systemChatSessions.some((session) => session.id === storedActiveId) ? storedActiveId : systemChatSessions[0].id;
+  persistSystemChatSessions();
+}
+
+function persistSystemChatSessions() {
+  writeLocalStorage(SYSTEM_CHAT_SESSIONS_KEY, JSON.stringify(systemChatSessions));
+  writeLocalStorage(SYSTEM_CHAT_ACTIVE_KEY, activeSystemChatId);
+}
+
+function getActiveSystemChatSession() {
+  let session = systemChatSessions.find((item) => item.id === activeSystemChatId);
+  if (!session) {
+    session = createSystemChatSession("默认会话");
+    systemChatSessions.unshift(session);
+    activeSystemChatId = session.id;
+    persistSystemChatSessions();
+  }
+  return session;
+}
+
+function formatChatSessionTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "刚刚";
+  return date.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function renderSystemChatSessions() {
+  if (!systemChatSessionList) return;
+  const term = systemChatSearchTerm.trim().toLowerCase();
+  const sessions = [...systemChatSessions]
+    .filter((session) => {
+      if (!term) return true;
+      const latest = session.messages?.slice().reverse().find((message) => message.role === "user" || message.role === "assistant")?.content || "";
+      return `${session.title} ${latest}`.toLowerCase().includes(term);
+    })
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  if (!sessions.length) {
+    systemChatSessionList.innerHTML = `<p class="system-chat-empty">没有匹配的历史会话。</p>`;
+    return;
+  }
+  systemChatSessionList.innerHTML = sessions
+    .map(
+      (session) => `
+        <button class="system-chat-session ${session.id === activeSystemChatId ? "active" : ""}" type="button" data-chat-session="${escapeHtml(session.id)}">
+          <strong>${escapeHtml(session.title || "未命名会话")}</strong>
+          <small>${formatChatSessionTime(session.updatedAt)}</small>
+        </button>
+      `,
+    )
+    .join("");
+}
+
+function formatChatContent(content) {
+  return escapeHtml(content).replace(/\n/g, "<br>");
+}
+
+function renderSystemChatMessages() {
+  if (!systemChatMessages) return;
+  const session = getActiveSystemChatSession();
+  renderSystemChatSessions();
+  systemChatMessages.innerHTML = session.messages
+    .map(
+      (message) => `
+        <div class="system-chat-message ${message.role}">
+          <div>${formatChatContent(message.content)}</div>
+        </div>
+      `,
+    )
+    .join("");
+  systemChatMessages.scrollTop = systemChatMessages.scrollHeight;
+}
+
+function setSystemChatOpen(open) {
+  if (!systemChatPanel || !systemChatToggle) return;
+  systemChatPanel.hidden = !open;
+  systemChatToggle.classList.toggle("active", open);
+  systemChatToggle.setAttribute("aria-label", open ? "关闭系统助手" : "打开系统助手");
+  if (open) {
+    if (!systemChatSessions.length) loadSystemChatSessions();
+    renderSystemChatMessages();
+    window.setTimeout(() => systemChatInput?.focus(), 0);
+  }
+}
+
+function setSystemChatBusy(busy) {
+  systemChatBusy = busy;
+  if (systemChatSend) {
+    systemChatSend.disabled = busy;
+    systemChatSend.textContent = busy ? "生成中" : "发送";
+  }
+}
+
+async function submitSystemChat() {
+  const content = systemChatInput?.value.trim();
+  if (!content || systemChatBusy) return;
+  const session = getActiveSystemChatSession();
+  systemChatInput.value = "";
+  session.messages.push({ role: "user", content });
+  if (session.title === "新会话" || session.title === "默认会话") {
+    session.title = content.length > 18 ? `${content.slice(0, 18)}...` : content;
+  }
+  session.updatedAt = new Date().toISOString();
+  persistSystemChatSessions();
+  renderSystemChatMessages();
+  setSystemChatBusy(true);
+  session.messages.push({ role: "assistant", content: "正在结合当前页面和结果生成回复..." });
+  session.updatedAt = new Date().toISOString();
+  persistSystemChatSessions();
+  renderSystemChatMessages();
+  const pendingIndex = session.messages.length - 1;
+  try {
+    const response = await fetch(`${AI_API_URL}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId: activeProjectId,
+        messages: session.messages.filter((message, index) => index !== pendingIndex).slice(-12),
+        params,
+        result: compactResultForChat(lastResult),
+        context: chatContextPayload(),
+      }),
+    });
+    if (!response.ok) {
+      let message = `HTTP ${response.status}`;
+      try {
+        const error = await response.json();
+        message = error.detail || message;
+      } catch {
+        message = await response.text();
+      }
+      throw new Error(message);
+    }
+    const payload = await response.json();
+    session.messages[pendingIndex] = { role: "assistant", content: payload.reply || "没有返回有效回复。" };
+  } catch (error) {
+    session.messages[pendingIndex] = { role: "assistant", content: `聊天请求失败：${error.message}` };
+  } finally {
+    session.updatedAt = new Date().toISOString();
+    persistSystemChatSessions();
+    setSystemChatBusy(false);
+    renderSystemChatMessages();
   }
 }
 
@@ -2520,6 +3268,146 @@ async function realtimeRequest(path, options = {}) {
     throw new Error(message);
   }
   return response.json();
+}
+
+function localDatetimeValue(date = new Date()) {
+  const offsetMs = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function isoFromLocalDatetime(value) {
+  if (!value) return new Date().toISOString();
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : new Date().toISOString();
+}
+
+function trustGradeLabel(grade) {
+  const labels = {
+    good: "可信",
+    watch: "需关注",
+    poor: "需校准",
+    no_data: "缺少数据",
+  };
+  return labels[grade] || grade || "--";
+}
+
+function trustGradeClass(grade) {
+  if (grade === "good") return "good";
+  if (grade === "watch") return "watch";
+  if (grade === "poor") return "poor";
+  return "no-data";
+}
+
+function renderRealtimeTrust(payload) {
+  if (!trustSummary || !trustMetricGrid || !trustComparisonRows) return;
+  const overall = payload?.overall || "no_data";
+  const metrics = payload?.metrics || [];
+  const comparisons = payload?.comparisons || [];
+  trustSummary.innerHTML = `
+    <div class="trust-grade-card ${trustGradeClass(overall)}">
+      <span>总体判断</span>
+      <strong>${trustGradeLabel(overall)}</strong>
+      <small>${escapeHtml(payload?.statusText || "缺少实测数据")}</small>
+    </div>
+    <div><span>实测记录</span><strong>${payload?.observationCount || 0}</strong><small>最近 ${formatChartValue(payload?.hours || 24, 0)} 小时</small></div>
+    <div><span>成功匹配</span><strong>${payload?.matchedCount || 0}</strong><small>按模型时间最近点匹配</small></div>
+    <div><span>未匹配</span><strong>${payload?.unmatchedCount || 0}</strong><small>默认匹配窗口 ${formatChartValue(payload?.maxLagHours || 2)} h</small></div>
+  `;
+  trustMetricGrid.innerHTML = metrics.length
+    ? metrics
+        .map((metric) => {
+          const bias = Number(metric.bias);
+          const direction = !metric.count ? "无对比" : Math.abs(bias) < 1e-9 ? "基本一致" : bias > 0 ? "模型偏高" : "模型偏低";
+          return `
+            <article class="trust-metric-card ${trustGradeClass(metric.grade)}">
+              <div><strong>${escapeHtml(metric.label)}</strong><span>${trustGradeLabel(metric.grade)}</span></div>
+              <dl>
+                <div><dt>样本</dt><dd>${metric.count || 0}</dd></div>
+                <div><dt>MAE</dt><dd>${metric.mae === null ? "--" : formatChartValue(metric.mae)} ${escapeHtml(metric.unit)}</dd></div>
+                <div><dt>RMSE</dt><dd>${metric.rmse === null ? "--" : formatChartValue(metric.rmse)} ${escapeHtml(metric.unit)}</dd></div>
+                <div><dt>偏差</dt><dd>${metric.bias === null ? "--" : formatChartValue(metric.bias)} ${escapeHtml(metric.unit)}</dd></div>
+              </dl>
+              <p>${direction}</p>
+            </article>
+          `;
+        })
+        .join("")
+    : `<p class="empty-state-inline">暂无指标误差。请先录入实测出水值。</p>`;
+  const rows = [];
+  comparisons
+    .slice()
+    .reverse()
+    .forEach((comparison) => {
+      Object.values(comparison.metrics || {}).forEach((metric) => {
+        rows.push(`
+          <tr>
+            <td>${shortDateTime(comparison.observationTime)}</td>
+            <td>${shortDateTime(comparison.resultTime)}</td>
+            <td>${escapeHtml(metric.label)}</td>
+            <td>${formatChartValue(metric.predicted)} ${escapeHtml(metric.unit)}</td>
+            <td>${formatChartValue(metric.observed)} ${escapeHtml(metric.unit)}</td>
+            <td>${formatChartValue(metric.residual)} ${escapeHtml(metric.unit)}</td>
+            <td>${formatChartValue(comparison.matchLagHours)} h</td>
+          </tr>
+        `);
+      });
+    });
+  trustComparisonRows.innerHTML = rows.length ? rows.join("") : `<tr><td colspan="7">暂无可对比记录。</td></tr>`;
+}
+
+async function refreshRealtimeTrustPanel() {
+  if (!realtimeTrustStatus) return;
+  try {
+    realtimeTrustStatus.textContent = "正在加载模型可信度...";
+    realtimeTrustStatus.classList.remove("error");
+    const payload = await realtimeRequest(withProjectQuery("/trust?hours=24&limit=200"));
+    renderRealtimeTrust(payload);
+    realtimeTrustStatus.textContent = `已加载 ${payload.observationCount || 0} 条实测记录，匹配 ${payload.matchedCount || 0} 条模型结果。`;
+  } catch (error) {
+    realtimeTrustStatus.textContent = `模型可信度加载失败：${error.message}`;
+    realtimeTrustStatus.classList.add("error");
+  }
+}
+
+async function fillTrustObservationFromLatest() {
+  const payload = await realtimeRequest(withProjectQuery("/latest"));
+  const result = payload?.result?.result;
+  if (!result) {
+    throw new Error("暂无实时推进结果，无法填入预测值。");
+  }
+  if (trustObservationTime) trustObservationTime.value = localDatetimeValue(new Date(result.modelTimestamp || payload.result.timestamp || Date.now()));
+  if (trustObservedCod) trustObservedCod.value = Number.isFinite(Number(result.effCod)) ? Number(result.effCod).toFixed(1) : "";
+  if (trustObservedNh4) trustObservedNh4.value = Number.isFinite(Number(result.effNh4)) ? Number(result.effNh4).toFixed(2) : "";
+  if (trustObservedTn) trustObservedTn.value = Number.isFinite(Number(result.effTn)) ? Number(result.effTn).toFixed(1) : "";
+  if (trustObservedTss) trustObservedTss.value = Number.isFinite(Number(result.effTss)) ? Number(result.effTss).toFixed(1) : "";
+}
+
+async function saveTrustObservation() {
+  const values = {};
+  [
+    ["COD", trustObservedCod],
+    ["NH4", trustObservedNh4],
+    ["TN", trustObservedTn],
+    ["TSS", trustObservedTss],
+  ].forEach(([key, input]) => {
+    const value = Number(input?.value);
+    if (Number.isFinite(value)) values[key] = value;
+  });
+  if (!Object.keys(values).length) {
+    throw new Error("请至少填写 COD、NH4-N、TN 或 TSS 中的一项。");
+  }
+  const payload = await realtimeRequest("/observations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      projectId: activeProjectId,
+      timestamp: isoFromLocalDatetime(trustObservationTime?.value),
+      source: trustObservationSource?.value || "lab",
+      values,
+    }),
+  });
+  realtimeTrustStatus.textContent = `已保存实测记录 #${payload.id}。`;
+  await refreshRealtimeTrustPanel();
 }
 
 function realtimeBoundaryValues() {
@@ -2575,6 +3463,16 @@ function shortDateTime(value) {
   });
 }
 
+function forecastSourceLabel(payload) {
+  const source = payload?.current?.input?.quality?.source;
+  const label = payload?.current?.input?.quality?.sourceInfo?.label;
+  const profileLabel = payload?.current?.input?.quality?.profileLabel;
+  if (source === "mock") return profileLabel ? `Mock ${profileLabel}` : "Mock 在线边界";
+  if (source === "api") return "API 在线边界";
+  if (source === "manual") return "手动边界";
+  return label || "在线边界";
+}
+
 function shortTime(value) {
   if (!value) return "--";
   const date = new Date(value);
@@ -2597,6 +3495,7 @@ function qualityIssueCount(quality) {
 }
 
 function qualitySource(quality) {
+  if (quality?.source === "mock" && quality?.profileLabel) return `Mock ${quality.profileLabel}`;
   return quality?.sourceInfo?.label || quality?.source || "--";
 }
 
@@ -2663,6 +3562,57 @@ function fieldTrendClass(record, key) {
   const issue = (record.quality?.issues || []).find((item) => item.field === key);
   if (issue?.code === "delay") return "delay";
   return statusClass(record.quality?.fieldQuality?.[key]?.status || "unknown");
+}
+
+function cleaningRuleChipClass(ruleId) {
+  if (ruleId === "missing_fill") return "warning";
+  if (ruleId === "range_check") return "bad";
+  if (ruleId === "delay_check") return "blue";
+  return "";
+}
+
+async function loadCleaningSettings() {
+  cleaningSettings = await realtimeRequest(withProjectQuery("/cleaning-settings"));
+  renderCleaningRuleSettings();
+  return cleaningSettings;
+}
+
+function renderCleaningRuleSettings() {
+  if (!cleaningRuleSettings || !cleaningSettings) return;
+  cleaningRuleSettings.innerHTML = (cleaningSettings.rules || [])
+    .map(
+      (rule) => `
+        <label class="cleaning-rule-option">
+          <input type="checkbox" value="${escapeHtml(rule.id)}" ${rule.enabled ? "checked" : ""} />
+          <span>
+            <strong>${escapeHtml(rule.label)}</strong>
+            <small>${escapeHtml(rule.description || "")}</small>
+          </span>
+        </label>
+      `,
+    )
+    .join("");
+}
+
+async function saveCleaningRuleSettings() {
+  if (!cleaningRuleSettings || !saveCleaningSettings) return;
+  const enabledRules = Array.from(cleaningRuleSettings.querySelectorAll("input[type='checkbox']:checked")).map((input) => input.value);
+  saveCleaningSettings.disabled = true;
+  if (cleaningSettingsStatus) cleaningSettingsStatus.textContent = "正在保存清洗规则...";
+  try {
+    cleaningSettings = await realtimeRequest("/cleaning-settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId: activeProjectId, enabledRules }),
+    });
+    renderCleaningRuleSettings();
+    if (cleaningSettingsStatus) cleaningSettingsStatus.textContent = "清洗规则已保存。新进入系统的实时边界会按当前设置处理。";
+    await refreshDataCleaningDashboard();
+  } catch (error) {
+    if (cleaningSettingsStatus) cleaningSettingsStatus.textContent = `清洗规则保存失败：${error.message}`;
+  } finally {
+    saveCleaningSettings.disabled = false;
+  }
 }
 
 function rawBoundaryValue(record, key) {
@@ -2773,15 +3723,12 @@ function renderDataCleaningDashboard(statusPayload, historyPayload) {
     })
     .join("");
 
-  cleaningRuleChips.innerHTML = [
-    ["范围校验", ""],
-    ["变化率校验", ""],
-    ["缺失补齐", "warning"],
-    ["延迟检测", ""],
-    ["解析校验", ""],
-  ]
-    .map(([rule, cls]) => `<article><span class="${cls}">${rule}</span></article>`)
-    .join("");
+  const enabledRules = cleaningSettings?.rules?.filter((rule) => rule.enabled) || [];
+  cleaningRuleChips.innerHTML = enabledRules.length
+    ? enabledRules
+        .map((rule) => `<article><span class="${cleaningRuleChipClass(rule.id)}">${escapeHtml(rule.label)}</span></article>`)
+        .join("")
+    : `<article><span class="disabled">未启用清洗规则</span></article>`;
 
   const events = inputs
     .flatMap((record) => (record.quality?.issues || []).map((issue) => ({ record, issue })))
@@ -2797,12 +3744,11 @@ function renderDataCleaningDashboard(statusPayload, historyPayload) {
         .join("")
     : `<article><strong><span class="event-dot ok"></span>暂无异常事件</strong><span>最近 12 小时在线边界未触发清洗问题。</span></article>`;
 
+  const trendRecords = inputs.slice(0, 24).reverse();
   cleaningTrend.innerHTML = cleaningPointDefinitions
-    .slice(0, 4)
     .map(([key, shortName]) => {
-      const records = inputs.slice(0, 24).reverse();
-      const cells = records.length
-        ? records
+      const cells = trendRecords.length
+        ? trendRecords
             .map((record) => {
               const cls = fieldTrendClass(record, key);
               return `<span class="${cls}" title="${shortName} ${shortDateTime(record.timestamp)} ${qualityStatusText(record.quality?.fieldQuality?.[key]?.status)}"></span>`;
@@ -2822,31 +3768,597 @@ function renderDataCleaningDashboard(statusPayload, historyPayload) {
         <span><i style="background:var(--red)"></i>越界</span>
         <span><i style="background:var(--blue)"></i>延迟</span>
       </div>
-      <div class="trend-point-tabs">
-        ${cleaningPointDefinitions.map(([, shortName], index) => `<span class="${index === 0 ? "active" : ""}">${shortName}</span>`).join("")}
-      </div>
     `,
   );
+  const axisIndexes = trendRecords.length
+    ? [0, 0.25, 0.5, 0.75, 1].map((ratio) => Math.min(trendRecords.length - 1, Math.round((trendRecords.length - 1) * ratio)))
+    : [];
   cleaningTrend.insertAdjacentHTML(
     "beforeend",
-    `<div class="trend-axis"><span></span><span>01:00</span><span>04:00</span><span>07:00</span><span>10:00</span><span>13:00</span></div>`,
+    `<div class="trend-axis"><span></span>${axisIndexes.map((index) => `<span>${shortTime(trendRecords[index]?.timestamp)}</span>`).join("")}</div>`,
   );
 
   dataCleaningStatus.textContent = `已加载 ${inputs.length} 条最近 12 小时在线边界记录，累计问题 ${issueTotal} 个。`;
   dataCleaningStatus.classList.remove("error");
 }
 
-async function refreshDataCleaningDashboard() {
+function realtimeSeriesTime(results) {
+  if (!results.length) return [];
+  const firstTime = new Date(results[0].result?.modelTimestamp || results[0].timestamp).getTime();
+  return results.map((record, index) => {
+    const timestamp = new Date(record.result?.modelTimestamp || record.timestamp).getTime();
+    if (Number.isFinite(firstTime) && Number.isFinite(timestamp)) {
+      return Number(((timestamp - firstTime) / 86400000).toFixed(5));
+    }
+    const stepHours = Number(record.stepHours);
+    return Number(((index * (Number.isFinite(stepHours) ? stepHours : params.timeStepHours)) / 24).toFixed(5));
+  });
+}
+
+function scalarSeries(results, selector) {
+  return results.map((record) => {
+    const value = selector(record.result || {}, record);
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  });
+}
+
+function buildRealtimeResultSeries(payload) {
+  const results = payload?.results || [];
+  const time = realtimeSeriesTime(results);
+  const unitIds = nodes.map((node) => node.id);
+  const units = Object.fromEntries(
+    unitIds.map((unitId) => [
+      unitId,
+      Object.fromEntries(metricDefinitions.map(([metricId]) => [metricId, scalarSeries(results, (result) => result.units?.[unitId]?.[metricId])])),
+    ]),
+  );
+  const boundaries = Object.fromEntries(
+    ["q", "cod", "nh4", "no3", "tss", "do", "rasQ", "irQ", "wasQ"].map((key) => [key, scalarSeries(results, (result) => result.boundaries?.[key])]),
+  );
+  const warnings = results.flatMap((record) => record.warnings || record.result?.warnings || []).filter(Boolean);
+  return {
+    time,
+    effCod: scalarSeries(results, (result) => result.effCod),
+    effNh4: scalarSeries(results, (result) => result.effNh4),
+    effNo3: scalarSeries(results, (result) => result.effNo3),
+    effTn: scalarSeries(results, (result) => result.effTn),
+    effTss: scalarSeries(results, (result) => result.effTss),
+    anaerobicNo3: scalarSeries(results, (result) => result.units?.anaerobic?.NO3),
+    anoxicNo3: scalarSeries(results, (result) => result.units?.anoxic?.NO3),
+    aerobicNo3: scalarSeries(results, (result) => result.units?.aerobic?.NO3),
+    aerobicDo: scalarSeries(results, (result) => result.aerobicDo),
+    aerobicMlss: scalarSeries(results, (result) => result.aerobicMlss),
+    rasMlss: scalarSeries(results, (result) => result.rasMlss),
+    boundaries,
+    units,
+    clarifier: {
+      topTss: scalarSeries(results, (result) => result.clarifier?.topTss),
+      middleTss: scalarSeries(results, (result) => result.clarifier?.middleTss),
+      bottomTss: scalarSeries(results, (result) => result.clarifier?.bottomTss),
+      effluentTss: scalarSeries(results, (result) => result.clarifier?.effluentTss),
+      underflowTss: scalarSeries(results, (result) => result.clarifier?.underflowTss),
+    },
+    mode: "realtime",
+    sourceName: "实时推进",
+    solverMethod: params.solverMethod,
+    warnings,
+    validation: { ok: !warnings.length, warningCount: warnings.length, warnings },
+  };
+}
+
+const forecastMetricMeta = {
+  NH4: { label: "NH4-N", unit: "gN/m3", color: "#6f91c5", reference: 5 },
+  COD: { label: "COD", unit: "gCOD/m3", color: "#4d8a69", reference: 60 },
+  TN: { label: "TN", unit: "gN/m3", color: "#6f91c5", reference: 15 },
+  TP: { label: "TP", unit: "gP/m3", color: "#9a855c", reference: 0.5 },
+};
+
+async function requestRealtimeForecast() {
+  return realtimeRequest("/forecast", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      projectId: activeProjectId,
+      horizonHours: 8,
+      stepHours: 1,
+      historyHours: 24,
+    }),
+  });
+}
+
+function forecastRangeText(metric) {
+  if (!metric || metric.low === null || metric.high === null) return "--";
+  return `${formatForecastNumber(metric.low)}-${formatForecastNumber(metric.high)}`;
+}
+
+function formatForecastNumber(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "--";
+  return numeric.toFixed(1);
+}
+
+function forecastRiskText(risk) {
+  const labels = { ok: "受控", watch: "接近上限", warning: "风险升高", unavailable: "暂不可用" };
+  return labels[risk] || risk || "--";
+}
+
+function forecastRiskClass(risk) {
+  if (risk === "warning") return "warning";
+  if (risk === "watch") return "watch";
+  if (risk === "unavailable") return "muted";
+  return "ok";
+}
+
+function forecastTrendPartVisible(part) {
+  return !hiddenForecastTrendParts.has(part);
+}
+
+function toggleForecastTrendPart(part) {
+  if (hiddenForecastTrendParts.has(part)) hiddenForecastTrendParts.delete(part);
+  else hiddenForecastTrendParts.add(part);
+  renderForecastTrend(realtimeForecast);
+}
+
+function renderForecastTrendLegend(meta) {
+  const items = [
+    { key: "median", label: "中位预测", icon: `<i style="background:${meta.color}"></i>` },
+    { key: "interval", label: "预测区间", icon: `<i class="band"></i>` },
+    { key: "risk", label: "风险窗口", icon: `<i class="risk-window"></i>` },
+    { key: "reference", label: "参考线", icon: `<i class="reference"></i>` },
+  ];
+  forecastTrendLegend.innerHTML = items
+    .map(
+      (item) => `
+        <button class="${forecastTrendPartVisible(item.key) ? "" : "muted"}" type="button" data-forecast-part="${item.key}" aria-pressed="${forecastTrendPartVisible(item.key)}">
+          ${item.icon}
+          <span>${item.label}</span>
+        </button>
+      `,
+    )
+    .join("");
+  forecastTrendLegend.querySelectorAll("[data-forecast-part]").forEach((item) => {
+    item.addEventListener("click", () => toggleForecastTrendPart(item.dataset.forecastPart));
+  });
+}
+
+function forecastInfluentMetric(point, metricName) {
+  const boundaries = point?.boundaries || {};
+  const scenarioValue = (scenario, key) => {
+    const value = Number(boundaries?.[scenario]?.[key]);
+    return Number.isFinite(value) ? value : null;
+  };
+  const valuesFor = (key, unit, reference = null) => {
+    const values = ["low", "median", "high"].map((scenario) => scenarioValue(scenario, key)).filter((value) => Number.isFinite(value));
+    if (!values.length) return { low: null, median: null, high: null, unit, reference, risk: "unavailable" };
+    const sorted = values.slice().sort((a, b) => a - b);
+    return {
+      low: sorted[0],
+      median: sorted[Math.floor(sorted.length / 2)],
+      high: sorted[sorted.length - 1],
+      unit,
+      reference,
+      risk: "ok",
+    };
+  };
+  if (metricName === "COD") return valuesFor("influentCod", "gCOD/m3");
+  if (metricName === "NH4") return valuesFor("influentNh4", "gN/m3");
+  if (metricName === "TN") {
+    const values = ["low", "median", "high"]
+      .map((scenario) => {
+        const nh4 = scenarioValue(scenario, "influentNh4");
+        const no3 = scenarioValue(scenario, "influentNo3");
+        return Number.isFinite(nh4) || Number.isFinite(no3) ? (nh4 || 0) + (no3 || 0) : null;
+      })
+      .filter((value) => Number.isFinite(value))
+      .sort((a, b) => a - b);
+    return values.length
+      ? { low: values[0], median: values[Math.floor(values.length / 2)], high: values[values.length - 1], unit: "gN/m3", reference: null, risk: "ok" }
+      : { low: null, median: null, high: null, unit: "gN/m3", reference: null, risk: "unavailable" };
+  }
+  return {
+    low: null,
+    median: null,
+    high: null,
+    unit: "gP/m3",
+    reference: null,
+    risk: "unavailable",
+    note: "TP 进水点位尚未接入。",
+  };
+}
+
+function overviewSparkline(values, color) {
+  const finite = values.filter((value) => Number.isFinite(value));
+  if (finite.length < 2) return "";
+  const min = Math.min(...finite);
+  const max = Math.max(...finite);
+  const span = Math.max(max - min, 1e-9);
+  const points = finite
+    .map((value, index) => {
+      const x = (index / Math.max(finite.length - 1, 1)) * 180;
+      const y = 34 - ((value - min) / span) * 28;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  return `<svg viewBox="0 0 180 40" preserveAspectRatio="none"><polyline points="${points}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.72"></polyline></svg>`;
+}
+
+function overviewDualSparkline(influentValues, effluentValues, standard, color = "#4d8a69") {
+  const series = [
+    { values: influentValues.filter(Number.isFinite), color: "#8d9a92", dash: "5 5" },
+    { values: effluentValues.filter(Number.isFinite), color, dash: "" },
+  ].filter((item) => item.values.length >= 2);
+  if (!series.length) return `<div class="overview-trend empty">最近 24 小时暂无足够趋势数据</div>`;
+  const allValues = series.flatMap((item) => item.values);
+  if (Number.isFinite(Number(standard))) allValues.push(Number(standard));
+  const min = Math.min(...allValues);
+  const max = Math.max(...allValues);
+  const span = Math.max(max - min, 1e-9);
+  const width = 180;
+  const height = 42;
+  const pathFor = (values) =>
+    values
+      .map((value, index) => {
+        const x = (index / Math.max(values.length - 1, 1)) * width;
+        const y = height - 6 - ((value - min) / span) * (height - 12);
+        return `${index ? "L" : "M"} ${x.toFixed(1)} ${y.toFixed(1)}`;
+      })
+      .join(" ");
+  const standardY = Number.isFinite(Number(standard)) ? height - 6 - ((Number(standard) - min) / span) * (height - 12) : null;
+  return `
+    <div class="overview-trend">
+      <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+        ${standardY !== null ? `<line x1="0" y1="${standardY.toFixed(1)}" x2="${width}" y2="${standardY.toFixed(1)}" stroke="#c99b62" stroke-width="1.4" stroke-dasharray="5 5" opacity="0.75"></line>` : ""}
+        ${series.map((item) => `<path d="${pathFor(item.values)}" fill="none" stroke="${item.color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${item.dash}" opacity="0.86"></path>`).join("")}
+      </svg>
+      <div>
+        <span><i class="in"></i>进水</span>
+        <span><i class="out"></i>出水</span>
+        <span><i class="std"></i>一级 A</span>
+      </div>
+    </div>
+  `;
+}
+
+function historyInputSeries(key) {
+  return (realtimeDashboardHistory?.inputs || []).map((record) => Number(boundaryValue(record, key))).filter(Number.isFinite);
+}
+
+function historyResultSeries(key) {
+  return (realtimeDashboardHistory?.results || []).map((record) => Number(record.result?.[key])).filter(Number.isFinite);
+}
+
+function waterQualityStatus(value, standard) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || !Number.isFinite(standard)) return { label: "待接入", className: "muted" };
+  if (numeric <= standard) return { label: "达标", className: "ok" };
+  if (numeric <= standard * 1.15) return { label: "临界", className: "watch" };
+  return { label: "超标", className: "warning" };
+}
+
+function overviewValue(value, precision = 1) {
+  if (value === null || value === undefined || value === "") return "--";
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "--";
+  return numeric >= 100 ? numeric.toFixed(0) : numeric.toFixed(precision);
+}
+
+function dailyFlowEstimate(q, timestamp) {
+  if (q === null || q === undefined || q === "") return null;
+  const flow = Number(q);
+  if (!Number.isFinite(flow)) return null;
+  const date = timestamp ? new Date(timestamp) : new Date();
+  const validDate = Number.isFinite(date.getTime()) ? date : new Date();
+  const hours = validDate.getHours() + validDate.getMinutes() / 60 + validDate.getSeconds() / 3600;
+  return flow * (hours / 24);
+}
+
+function renderDashboardOverview(payload) {
+  if (!dashboardOverviewCards) return;
+  const input = payload?.current?.input || null;
+  const effluent = payload?.current?.effluent || {};
+  const inputValues = input
+    ? {
+        q: boundaryValue(input, "influentQ"),
+        cod: boundaryValue(input, "influentCod"),
+        nh4: boundaryValue(input, "influentNh4"),
+        no3: boundaryValue(input, "influentNo3"),
+      }
+    : {};
+  const estimatedInfluentTn = Number.isFinite(Number(inputValues.nh4)) || Number.isFinite(Number(inputValues.no3))
+    ? (Number(inputValues.nh4) || 0) + (Number(inputValues.no3) || 0)
+    : null;
+  const dailyFlow = dailyFlowEstimate(inputValues.q, input?.timestamp);
+  const cards = [
+    {
+      label: "COD",
+      influent: inputValues.cod,
+      effluent: effluent.COD,
+      standard: 50,
+      unit: "mg/L",
+      color: "#4d8a69",
+      influentTrend: historyInputSeries("influentCod"),
+      effluentTrend: historyResultSeries("effCod"),
+    },
+    {
+      label: "NH4-N",
+      influent: inputValues.nh4,
+      effluent: effluent.NH4,
+      standard: 5,
+      standardText: "5 / 8",
+      unit: "mg/L",
+      color: "#6f91c5",
+      influentTrend: historyInputSeries("influentNh4"),
+      effluentTrend: historyResultSeries("effNh4"),
+    },
+    {
+      label: "TN",
+      influent: estimatedInfluentTn,
+      influentNote: "按 NH4+NO3 估算",
+      effluent: effluent.TN,
+      standard: 15,
+      unit: "mg/L",
+      color: "#6f91c5",
+      influentTrend: (() => {
+        const nh4 = historyInputSeries("influentNh4");
+        const no3 = historyInputSeries("influentNo3");
+        return nh4.map((value, index) => value + (no3[index] || 0));
+      })(),
+      effluentTrend: historyResultSeries("effTn"),
+    },
+    { label: "TP", influent: null, effluent: null, standard: 0.5, unit: "mg/L", note: "待接入 TP 点位", color: "#9a855c", influentTrend: [], effluentTrend: [] },
+  ];
+  dashboardOverviewCards.innerHTML = cards
+    .map((card) => {
+      const status = waterQualityStatus(card.effluent, card.standard);
+      return `
+        <article class="dashboard-overview-card quality-card">
+          <div><span>${card.label}</span><em class="${status.className}">${status.label}</em></div>
+          <dl>
+            <div><dt>进水</dt><dd>${overviewValue(card.influent)} <small>${card.unit}</small></dd></div>
+            <div><dt>出水</dt><dd>${overviewValue(card.effluent)} <small>${card.unit}</small></dd></div>
+            <div><dt>一级 A</dt><dd>${card.standardText || overviewValue(card.standard)} <small>${card.unit}</small></dd></div>
+          </dl>
+          ${overviewDualSparkline(card.influentTrend || [], card.effluentTrend || [], card.standard, card.color)}
+          ${card.influentNote || card.note ? `<p>${escapeHtml(card.influentNote || card.note)}</p>` : ""}
+        </article>
+      `;
+    })
+    .join("") + `
+    <article class="dashboard-overview-card flow-card">
+      <div><span>水量</span><em class="ok">实时</em></div>
+      <strong>${overviewValue(inputValues.q, 0)} <small>m3/d</small></strong>
+      <dl>
+        <div><dt>进水实时水量</dt><dd>${overviewValue(inputValues.q, 0)} <small>m3/d</small></dd></div>
+        <div><dt>当日累计处理水量</dt><dd>${overviewValue(dailyFlow, 0)} <small>m3</small></dd></div>
+      </dl>
+      ${overviewSparkline(historyInputSeries("influentQ"), "#4d8a69")}
+      <p>按当前在线流量折算。</p>
+    </article>`;
+}
+
+function renderForecastCards(payload) {
+  if (!forecastCards) return;
+  const points = payload?.points || [];
+  const meta = forecastMetricMeta[activeForecastMetric] || forecastMetricMeta.NH4;
+  forecastCards.innerHTML = points.length
+    ? points
+        .map((point) => {
+          const metric = forecastInfluentMetric(point, activeForecastMetric);
+          const risk = forecastRiskClass(metric?.risk);
+          return `
+            <article class="forecast-hour-card ${risk}">
+              <span>+${point.hour}h</span>
+              <strong>${forecastRangeText(metric)}</strong>
+              <div class="forecast-interval-mark ${risk}">
+                <i></i><b></b>
+              </div>
+              <small>中位 ${metric?.median === null || metric?.median === undefined ? "--" : formatForecastNumber(metric.median)}<br>${metric?.unit || meta.unit}</small>
+            </article>
+          `;
+        })
+        .join("")
+    : `<p class="empty-state-inline">暂无预测结果。点击“刷新预测”生成未来 8 小时预测。</p>`;
+}
+
+function renderForecastTrend(payload) {
+  if (!forecastTrend || !forecastTrendLegend) return;
+  const points = payload?.points || [];
+  const meta = forecastMetricMeta[activeForecastMetric] || forecastMetricMeta.NH4;
+  const metricPoints = points
+    .map((point) => ({ hour: point.hour, ...(point.metrics?.[activeForecastMetric] || {}) }))
+    .filter((point) => Number.isFinite(point.low) && Number.isFinite(point.median) && Number.isFinite(point.high));
+  renderForecastTrendLegend(meta);
+  if (!metricPoints.length) {
+    forecastTrend.innerHTML = `<div class="forecast-unavailable">当前模型暂不支持 ${meta.label} 的机理预测。后续接入除磷模型后可启用。</div>`;
+    return;
+  }
+  const showMedian = forecastTrendPartVisible("median");
+  const showInterval = forecastTrendPartVisible("interval");
+  const showRisk = forecastTrendPartVisible("risk");
+  const showReference = forecastTrendPartVisible("reference");
+  const width = 980;
+  const height = 230;
+  const pad = { left: 74, right: 28, top: 34, bottom: 44 };
+  const values = [
+    ...(showInterval ? metricPoints.flatMap((point) => [point.low, point.high]) : []),
+    ...(showMedian ? metricPoints.map((point) => point.median) : []),
+    ...(showReference ? [meta.reference] : []),
+  ].filter(Number.isFinite);
+  const domain = niceYDomain(values);
+  const x = (hour) => pad.left + ((hour - 1) / Math.max(metricPoints.length - 1, 1)) * (width - pad.left - pad.right);
+  const y = (value) => pad.top + (1 - (value - domain.min) / Math.max(domain.max - domain.min, 1e-9)) * (height - pad.top - pad.bottom);
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+    const value = domain.max - (domain.max - domain.min) * ratio;
+    return { ratio, value, y: pad.top + ratio * (height - pad.top - pad.bottom) };
+  });
+  const medianPath = metricPoints.map((point, index) => `${index ? "L" : "M"} ${x(point.hour).toFixed(1)} ${y(point.median).toFixed(1)}`).join(" ");
+  const highPath = metricPoints.map((point) => `${x(point.hour).toFixed(1)} ${y(point.high).toFixed(1)}`).join(" L ");
+  const lowPath = metricPoints
+    .slice()
+    .reverse()
+    .map((point) => `${x(point.hour).toFixed(1)} ${y(point.low).toFixed(1)}`)
+    .join(" L ");
+  const refY = y(meta.reference);
+  const riskWindow = payload?.advice?.riskWindow || {};
+  const activeRiskPoints = metricPoints.filter((point) => point.risk === "watch" || point.risk === "warning");
+  const windowStart = activeRiskPoints.length ? activeRiskPoints[0].hour : riskWindow.startHour;
+  const windowEnd = activeRiskPoints.length ? activeRiskPoints[activeRiskPoints.length - 1].hour : riskWindow.endHour;
+  const riskRect =
+    showRisk && Number.isFinite(Number(windowStart)) && Number.isFinite(Number(windowEnd))
+      ? `<rect x="${x(windowStart) - 16}" y="${pad.top}" width="${x(windowEnd) - x(windowStart) + 32}" height="${height - pad.top - pad.bottom}" rx="8" fill="#fff7e8" stroke="#e8c88a" stroke-width="1" opacity="0.62"></rect>`
+      : "";
+  forecastTrend.innerHTML = `
+    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" class="forecast-trend-svg" aria-label="${meta.label} 出水预测图">
+      <rect width="${width}" height="${height}" fill="#ffffff"></rect>
+      ${yTicks
+        .map((tick) => {
+          return `
+            <line x1="${pad.left}" y1="${tick.y}" x2="${width - pad.right}" y2="${tick.y}" stroke="#e8eee9" stroke-width="1"></line>
+            <text x="${pad.left - 12}" y="${tick.y + 3.5}" fill="#7b8981" font-size="10.5" font-weight="500" text-anchor="end">${formatForecastNumber(tick.value)}</text>
+          `;
+        })
+        .join("")}
+      <text x="${pad.left}" y="20" fill="#7b8981" font-size="11" font-weight="600">${meta.label} (${meta.unit})</text>
+      ${riskRect}
+      ${showReference ? `<line x1="${pad.left}" y1="${refY}" x2="${width - pad.right}" y2="${refY}" stroke="#c99b62" stroke-width="1.2" stroke-dasharray="6 8" opacity="0.7"></line>` : ""}
+      ${showInterval ? `<path d="M ${highPath} L ${lowPath} Z" fill="#dcebf5" opacity="0.42"></path>` : ""}
+      ${showMedian ? `<path d="${medianPath}" fill="none" stroke="${meta.color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"></path>` : ""}
+      ${showMedian ? metricPoints.map((point) => `<circle cx="${x(point.hour)}" cy="${y(point.median)}" r="3.3" fill="#ffffff" stroke="${point.risk === "warning" ? "#b97855" : point.risk === "watch" ? "#c99b62" : meta.color}" stroke-width="1.7"></circle>`).join("") : ""}
+      ${showReference ? `<text x="${pad.left - 12}" y="${refY + 3.5}" fill="#a27b4d" font-size="10.5" font-weight="600" text-anchor="end">${formatForecastNumber(meta.reference)}</text>` : ""}
+      ${riskRect ? `<text x="${x(windowStart)}" y="${pad.top + 14}" fill="#a27b4d" font-size="10.5" font-weight="600">风险窗口</text>` : ""}
+      ${metricPoints.map((point) => `<text x="${x(point.hour)}" y="${height - 25}" fill="#7b8981" font-size="10.5" font-weight="500" text-anchor="middle">+${point.hour}h</text>`).join("")}
+      <text x="${width - pad.right}" y="${height - 8}" fill="#7b8981" font-size="10.5" font-weight="500" text-anchor="end">预测时间 h</text>
+    </svg>
+  `;
+}
+
+function renderForecastSide(payload) {
+  const advice = payload?.advice || {};
+  const actions = advice.actions || [];
+  const riskWindow = advice.riskWindow?.message || "未来 8 小时未触发主要出水风险窗口";
+  const riskEvidence = payload?.summary?.riskWindow?.message || riskWindow;
+  if (forecastRunMeta) {
+    const runText = payload?.createdAt
+      ? `最近预测 ${shortDateTime(payload.createdAt)} · 未来 ${formatChartValue(payload.horizonHours || 8)} h · ${forecastSourceLabel(payload)}`
+      : "尚未生成预测";
+    forecastRunMeta.textContent = runText;
+  }
+  if (dashboardUpdatedAt) {
+    dashboardUpdatedAt.textContent = payload?.createdAt ? `最近预测 ${shortDateTime(payload.createdAt)}` : "--";
+  }
+  if (forecastRiskBadge) {
+    forecastRiskBadge.textContent = advice.riskLevel === "warning" ? "中风险" : "受控";
+    forecastRiskBadge.className = advice.riskLevel === "warning" ? "risk-badge warning" : "risk-badge ok";
+  }
+  if (forecastAdviceCards) {
+    const actionRows = actions.length
+      ? actions
+          .map((action) => {
+            const value = action.from === action.to ? `${action.from}` : `${action.from} → ${action.to}`;
+            return `<li><span>${escapeHtml(action.label)}</span><strong>${escapeHtml(value)} ${escapeHtml(action.unit || "")}</strong></li>`;
+          })
+          .join("")
+      : "<li><span>主要控制量</span><strong>暂无调整</strong></li>";
+    const evidenceRows = [
+      riskEvidence,
+      "基于最近在线边界、当前模型状态和未来 8 小时情景预测。",
+      ...(advice.notes || []).slice(0, 1),
+    ];
+    forecastAdviceCards.innerHTML = `
+      <article class="forecast-advice-section">
+        <span>风险来源</span>
+        <strong>${escapeHtml(riskWindow)}</strong>
+      </article>
+      <article class="forecast-advice-section">
+        <span>建议动作</span>
+        <ul>${actionRows}</ul>
+      </article>
+      <article class="forecast-advice-section">
+        <span>判断依据</span>
+        <ul>${evidenceRows.map((row) => `<li>${escapeHtml(row)}</li>`).join("")}</ul>
+      </article>
+    `;
+  }
+  if (forecastMonitorRows) {
+    const monitors = advice.monitors || {};
+    const rows = [
+      ["生物池 MLSS", monitors.MLSS, "g/m3"],
+      ["厌氧池 DO", monitors.anaerobicDO, "gO2/m3"],
+      ["缺氧池 DO", monitors.anoxicDO, "gO2/m3"],
+      ["好氧池 DO", monitors.aerobicDO, "gO2/m3"],
+      ["排泥量 WAS", monitors.WAS, "m3/d"],
+    ];
+    forecastMonitorRows.innerHTML = rows
+      .map(([label, value, unit]) => `<div><span>${label}</span><strong>${Number.isFinite(Number(value)) ? formatChartValue(value) : "--"}</strong><em>${unit}</em></div>`)
+      .join("");
+  }
+  if (forecastRiskNotes) {
+    const notes = [riskWindow, ...(advice.notes || [])];
+    forecastRiskNotes.innerHTML = notes.map((note, index) => `<article class="${index === 0 ? "primary" : ""}">${escapeHtml(note)}</article>`).join("");
+  }
+}
+
+function renderRealtimeDashboard(payload) {
+  realtimeForecast = payload;
+  forecastMetricTabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.forecastMetric === activeForecastMetric));
+  renderDashboardOverview(payload);
+  renderForecastCards(payload);
+  renderForecastTrend(payload);
+  renderForecastSide(payload);
+}
+
+async function refreshRealtimeDashboard() {
+  if (activePanel !== "realtimeDashboard") return;
+  const previousText = refreshRealtimeForecast?.textContent || "刷新预测";
   try {
+    if (refreshRealtimeForecast) {
+      refreshRealtimeForecast.disabled = true;
+      refreshRealtimeForecast.textContent = "预测中";
+    }
+    if (forecastRunMeta) forecastRunMeta.textContent = "正在基于实时状态生成预测...";
+    const [payload, history] = await Promise.all([
+      requestRealtimeForecast(),
+      realtimeRequest(withProjectQuery("/history?hours=24&limit=500")),
+    ]);
+    realtimeDashboardHistory = history;
+    renderRealtimeDashboard(payload);
+  } catch (error) {
+    if (forecastRunMeta) forecastRunMeta.textContent = `预测失败：${error.message}`;
+    renderRealtimeDashboard(null);
+  } finally {
+    if (refreshRealtimeForecast) {
+      refreshRealtimeForecast.disabled = false;
+      refreshRealtimeForecast.textContent = previousText;
+    }
+  }
+}
+
+async function refreshDataCleaningDashboard() {
+  const label = refreshDataCleaning?.querySelector("span");
+  const previousLabel = label?.textContent || "刷新";
+  try {
+    if (refreshDataCleaning) refreshDataCleaning.disabled = true;
+    if (label) label.textContent = "刷新中";
     dataCleaningStatus.textContent = "正在加载在线数据清洗仪表板...";
-    const [statusPayload, historyPayload] = await Promise.all([
+    const [settingsPayload, statusPayload, historyPayload] = await Promise.all([
+      realtimeRequest(withProjectQuery("/cleaning-settings")),
       realtimeRequest(withProjectQuery("/status")),
       realtimeRequest(withProjectQuery("/history?hours=12&limit=200")),
     ]);
+    cleaningSettings = settingsPayload;
+    renderCleaningRuleSettings();
     renderDataCleaningDashboard(statusPayload, historyPayload);
+    if (label) label.textContent = "已刷新";
   } catch (error) {
     dataCleaningStatus.textContent = `在线数据清洗加载失败：${error.message}`;
     dataCleaningStatus.classList.add("error");
+    if (label) label.textContent = "刷新失败";
+  } finally {
+    window.setTimeout(() => {
+      if (label) label.textContent = previousLabel;
+      if (refreshDataCleaning) refreshDataCleaning.disabled = false;
+    }, 900);
   }
 }
 
@@ -2918,8 +4430,11 @@ function renderMockSummary(status) {
     if (settingsMockSummary) settingsMockSummary.innerHTML = "";
     return;
   }
+  if (mockProfileRealtime) mockProfileRealtime.value = status.profile || "normal";
+  if (settingsMockProfile) settingsMockProfile.value = status.profile || "normal";
   const html = `
     <div><span>状态</span><strong>${status.running ? "运行中" : "已停止"}</strong></div>
+    <div><span>工况</span><strong>${escapeHtml(status.profileLabel || status.profile || "正常工况")}</strong></div>
     <div><span>间隔</span><strong>${status.intervalSeconds || 300} s</strong></div>
     <div><span>最近结果</span><strong>${status.lastResultId ?? "--"}</strong></div>
     <div><span>最近错误</span><strong>${status.lastError || "无"}</strong></div>
@@ -2979,9 +4494,17 @@ async function resetRealtimeState() {
 }
 
 async function startRealtimeMock() {
-  const status = await realtimeRequest("/mock/start", { method: "POST" });
-  updateRealtimeStatus("Mock 实时数据已启动，每 5 分钟自动推进一次。");
+  const profile = settingsMockProfile?.value || mockProfileRealtime?.value || "normal";
+  const status = await realtimeRequest("/mock/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ projectId: activeProjectId, profile, intervalSeconds: 300, warmStart: true }),
+  });
+  updateRealtimeStatus(`${status.profileLabel || "Mock"} 已启动，并已按该工况暖启动模型。`);
   renderMockSummary(status);
+  await refreshRealtimeLatest();
+  await refreshRealtimeHistory();
+  if (activePanel === "realtimeDashboard") await refreshRealtimeDashboard();
 }
 
 async function stopRealtimeMock() {
@@ -3112,11 +4635,26 @@ function renderWarnings(result) {
     warningPanel.innerHTML = "";
     return;
   }
+  const collapsed = warnings.length > 2;
+  const visibleWarnings = collapsed ? warnings.slice(0, 2) : warnings;
   warningPanel.hidden = false;
   warningPanel.innerHTML = `
-    <strong>模型校验提示 (${warnings.length})</strong>
-    <ul>${warnings.map((warning) => `<li>${warning}</li>`).join("")}</ul>
+    <div class="warning-panel-head">
+      <strong>模型校验提示 (${warnings.length})</strong>
+      ${collapsed ? `<button class="warning-toggle" type="button" data-expanded="false">展开全部</button>` : ""}
+    </div>
+    <ul data-warning-list>${visibleWarnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul>
   `;
+  const toggle = warningPanel.querySelector(".warning-toggle");
+  if (toggle) {
+    toggle.addEventListener("click", () => {
+      const expanded = toggle.dataset.expanded === "true";
+      const nextWarnings = expanded ? warnings.slice(0, 2) : warnings;
+      warningPanel.querySelector("[data-warning-list]").innerHTML = nextWarnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("");
+      toggle.dataset.expanded = String(!expanded);
+      toggle.textContent = expanded ? "展开全部" : "收起";
+    });
+  }
 }
 
 function niceMax(values) {
@@ -3476,8 +5014,10 @@ function updateMetrics(result) {
   const stateText = result.statePersistence?.usedPreviousState ? "，已继承上次最终状态" : "，已保存本次最终状态";
   document.getElementById("resultSummary").textContent =
     `已完成 ${sourceText} 仿真${solverText}${durationText}${stateText}${warningText}。可点击任一单体并在下拉框选择 WEST 风格指标查看过程浓度。`;
-  setAiAnalysisStatus("已获得方案仿真结果，可生成 AI 分析。");
-  if (aiAnalysisOutput) {
+  if (aiAnalysisState === "running") {
+    renderAiWorkingState();
+  } else if (aiAnalysisState !== "success") {
+    setAiAnalysisStatus("已获得方案仿真结果，可生成 AI 分析。");
     aiAnalysisOutput.innerHTML = "<p>点击“生成 AI 建议”获取结果分析与工艺调整建议。</p>";
   }
   renderWarnings(result);
@@ -3526,6 +5066,8 @@ environmentSelect?.addEventListener("change", () => {
 logoutButton?.addEventListener("click", () => {
   if (appFrame) appFrame.hidden = true;
   if (loginScreen) loginScreen.hidden = false;
+  if (systemChatToggle) systemChatToggle.hidden = true;
+  setSystemChatOpen(false);
   setPendingEnvironment(activeEnvironment);
 });
 
@@ -3589,11 +5131,8 @@ resetParams.addEventListener("click", async () => {
   await resetToDefaultParams();
 });
 projectSelect.addEventListener("change", async () => {
-  activeProjectId = projectSelect.value || "default";
-  await loadProjectParams(activeProjectId);
-  await loadProjectCsv(activeProjectId);
+  await switchProject(projectSelect.value || "default");
   renderForm();
-  showDefaultBoundaryPreview();
   if (activePanel === "results" && activeResultMode === "realtime") showRealtimeResults();
   if (activePanel === "logs") await refreshCalculationLogs();
   if (activePanel === "cleaning") await refreshDataCleaningDashboard();
@@ -3608,20 +5147,39 @@ newProject.addEventListener("click", async () => {
 libraryNewProject?.addEventListener("click", async () => {
   await createNewProject();
 });
-libraryProjectSelect?.addEventListener("change", async () => {
-  activeProjectId = libraryProjectSelect.value || "default";
-  await loadProjectParams(activeProjectId);
-  await loadProjectCsv(activeProjectId);
-  renderForm();
-  showDefaultBoundaryPreview();
-});
-openScenarioEditor?.addEventListener("click", () => {
-  activatePanel("params");
+scenarioList?.addEventListener("click", async (event) => {
+  const actionTarget = event.target instanceof Element ? event.target.closest("[data-scenario-action]") : null;
+  if (!actionTarget) return;
+  await handleScenarioAction(actionTarget.dataset.scenarioAction, actionTarget.dataset.projectId);
 });
 refreshLogs.addEventListener("click", async () => {
   await refreshCalculationLogs();
 });
-refreshDataCleaning.addEventListener("click", refreshDataCleaningDashboard);
+refreshRealtimeForecast?.addEventListener("click", refreshRealtimeDashboard);
+forecastMetricTabs.forEach((tab) => {
+  tab.addEventListener("click", () => {
+    activeForecastMetric = tab.dataset.forecastMetric || "NH4";
+    if (realtimeForecast) {
+      renderRealtimeDashboard(realtimeForecast);
+    }
+  });
+});
+refreshDataCleaning?.addEventListener("click", refreshDataCleaningDashboard);
+openCleaningSettings?.addEventListener("click", async () => {
+  if (cleaningSettingsStatus) cleaningSettingsStatus.textContent = "正在加载当前项目清洗规则...";
+  try {
+    await loadCleaningSettings();
+    if (cleaningSettingsStatus) cleaningSettingsStatus.textContent = "选择要启用的清洗规则，然后保存。";
+  } catch (error) {
+    if (cleaningSettingsStatus) cleaningSettingsStatus.textContent = `清洗规则加载失败：${error.message}`;
+  }
+  if (cleaningSettingsDialog?.showModal) {
+    cleaningSettingsDialog.showModal();
+    return;
+  }
+  window.alert("当前浏览器不支持弹窗设置。");
+});
+saveCleaningSettings?.addEventListener("click", saveCleaningRuleSettings);
 runQuickCalibration.addEventListener("click", async () => {
   await runQuickNh4Calibration();
 });
@@ -3637,6 +5195,25 @@ refreshCalibrationRuns.addEventListener("click", async () => {
 exportCalibrationReport.addEventListener("click", exportLastCalibrationReport);
 refreshModelEvaluation.addEventListener("click", () => refreshModelEvaluationPanel());
 compareBsm1Reference.addEventListener("click", () => refreshModelEvaluationPanel({ compareReference: true }));
+refreshRealtimeTrust?.addEventListener("click", refreshRealtimeTrustPanel);
+fillObservationFromLatest?.addEventListener("click", async () => {
+  try {
+    await fillTrustObservationFromLatest();
+    realtimeTrustStatus.textContent = "已填入最新模型预测值，请按现场实测值修正后保存。";
+    realtimeTrustStatus.classList.remove("error");
+  } catch (error) {
+    realtimeTrustStatus.textContent = `填入失败：${error.message}`;
+    realtimeTrustStatus.classList.add("error");
+  }
+});
+saveRealtimeObservation?.addEventListener("click", async () => {
+  try {
+    await saveTrustObservation();
+  } catch (error) {
+    realtimeTrustStatus.textContent = `保存实测值失败：${error.message}`;
+    realtimeTrustStatus.classList.add("error");
+  }
+});
 calibrationObservationFileInput.addEventListener("change", async () => {
   const file = calibrationObservationFileInput.files?.[0];
   if (!file) return;
@@ -3804,6 +5381,49 @@ settingsRefreshMock?.addEventListener("click", async () => {
 });
 
 runAiAnalysis?.addEventListener("click", requestAiAnalysis);
+aiModelSelect?.addEventListener("change", () => {
+  writeLocalStorage(AI_MODEL_KEY, aiModelSelect.value);
+  if (aiAnalysisMeta) {
+    aiAnalysisMeta.textContent = `deepseek · ${displayAiModelName(aiModelSelect.value)} · 已选择`;
+  }
+});
+systemChatToggle?.addEventListener("click", () => {
+  setSystemChatOpen(systemChatPanel?.hidden !== false);
+});
+systemChatClose?.addEventListener("click", () => {
+  setSystemChatOpen(false);
+});
+systemChatNew?.addEventListener("click", () => {
+  const session = createSystemChatSession();
+  systemChatSessions.unshift(session);
+  activeSystemChatId = session.id;
+  systemChatSearchTerm = "";
+  if (systemChatSearch) systemChatSearch.value = "";
+  persistSystemChatSessions();
+  renderSystemChatMessages();
+  window.setTimeout(() => systemChatInput?.focus(), 0);
+});
+systemChatSearch?.addEventListener("input", () => {
+  systemChatSearchTerm = systemChatSearch.value;
+  renderSystemChatSessions();
+});
+systemChatSessionList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-chat-session]");
+  if (!button || systemChatBusy) return;
+  activeSystemChatId = button.dataset.chatSession;
+  persistSystemChatSessions();
+  renderSystemChatMessages();
+});
+systemChatForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await submitSystemChat();
+});
+systemChatInput?.addEventListener("keydown", async (event) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    await submitSystemChat();
+  }
+});
 
 resultChart.addEventListener("mousemove", updateChartTooltip);
 resultChart.addEventListener("mouseleave", hideChartTooltip);
@@ -3936,6 +5556,10 @@ async function initializeApp() {
   renderMetricOptions();
   drawNodes();
   showDefaultBoundaryPreview();
+  loadSystemChatSessions();
+  if (aiModelSelect) {
+    aiModelSelect.value = readLocalStorage(AI_MODEL_KEY, aiModelSelect.value);
+  }
   refreshAiStatus();
 }
 

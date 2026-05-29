@@ -28,6 +28,32 @@ class RealtimeStepRequest(BaseModel):
     stepHours: Optional[float] = None
 
 
+class RealtimeForecastRequest(BaseModel):
+    projectId: Optional[str] = "default"
+    horizonHours: int = 8
+    stepHours: float = 1.0
+    historyHours: float = 24
+
+
+class RealtimeMockStartRequest(BaseModel):
+    projectId: Optional[str] = "default"
+    profile: str = "normal"
+    intervalSeconds: int = 300
+    warmStart: bool = True
+
+
+class RealtimeObservationRequest(BaseModel):
+    projectId: Optional[str] = "default"
+    timestamp: Optional[str] = None
+    values: dict[str, Any] = Field(default_factory=dict)
+    source: str = "manual"
+
+
+class CleaningSettingsRequest(BaseModel):
+    projectId: Optional[str] = "default"
+    enabledRules: list[str] = Field(default_factory=list)
+
+
 class ParamConfigRequest(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
 
@@ -55,6 +81,15 @@ class ModelCredibilityRequest(BaseModel):
 
 class AIAnalysisRequest(BaseModel):
     projectId: Optional[str] = "default"
+    model: Optional[str] = None
+    result: dict[str, Any] = Field(default_factory=dict)
+    params: dict[str, Any] = Field(default_factory=dict)
+    context: dict[str, Any] = Field(default_factory=dict)
+
+
+class AIChatRequest(BaseModel):
+    projectId: Optional[str] = "default"
+    messages: list[dict[str, str]] = Field(default_factory=list)
     result: dict[str, Any] = Field(default_factory=dict)
     params: dict[str, Any] = Field(default_factory=dict)
     context: dict[str, Any] = Field(default_factory=dict)

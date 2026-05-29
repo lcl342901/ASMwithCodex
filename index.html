@@ -21,6 +21,16 @@
       <symbol id="icon-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></symbol>
       <symbol id="icon-alert" viewBox="0 0 24 24"><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5"/><path d="M12 17h.01"/></symbol>
       <symbol id="icon-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v6l4 2"/></symbol>
+      <symbol id="icon-chat" viewBox="0 0 24 24"><path d="M5 5h14v10H8l-3 4V5Z"/><path d="M8 9h8"/><path d="M8 12h5"/></symbol>
+      <symbol id="icon-operator" viewBox="0 0 24 24">
+        <circle cx="12" cy="9" r="4"/>
+        <path d="M5 21c1.2-3.4 3.5-5 7-5s5.8 1.6 7 5"/>
+        <path d="M6 10v-1a6 6 0 0 1 12 0v1"/>
+        <path d="M5 10h2v4H5z"/>
+        <path d="M17 10h2v4h-2z"/>
+        <path d="M17 14c0 2-1.7 3-5 3"/>
+        <path d="M11 17h2"/>
+      </symbol>
     </svg>
     <section id="loginScreen" class="login-screen" aria-label="登录与环境选择">
       <div class="login-shell">
@@ -87,10 +97,25 @@
         </div>
         <nav class="primary-nav">
           <span class="nav-group-label" data-env="realtime">实时仿真</span>
+          <button class="nav-item panel-tab" data-env="realtime" data-panel="realtimeDashboard" type="button" title="运行驾驶舱">
+            <svg><use href="#icon-chart"></use></svg>
+            <span class="nav-text">运行驾驶舱</span>
+            <small>预测与调度</small>
+          </button>
+          <button class="nav-item panel-tab" data-env="realtime" data-panel="realtimeOps" type="button" title="实时推进">
+            <svg><use href="#icon-database"></use></svg>
+            <span class="nav-text">实时推进</span>
+            <small>输入与计算</small>
+          </button>
           <button class="nav-item panel-tab" data-env="realtime" data-panel="results" data-result-mode-target="realtime" type="button" title="实时结果">
             <svg><use href="#icon-chart"></use></svg>
             <span class="nav-text">实时结果</span>
-            <small>状态与出水</small>
+            <small>曲线与建议</small>
+          </button>
+          <button class="nav-item panel-tab" data-env="realtime" data-panel="realtimeTrust" type="button" title="模型可信度">
+            <svg><use href="#icon-eval"></use></svg>
+            <span class="nav-text">模型可信度</span>
+            <small>误差与校正</small>
           </button>
           <button class="nav-item panel-tab" data-env="realtime" data-panel="cleaning" type="button" title="在线数据清洗">
             <svg><use href="#icon-cleaning"></use></svg>
@@ -184,47 +209,16 @@
               <p>方案存放在本地 SQLite 项目库中。每个方案保存一套参数和可选 CSV 历史边界，打开后可进入方案编辑或直接运行。</p>
             </div>
             <div class="library-actions">
-              <select id="libraryProjectSelect" aria-label="当前方案"></select>
               <button id="libraryNewProject" class="secondary-button" type="button">新建方案</button>
-              <button id="openScenarioEditor" class="primary-button" type="button">打开方案编辑</button>
             </div>
           </div>
-          <div class="scenario-grid">
-            <article class="scenario-card active">
-              <div>
-                <span class="scenario-tag">当前</span>
-                <h3>Default Project</h3>
-                <p>默认 AAO 方案，适合快速验证进水、池体、控制边界和解算器设置。</p>
-              </div>
-              <dl>
-                <div><dt>边界</dt><dd>手动 / CSV</dd></div>
-                <div><dt>解算器</dt><dd id="librarySolverLabel">RK4 v2</dd></div>
-                <div><dt>状态</dt><dd id="libraryScenarioStatus">可运行</dd></div>
-              </dl>
-            </article>
+          <div class="scenario-library-toolbar">
+            <strong>方案列表</strong>
+            <span id="scenarioLibraryStatus">正在加载方案...</span>
+          </div>
+          <div id="scenarioList" class="scenario-grid">
             <article class="scenario-card">
-              <div>
-                <span class="scenario-tag muted">模板</span>
-                <h3>雨季高负荷</h3>
-                <p>用于后续保存高流量、高 COD 冲击负荷下的方案快照。</p>
-              </div>
-              <dl>
-                <div><dt>边界</dt><dd>从实时复制</dd></div>
-                <div><dt>输出</dt><dd>方案结果</dd></div>
-                <div><dt>状态</dt><dd>待创建</dd></div>
-              </dl>
-            </article>
-            <article class="scenario-card">
-              <div>
-                <span class="scenario-tag muted">模板</span>
-                <h3>低 DO 对照</h3>
-                <p>用于比较好氧池 DO 设定变化对氨氮、硝态氮和 MLSS 的影响。</p>
-              </div>
-              <dl>
-                <div><dt>变量</dt><dd>DO set</dd></div>
-                <div><dt>输出</dt><dd>对比曲线</dd></div>
-                <div><dt>状态</dt><dd>待创建</dd></div>
-              </dl>
+              <p>正在加载方案库。</p>
             </article>
           </div>
         </section>
@@ -321,6 +315,10 @@
             </div>
             <div id="settingsMockSummary" class="mock-summary"></div>
             <div class="realtime-actions">
+              <select id="settingsMockProfile" class="compact-select" aria-label="Mock 工况模式">
+                <option value="normal">正常工况</option>
+                <option value="shock">冲击负荷</option>
+              </select>
               <button id="settingsStartMock" class="secondary-button" type="button">启动 Mock</button>
               <button id="settingsStopMock" class="secondary-button" type="button">停止 Mock</button>
               <button id="settingsRefreshMock" class="secondary-button" type="button">刷新状态</button>
@@ -340,7 +338,7 @@
               <svg><use href="#icon-refresh"></use></svg>
               <span>刷新</span>
             </button>
-            <button class="primary-button icon-text-button" type="button">
+            <button id="openCleaningSettings" class="primary-button icon-text-button" type="button">
               <svg><use href="#icon-settings"></use></svg>
               <span>清洗设置</span>
             </button>
@@ -405,6 +403,26 @@
           <p id="dataCleaningStatus" class="data-cleaning-status-line">尚未加载在线数据清洗状态。</p>
         </div>
       </section>
+      <dialog id="cleaningSettingsDialog" class="settings-dialog" aria-label="清洗设置">
+        <form method="dialog">
+          <div class="settings-dialog-head">
+            <div>
+              <p class="eyebrow">DATA CLEANING</p>
+              <h3>清洗设置</h3>
+            </div>
+            <button class="icon-button" value="cancel" aria-label="关闭清洗设置">×</button>
+          </div>
+          <div class="settings-dialog-body">
+            <p>选择当前项目启用的在线边界清洗规则。保存后，新进入系统的实时边界会按这些规则处理，仪表板中的“清洗规则”也会同步更新。</p>
+            <div id="cleaningRuleSettings" class="cleaning-rule-settings"></div>
+            <p id="cleaningSettingsStatus" class="tool-note">规则阈值暂由后端固定管理；后续可以扩展为项目级阈值配置。</p>
+          </div>
+          <div class="settings-dialog-actions">
+            <button class="secondary-button" value="cancel">关闭</button>
+            <button id="saveCleaningSettings" class="primary-button" type="button">保存设置</button>
+          </div>
+        </form>
+      </dialog>
 
       <section class="workspace-page stack-page" data-page="logs" aria-label="系统日志">
         <div class="panel-heading">
@@ -522,6 +540,173 @@
         </div>
       </section>
 
+      <section class="workspace-page stack-page realtime-dashboard-page" data-page="realtimeDashboard" aria-label="实时仿真运行驾驶舱">
+        <div class="dashboard-hero">
+          <div>
+            <p class="eyebrow">REALTIME SIMULATION</p>
+            <h2>污水厂运行驾驶舱</h2>
+            <p>基于最近实时边界、当前模型状态和 ASM1 滚动预测，展示未来 8 小时出水风险区间。预测只用于沙盘推演，不会覆盖真实实时状态。</p>
+          </div>
+          <div class="dashboard-actions">
+            <div id="forecastRunMeta" class="forecast-run-meta">尚未生成预测</div>
+            <button id="refreshRealtimeForecast" class="secondary-button" type="button">刷新预测</button>
+          </div>
+        </div>
+
+        <div class="realtime-dashboard-grid">
+          <div class="dashboard-main">
+            <section class="dashboard-card">
+              <div class="dashboard-card-head">
+                <div>
+                  <h3>实时进出水总览</h3>
+                  <p>当前值 + 最近 24 小时趋势，作为未来 8 小时预测的输入基线。</p>
+                </div>
+                <span id="dashboardUpdatedAt">--</span>
+              </div>
+              <div id="dashboardOverviewCards" class="dashboard-overview-grid"></div>
+            </section>
+
+            <section class="dashboard-card forecast-combined-card">
+              <div class="dashboard-card-head">
+                <div>
+                  <h3>未来 8 小时预测</h3>
+                  <p>上方展示进水负荷预测，下方展示模型滚动计算得到的出水水质预测。</p>
+                </div>
+                <div class="forecast-metric-tabs" role="tablist" aria-label="预测指标">
+                  <button class="active" data-forecast-metric="NH4" type="button">NH4-N</button>
+                  <button data-forecast-metric="COD" type="button">COD</button>
+                  <button data-forecast-metric="TN" type="button">TN</button>
+                  <button data-forecast-metric="TP" type="button">TP</button>
+                </div>
+              </div>
+              <div class="forecast-subsection">
+                <div class="forecast-subsection-head">
+                  <h4>进水负荷预测</h4>
+                  <span>预测区间 + 中位负荷</span>
+                </div>
+              <div id="forecastCards" class="forecast-card-row"></div>
+              </div>
+              <div class="forecast-subsection">
+                <div class="forecast-subsection-head">
+                  <div>
+                    <h4>出水水质预测</h4>
+                    <span>中位线、预测区间、风险窗口与参考线</span>
+                  </div>
+                  <div id="forecastTrendLegend" class="forecast-trend-legend"></div>
+                </div>
+                <div id="forecastTrend" class="forecast-trend-chart"></div>
+              </div>
+            </section>
+          </div>
+
+          <aside class="dashboard-side">
+            <section class="dashboard-card">
+              <div class="dashboard-card-head compact">
+                <h3>运行建议</h3>
+                <span>风险来源 / 建议动作 / 判断依据</span>
+              </div>
+              <div id="forecastAdviceCards" class="forecast-advice-panel"></div>
+            </section>
+            <section class="dashboard-card">
+              <div class="dashboard-card-head compact">
+                <h3>关键监控指标</h3>
+                <span>生物池 / 工艺段</span>
+              </div>
+              <div id="forecastMonitorRows" class="forecast-monitor-list"></div>
+            </section>
+            <section class="dashboard-card">
+              <div class="dashboard-card-head compact">
+                <h3>风险解释</h3>
+                <span id="forecastRiskBadge">--</span>
+              </div>
+              <div id="forecastRiskNotes" class="forecast-risk-notes"></div>
+            </section>
+          </aside>
+        </div>
+      </section>
+
+      <section class="results-panel workspace-page" data-page="realtimeOps" aria-label="实时推进">
+        <div class="panel-heading">
+          <div>
+            <h2>实时推进</h2>
+            <p>管理实时边界写入、模型增量推进、Mock 数据源和最近 12 小时输入/输出明细。</p>
+          </div>
+        </div>
+        <div id="realtimeOpsMount"></div>
+      </section>
+
+      <section class="workspace-page stack-page" data-page="realtimeTrust" aria-label="模型可信度">
+        <div class="panel-heading">
+          <div>
+            <h2>模型可信度</h2>
+            <p>录入实测出水值，将在线模型预测与现场观测对齐，跟踪误差、偏差和校准需求。</p>
+          </div>
+          <div class="panel-tools">
+            <button id="refreshRealtimeTrust" class="secondary-button" type="button">刷新可信度</button>
+          </div>
+        </div>
+        <div id="realtimeTrustTools" class="realtime-trust-tools" hidden>
+          <div class="evaluation-grid">
+            <section class="tool-section">
+              <div class="tool-section-heading">
+                <strong>实测出水录入</strong>
+                <span>现场 / 化验数据</span>
+              </div>
+              <div class="trust-observation-grid">
+                <label><span>时间</span><input id="trustObservationTime" type="datetime-local" /></label>
+                <label><span>COD mg/L</span><input id="trustObservedCod" type="number" step="0.1" /></label>
+                <label><span>NH4-N mg/L</span><input id="trustObservedNh4" type="number" step="0.01" /></label>
+                <label><span>TN mg/L</span><input id="trustObservedTn" type="number" step="0.1" /></label>
+                <label><span>TSS mg/L</span><input id="trustObservedTss" type="number" step="0.1" /></label>
+                <label><span>来源</span><input id="trustObservationSource" type="text" value="lab" /></label>
+              </div>
+              <div class="realtime-actions">
+                <button id="fillObservationFromLatest" class="secondary-button" type="button">填入最新预测</button>
+                <button id="saveRealtimeObservation" class="secondary-button" type="button">保存实测值</button>
+              </div>
+              <p class="tool-note">用于模型可信度检查。真实项目中这里应接入在线仪表或化验室 LIMS 数据。</p>
+            </section>
+            <section class="tool-section">
+              <div class="tool-section-heading">
+                <strong>当前可信度</strong>
+                <span>最近 24 小时</span>
+              </div>
+              <div id="trustSummary" class="trust-summary"></div>
+            </section>
+          </div>
+          <section class="tool-section">
+            <div class="tool-section-heading">
+              <strong>分指标误差</strong>
+              <span>预测值 - 实测值</span>
+            </div>
+            <div id="trustMetricGrid" class="trust-metric-grid"></div>
+          </section>
+          <section class="tool-section table-section">
+            <div class="tool-section-heading">
+              <strong>最近对比记录</strong>
+              <span>按模型时间匹配</span>
+            </div>
+            <div class="table-scroll">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>观测时间</th>
+                    <th>模型时间</th>
+                    <th>指标</th>
+                    <th>预测</th>
+                    <th>实测</th>
+                    <th>误差</th>
+                    <th>滞后</th>
+                  </tr>
+                </thead>
+                <tbody id="trustComparisonRows"></tbody>
+              </table>
+            </div>
+          </section>
+          <p id="realtimeTrustStatus">尚未加载模型可信度。</p>
+        </div>
+      </section>
+
       <section class="results-panel workspace-page" data-page="results" aria-label="仿真结果">
         <div class="panel-heading">
           <div>
@@ -592,11 +777,18 @@
                 <p>基于当前仿真结果生成工艺表现总结、风险判断和调整建议。API Key 仅由后端本地环境读取。</p>
               </div>
               <div class="ai-analysis-actions">
+                <label class="ai-model-field">
+                  <span>模型</span>
+                  <select id="aiModelSelect" aria-label="AI 分析模型">
+                    <option value="deepseek/deepseek-v4-flash">deepseek-v4-flash</option>
+                    <option value="deepseek/deepseek-v4-pro">deepseek-v4-pro</option>
+                  </select>
+                </label>
                 <span id="aiAnalysisMeta">DeepSeek · 本地密钥</span>
                 <button id="runAiAnalysis" class="secondary-button" type="button">生成 AI 建议</button>
               </div>
             </div>
-            <div id="aiAnalysisStatus" class="ai-analysis-status">运行方案后可生成 AI 分析。</div>
+            <div id="aiAnalysisStatus" class="ai-analysis-status">运行仿真或加载实时结果后可生成 AI 分析。</div>
             <div id="aiAnalysisOutput" class="ai-analysis-output">
               <p>暂无 AI 建议。</p>
             </div>
@@ -633,6 +825,10 @@
               </div>
               <p class="tool-note">Mock 会每 5 分钟自动生成一条模拟边界并推进模型。它不会阻止你手动推送边界，但开启后表格里会同时出现 mock 和手动/API 数据。</p>
               <div class="realtime-actions">
+                <select id="mockProfileRealtime" class="compact-select" aria-label="Mock 工况模式">
+                  <option value="normal">正常工况</option>
+                  <option value="shock">冲击负荷</option>
+                </select>
                 <button id="startMockRealtime" class="secondary-button" type="button">启动 Mock</button>
                 <button id="stopMockRealtime" class="secondary-button" type="button">停止 Mock</button>
                 <button id="refreshMockRealtime" class="secondary-button" type="button">Mock 状态</button>
@@ -699,6 +895,37 @@
       </section>
       </main>
     </div>
+
+    <button id="systemChatToggle" class="system-chat-toggle" type="button" aria-label="打开系统助手" title="系统助手" hidden>
+      <svg><use href="#icon-operator"></use></svg>
+    </button>
+    <section id="systemChatPanel" class="system-chat-panel" aria-label="系统助手聊天窗口" hidden>
+      <div class="system-chat-head">
+        <div>
+          <p class="eyebrow">SYSTEM CHAT</p>
+          <h3>系统助手</h3>
+          <span>Powered by Deepseek-v4-pro</span>
+        </div>
+        <button id="systemChatClose" class="icon-button" type="button" aria-label="关闭系统助手">×</button>
+      </div>
+      <div class="system-chat-workspace">
+        <aside class="system-chat-sessions" aria-label="历史会话">
+          <div class="system-chat-sessions-head">
+            <span>历史会话</span>
+            <button id="systemChatNew" class="ghost-button" type="button">新建</button>
+          </div>
+          <input id="systemChatSearch" class="system-chat-search" type="search" placeholder="搜索会话" aria-label="搜索历史会话" />
+          <div id="systemChatSessionList" class="system-chat-session-list"></div>
+        </aside>
+        <div class="system-chat-main">
+          <div id="systemChatMessages" class="system-chat-messages" aria-live="polite"></div>
+          <form id="systemChatForm" class="system-chat-form">
+            <textarea id="systemChatInput" rows="2" placeholder="问我系统功能、操作路径，或让它分析当前结果。"></textarea>
+            <button id="systemChatSend" class="primary-button" type="submit">发送</button>
+          </form>
+        </div>
+      </div>
+    </section>
 
     <script src="./app.js"></script>
   </body>

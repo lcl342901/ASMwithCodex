@@ -384,6 +384,35 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(history["results"][0]["inputId"], history["inputs"][0]["id"])
         self.assertIn("effCod", history["results"][0]["result"])
 
+    def test_realtime_trust_compares_observations_to_results(self):
+        step = realtime.realtime_step(values={"Q": 10000, "COD": 420, "NH4": 32, "NO3": 0.5, "TSS": 220}, step_hours=0.5)
+        model_time = step["result"]["modelTimestamp"]
+        predicted_nh4 = step["result"]["effNh4"]
+
+        observation = realtime.insert_observation(model_time, {"NH4": predicted_nh4 + 0.4}, "unit-test")
+        trust = realtime.realtime_trust(hours=12)
+
+        self.assertEqual(observation["projectId"], "default")
+        self.assertEqual(trust["observationCount"], 1)
+        self.assertEqual(trust["matchedCount"], 1)
+        nh4_summary = next(row for row in trust["metrics"] if row["metric"] == "effNh4")
+        self.assertEqual(nh4_summary["count"], 1)
+        self.assertAlmostEqual(nh4_summary["mae"], 0.4)
+
+    def test_realtime_forecast_uses_saved_state_without_advancing_realtime_state(self):
+        step = realtime.realtime_step(values={"Q": 10000, "COD": 420, "NH4": 32, "NO3": 0.5, "TSS": 220}, step_hours=0.5)
+        before = realtime.latest()["state"]["timestamp"]
+
+        forecast = realtime.realtime_forecast(horizon_hours=8, step_hours=1, history_hours=24)
+        after = realtime.latest()["state"]["timestamp"]
+
+        self.assertEqual(before, after)
+        self.assertEqual(forecast["status"], "ready")
+        self.assertEqual(len(forecast["points"]), 8)
+        self.assertEqual(forecast["sourceResultId"], step["resultId"])
+        self.assertIn("NH4", forecast["points"][0]["metrics"])
+        self.assertEqual(forecast["points"][0]["metrics"]["TP"]["risk"], "unavailable")
+
     def test_realtime_ingest_enriches_quality_report(self):
         record = realtime.ingest_input(
             None,
@@ -395,6 +424,19 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(record["quality"]["status"], "warning")
         self.assertIn("acceptedValues", record["quality"])
         self.assertTrue(any(issue["code"] == "parse_error" for issue in record["quality"]["issues"]))
+        self.assertTrue(any(issue["code"] == "missing_value" for issue in record["quality"]["issues"]))
+
+    def test_realtime_cleaning_rules_can_disable_checks(self):
+        realtime.save_cleaning_settings("default", ["missing_fill"])
+        record = realtime.ingest_input(
+            None,
+            {"Q": -10, "COD": "bad", "NH4": 32},
+            {"source": "unit-test"},
+        )
+
+        self.assertEqual(record["quality"]["acceptedValues"]["influentQ"], -10)
+        self.assertFalse(any(issue["code"] == "parse_error" for issue in record["quality"]["issues"]))
+        self.assertFalse(any(issue["code"] == "out_of_range_clipped" for issue in record["quality"]["issues"]))
         self.assertTrue(any(issue["code"] == "missing_value" for issue in record["quality"]["issues"]))
 
     def test_realtime_step_clips_out_of_range_values(self):

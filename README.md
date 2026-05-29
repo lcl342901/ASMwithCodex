@@ -295,6 +295,9 @@ POST /api/realtime/ingest
 POST /api/realtime/step
 GET  /api/realtime/latest
 GET  /api/realtime/history
+POST /api/realtime/observations
+GET  /api/realtime/observations
+GET  /api/realtime/trust
 GET  /api/realtime/sources
 GET  /api/realtime/status
 POST /api/realtime/reset
@@ -334,6 +337,12 @@ Realtime operation separates boundary input time from model time:
 
 `GET /api/realtime/history?hours=12` returns recent boundary inputs and realtime step results for the active project. The frontend uses it to show the latest 12 hours of input/output tables in the realtime workspace.
 
+Realtime model trust is project-scoped and compares online model outputs with measured effluent observations:
+
+- `POST /api/realtime/observations` stores measured effluent values such as `COD`, `NH4`, `TN`, and `TSS`.
+- `GET /api/realtime/trust?hours=24` matches observations to the nearest model result time, then returns per-metric `MAE`, `RMSE`, bias, and a simple trust grade.
+- The frontend shows this in `实时仿真 > 模型可信度`. This is the online trust loop; the separate `模型管理 > 模型评估` page remains for offline/reference-model screening.
+
 Realtime inputs now carry a normalized quality report. The backend stores the raw payload, then derives `quality.status`,
 per-field `fieldQuality`, `issues`, and `acceptedValues`. Missing boundaries fall back to current model parameters, and
 out-of-range values are clipped to configured parameter limits before the realtime model advances.
@@ -350,7 +359,22 @@ curl http://127.0.0.1:8000/api/realtime/mock/status
 curl -X POST http://127.0.0.1:8000/api/realtime/mock/stop
 ```
 
-Mock data uses the current saved/default model parameters and generates `Q`, `COD`, `NH4`, `NO3`, `TSS`, and `DO` with small periodic variation plus noise. Each mock tick advances the dynamic model by 5 minutes.
+Mock data generates `Q`, `COD`, `NH4`, `NO3`, `TSS`, and `DO` with periodic variation plus noise. Each mock tick advances the dynamic model by 5 minutes.
+
+Two mock profiles are available:
+
+- `normal`: typical municipal influent for stable demo operation. Starting this profile can warm-start the model before the first realtime tick so the online state is not created from default initial values. The built-in normal warm-start target is intended to produce generally compliant demo effluent.
+- `shock`: higher-load disturbance data for demonstrating forecast risk windows and operating recommendations.
+
+Example:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/realtime/mock/start \
+  -H "Content-Type: application/json" \
+  -d '{"projectId":"default","profile":"normal","intervalSeconds":300,"warmStart":true}'
+```
+
+Mock profiles are only for product demonstration and development. They are not a substitute for plant-specific sensor data, calibration, or model validation.
 
 ## Calculation Logs
 

@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>污水管理平台首页驾驶舱 - 三套方案</title>
+    <style>
+      :root {
+        --ink: #17221d;
+        --muted: #627268;
+        --line: #d7e1db;
+        --panel: rgba(255, 255, 255, 0.86);
+        --green: #20845a;
+        --green-dark: #0f6542;
+        --blue: #2868b7;
+        --cyan: #2a9294;
+        --amber: #b87522;
+        --red: #b94a4a;
+        --bg: #eef6f1;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 20% 0%, rgba(42, 146, 148, 0.16), transparent 32%),
+          radial-gradient(circle at 86% 16%, rgba(32, 132, 90, 0.15), transparent 30%),
+          var(--bg);
+        color: var(--ink);
+        font-family: Inter, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      }
+
+      .page {
+        display: grid;
+        gap: 42px;
+        padding: 28px;
+      }
+
+      .concept {
+        min-height: 960px;
+        overflow: hidden;
+        border: 1px solid rgba(112, 132, 121, 0.26);
+        border-radius: 18px;
+        background: rgba(248, 252, 249, 0.92);
+        box-shadow: 0 28px 80px rgba(20, 35, 27, 0.14);
+      }
+
+      .hero {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 26px 30px 22px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .eyebrow {
+        margin: 0 0 7px;
+        color: var(--green-dark);
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 34px;
+        line-height: 1.12;
+      }
+
+      h2 {
+        font-size: 20px;
+      }
+
+      h3 {
+        font-size: 15px;
+      }
+
+      .hero p:last-child {
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .hero-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .time-pill,
+      .mode-pill {
+        min-width: 116px;
+        padding: 10px 14px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+        text-align: center;
+      }
+
+      .mode-pill {
+        background: var(--green);
+        color: #fff;
+      }
+
+      .dashboard {
+        display: grid;
+        gap: 18px;
+        padding: 22px;
+      }
+
+      .grid-a {
+        grid-template-columns: 1.15fr 1.15fr 1fr;
+      }
+
+      .grid-b {
+        grid-template-columns: 1.2fr 1.7fr 1fr;
+      }
+
+      .grid-c {
+        grid-template-columns: 1fr 1.25fr 1.25fr;
+      }
+
+      .dashboard-grid {
+        display: grid;
+        gap: 18px;
+      }
+
+      .panel {
+        display: grid;
+        gap: 14px;
+        min-width: 0;
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--panel);
+      }
+
+      .panel-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .panel-head span {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .kpi {
+        min-height: 92px;
+        padding: 13px;
+        border: 1px solid rgba(99, 113, 104, 0.18);
+        border-radius: 10px;
+        background: #fff;
+      }
+
+      .kpi label {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .kpi strong {
+        display: block;
+        margin-top: 7px;
+        font-size: 25px;
+        line-height: 1;
+      }
+
+      .kpi small {
+        display: block;
+        margin-top: 7px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .spark {
+        width: 100%;
+        height: 74px;
+      }
+
+      .spark path,
+      .chart path {
+        fill: none;
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .chart {
+        width: 100%;
+        height: 180px;
+        border-radius: 10px;
+        background:
+          linear-gradient(#e2ebe5 1px, transparent 1px),
+          linear-gradient(90deg, #e2ebe5 1px, transparent 1px);
+        background-size: 100% 45px, 70px 100%;
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .legend i {
+        display: inline-block;
+        width: 16px;
+        height: 3px;
+        margin-right: 6px;
+        border-radius: 99px;
+        vertical-align: middle;
+      }
+
+      .map {
+        position: relative;
+        min-height: 330px;
+        overflow: hidden;
+        border-radius: 12px;
+        background:
+          linear-gradient(120deg, rgba(32, 132, 90, 0.08), rgba(42, 146, 148, 0.08)),
+          linear-gradient(#dfeae4 1px, transparent 1px),
+          linear-gradient(90deg, #dfeae4 1px, transparent 1px);
+        background-size: auto, 42px 42px, 42px 42px;
+      }
+
+      .tank {
+        position: absolute;
+        display: grid;
+        place-items: center;
+        width: 128px;
+        height: 86px;
+        border: 1px solid #9fb8ab;
+        transform: skewY(-13deg);
+        border-radius: 8px;
+        background: linear-gradient(180deg, #8ed4d3 0 32%, #dce6de 33% 100%);
+        box-shadow: 14px 18px 24px rgba(29, 56, 41, 0.12);
+      }
+
+      .tank span {
+        transform: skewY(13deg);
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .node-card {
+        position: absolute;
+        min-width: 116px;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        box-shadow: 0 12px 28px rgba(23, 33, 27, 0.12);
+      }
+
+      .node-card small {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .node-card strong {
+        display: block;
+        margin-top: 5px;
+        font-size: 22px;
+      }
+
+      .flow-arrow {
+        position: absolute;
+        height: 7px;
+        border-radius: 99px;
+        background: #607369;
+      }
+
+      .flow-arrow::after {
+        position: absolute;
+        right: -9px;
+        top: -6px;
+        width: 0;
+        height: 0;
+        border-top: 9px solid transparent;
+        border-bottom: 9px solid transparent;
+        border-left: 13px solid #607369;
+        content: "";
+      }
+
+      .table {
+        display: grid;
+        gap: 7px;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 88px 88px;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 0;
+        border-bottom: 1px solid rgba(99, 113, 104, 0.14);
+        font-size: 12px;
+      }
+
+      .row strong {
+        font-size: 13px;
+      }
+
+      .row span {
+        color: var(--muted);
+        font-weight: 800;
+        text-align: right;
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .status::before {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--green);
+        content: "";
+      }
+
+      .status.warn::before {
+        background: var(--amber);
+      }
+
+      .forecast-strip {
+        display: grid;
+        grid-template-columns: repeat(8, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .hour {
+        display: grid;
+        gap: 7px;
+        min-height: 142px;
+        padding: 12px 9px;
+        border: 1px solid rgba(99, 113, 104, 0.16);
+        border-radius: 10px;
+        background: #fff;
+        text-align: center;
+      }
+
+      .hour strong {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .hour b {
+        font-size: 18px;
+      }
+
+      .bar {
+        align-self: end;
+        width: 16px;
+        margin: 0 auto;
+        border-radius: 99px 99px 4px 4px;
+        background: linear-gradient(180deg, var(--blue), var(--cyan));
+      }
+
+      .sludge {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      .gauge {
+        display: grid;
+        place-items: center;
+        min-height: 190px;
+        border-radius: 12px;
+        background: #fff;
+      }
+
+      .gauge svg {
+        width: 160px;
+        height: 160px;
+      }
+
+      .wide {
+        grid-column: 1 / -1;
+      }
+
+      .two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+      }
+
+      .control-band {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .control-card {
+        padding: 13px;
+        border: 1px solid rgba(99, 113, 104, 0.16);
+        border-radius: 10px;
+        background: #fff;
+      }
+
+      .control-card small {
+        color: var(--muted);
+        font-weight: 800;
+      }
+
+      .control-card strong {
+        display: block;
+        margin-top: 8px;
+        font-size: 22px;
+      }
+
+      .dark {
+        background:
+          radial-gradient(circle at 18% 0%, rgba(42, 146, 148, 0.22), transparent 30%),
+          linear-gradient(135deg, #0e1c18, #122921 58%, #17382d);
+        color: #eff8f2;
+      }
+
+      .dark .hero,
+      .dark .panel,
+      .dark .kpi,
+      .dark .hour,
+      .dark .gauge,
+      .dark .control-card,
+      .dark .node-card {
+        border-color: rgba(194, 221, 207, 0.16);
+        background: rgba(14, 28, 24, 0.72);
+      }
+
+      .dark .panel,
+      .dark .kpi,
+      .dark .hour,
+      .dark .gauge,
+      .dark .control-card {
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      }
+
+      .dark .eyebrow,
+      .dark .status,
+      .dark .panel-head span,
+      .dark .kpi label,
+      .dark .kpi small,
+      .dark .legend,
+      .dark .row span,
+      .dark .control-card small,
+      .dark .hour strong,
+      .dark .hero p:last-child {
+        color: #a9bdb2;
+      }
+
+      .dark .chart,
+      .dark .map {
+        background:
+          linear-gradient(rgba(197, 222, 208, 0.08) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(197, 222, 208, 0.08) 1px, transparent 1px);
+        background-size: 100% 45px, 70px 100%;
+      }
+
+      .dark .tank {
+        border-color: rgba(192, 223, 207, 0.22);
+        background: linear-gradient(180deg, #52b7b6 0 32%, rgba(255, 255, 255, 0.16) 33% 100%);
+      }
+
+      @media (max-width: 1200px) {
+        .grid-a,
+        .grid-b,
+        .grid-c,
+        .two-col {
+          grid-template-columns: 1fr;
+        }
+
+        .forecast-strip,
+        .control-band,
+        .kpi-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="concept">
+        <header class="hero">
+          <div>
+            <p class="eyebrow">Concept 01 / Operation Overview</p>
+            <h1>污水厂运行总控驾驶舱</h1>
+            <p>适合首页默认态：先进出水总览，再看预测、工艺关键指标和排泥状态。</p>
+          </div>
+          <div class="hero-actions">
+            <span class="time-pill">2026-05-29 00:20</span>
+            <span class="mode-pill">实时运行</span>
+          </div>
+        </header>
+
+        <div class="dashboard dashboard-grid grid-a">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>进水实时信息</h2>
+              <span>最近 24 h</span>
+            </div>
+            <div class="kpi-grid">
+              <div class="kpi"><label>Q</label><strong>10,324</strong><small>m3/d</small></div>
+              <div class="kpi"><label>COD</label><strong>406.6</strong><small>gCOD/m3</small></div>
+              <div class="kpi"><label>NH4-N</label><strong>31.6</strong><small>gN/m3</small></div>
+              <div class="kpi"><label>NO3-N</label><strong>0.50</strong><small>gN/m3</small></div>
+              <div class="kpi"><label>TSS</label><strong>240</strong><small>g/m3</small></div>
+              <div class="kpi"><label>DO</label><strong>2.44</strong><small>gO2/m3</small></div>
+            </div>
+            <svg class="chart" viewBox="0 0 560 180">
+              <path d="M20 128 C90 112 125 124 170 95 S250 72 310 88 S420 130 540 72" stroke="#20845a" />
+              <path d="M20 92 C110 102 160 82 220 74 S330 110 390 94 S470 64 540 82" stroke="#2868b7" />
+              <path d="M20 132 C120 138 190 126 260 118 S370 122 540 96" stroke="#b87522" />
+            </svg>
+            <div class="legend">
+              <span><i style="background:#20845a"></i>Q</span>
+              <span><i style="background:#2868b7"></i>COD</span>
+              <span><i style="background:#b87522"></i>NH4-N</span>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>出水达标状态</h2>
+              <span class="status">稳定</span>
+            </div>
+            <div class="kpi-grid">
+              <div class="kpi"><label>COD</label><strong>53.1</strong><small>gCOD/m3</small></div>
+              <div class="kpi"><label>NH4-N</label><strong>4.1</strong><small>gN/m3</small></div>
+              <div class="kpi"><label>TN</label><strong>11.6</strong><small>gN/m3</small></div>
+              <div class="kpi"><label>TSS</label><strong>10.4</strong><small>g/m3</small></div>
+              <div class="kpi"><label>TP</label><strong>0.72</strong><small>gP/m3</small></div>
+              <div class="kpi"><label>风险</label><strong style="color:var(--amber)">TSS</strong><small>接近上限</small></div>
+            </div>
+            <svg class="chart" viewBox="0 0 560 180">
+              <path d="M20 92 C95 84 150 98 210 78 S330 68 390 76 S480 94 540 70" stroke="#20845a" />
+              <path d="M20 126 C120 122 180 138 260 118 S380 112 540 98" stroke="#b94a4a" />
+              <path d="M20 136 C120 132 220 126 320 130 S440 122 540 116" stroke="#2868b7" />
+            </svg>
+            <div class="legend">
+              <span><i style="background:#20845a"></i>COD</span>
+              <span><i style="background:#b94a4a"></i>NH4-N</span>
+              <span><i style="background:#2868b7"></i>TN</span>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>污水厂关键监控</h2>
+              <span>生物池 / 工艺段</span>
+            </div>
+            <div class="table">
+              <div class="row"><strong>厌氧池 DO</strong><span>0.12</span><span>gO2/m3</span></div>
+              <div class="row"><strong>缺氧池 DO</strong><span>0.28</span><span>gO2/m3</span></div>
+              <div class="row"><strong>好氧池 DO</strong><span>2.12</span><span>gO2/m3</span></div>
+              <div class="row"><strong>MLSS</strong><span>2,390</span><span>g/m3</span></div>
+              <div class="row"><strong>RAS MLSS</strong><span>4,236</span><span>g/m3</span></div>
+            </div>
+            <div class="sludge">
+              <div class="gauge">
+                <svg viewBox="0 0 160 160">
+                  <circle cx="80" cy="80" r="58" fill="none" stroke="#e3ece6" stroke-width="16" />
+                  <path d="M80 22 A58 58 0 1 1 34 116" fill="none" stroke="#20845a" stroke-width="16" stroke-linecap="round" />
+                  <text x="80" y="78" text-anchor="middle" font-size="24" font-weight="900" fill="#17221d">350</text>
+                  <text x="80" y="101" text-anchor="middle" font-size="12" fill="#627268">m3/d WAS</text>
+                </svg>
+              </div>
+              <div class="table">
+                <div class="row"><strong>今日排泥</strong><span>14.6</span><span>tDS</span></div>
+                <div class="row"><strong>SRT 估算</strong><span>11.2</span><span>d</span></div>
+                <div class="row"><strong>排泥策略</strong><span>维持</span><span></span></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel wide">
+            <div class="panel-head">
+              <h2>未来 8 小时预测：进水负荷与预测出水</h2>
+              <span class="status warn">04:00 后 COD 冲击升高</span>
+            </div>
+            <div class="forecast-strip">
+              <div class="hour"><strong>+1h</strong><b>10.1k</b><span class="bar" style="height:42px"></span><small>NH4 4.0</small></div>
+              <div class="hour"><strong>+2h</strong><b>10.4k</b><span class="bar" style="height:52px"></span><small>NH4 4.2</small></div>
+              <div class="hour"><strong>+3h</strong><b>11.2k</b><span class="bar" style="height:66px"></span><small>NH4 4.5</small></div>
+              <div class="hour"><strong>+4h</strong><b>12.0k</b><span class="bar" style="height:82px"></span><small>NH4 4.8</small></div>
+              <div class="hour"><strong>+5h</strong><b>12.4k</b><span class="bar" style="height:90px"></span><small>NH4 5.1</small></div>
+              <div class="hour"><strong>+6h</strong><b>11.8k</b><span class="bar" style="height:76px"></span><small>NH4 4.9</small></div>
+              <div class="hour"><strong>+7h</strong><b>10.9k</b><span class="bar" style="height:58px"></span><small>NH4 4.4</small></div>
+              <div class="hour"><strong>+8h</strong><b>10.5k</b><span class="bar" style="height:50px"></span><small>NH4 4.1</small></div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="concept dark">
+        <header class="hero">
+          <div>
+            <p class="eyebrow">Concept 02 / Process Command</p>
+            <h1>工艺链路监控驾驶舱</h1>
+            <p>把 AAO 工艺作为首页主画布，实时值和风险直接叠加在流程节点上。</p>
+          </div>
+          <div class="hero-actions">
+            <span class="time-pill">在线边界 5 min</span>
+            <span class="mode-pill">流程态势</span>
+          </div>
+        </header>
+
+        <div class="dashboard dashboard-grid grid-b">
+          <section class="panel wide">
+            <div class="panel-head">
+              <h2>2.5D 工艺流程态势</h2>
+              <div class="legend">
+                <span><i style="background:#607369"></i>主水线</span>
+                <span><i style="background:#2868b7"></i>回流</span>
+                <span><i style="background:#b87522"></i>排泥</span>
+              </div>
+            </div>
+            <div class="map">
+              <div class="flow-arrow" style="left:80px;top:174px;width:150px"></div>
+              <div class="flow-arrow" style="left:310px;top:174px;width:130px"></div>
+              <div class="flow-arrow" style="left:540px;top:174px;width:130px"></div>
+              <div class="tank" style="left:245px;top:132px"><span>厌氧池</span></div>
+              <div class="tank" style="left:455px;top:132px"><span>缺氧池</span></div>
+              <div class="tank" style="left:665px;top:132px"><span>好氧池</span></div>
+              <div class="tank" style="left:880px;top:122px;border-radius:50%;height:120px"><span>二沉池</span></div>
+              <div class="node-card" style="left:36px;top:122px"><small>IN 进水 Q</small><strong>10,324</strong><small>m3/d</small></div>
+              <div class="node-card" style="left:270px;top:46px"><small>AN NO3-N</small><strong>0.18</strong><small>gN/m3</small></div>
+              <div class="node-card" style="left:482px;top:44px"><small>AX NO3-N</small><strong>0.32</strong><small>gN/m3</small></div>
+              <div class="node-card" style="left:694px;top:44px"><small>OX DO</small><strong>2.12</strong><small>gO2/m3</small></div>
+              <div class="node-card" style="right:56px;top:66px"><small>OUT NH4-N</small><strong>4.1</strong><small>gN/m3</small></div>
+              <div class="node-card" style="left:540px;bottom:28px"><small>RAS</small><strong>75%</strong><small>内/外回流正常</small></div>
+              <div class="node-card" style="right:110px;bottom:30px"><small>WAS</small><strong>350</strong><small>m3/d</small></div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>进水 24 h 曲线</h2>
+              <span>负荷趋势</span>
+            </div>
+            <div class="kpi-grid">
+              <div class="kpi"><label>COD</label><strong>406.6</strong><small>gCOD/m3</small></div>
+              <div class="kpi"><label>NH4-N</label><strong>31.6</strong><small>gN/m3</small></div>
+              <div class="kpi"><label>TSS</label><strong>240</strong><small>g/m3</small></div>
+            </div>
+            <svg class="chart" viewBox="0 0 560 180">
+              <path d="M20 140 C80 110 150 124 210 80 S330 78 390 102 S482 62 540 82" stroke="#49c1b8" />
+              <path d="M20 102 C140 96 200 70 290 84 S430 126 540 72" stroke="#f0a84f" />
+            </svg>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>出水 24 h 曲线</h2>
+              <span>达标风险</span>
+            </div>
+            <div class="kpi-grid">
+              <div class="kpi"><label>NH4-N</label><strong>4.1</strong><small>受控</small></div>
+              <div class="kpi"><label>TN</label><strong>11.6</strong><small>受控</small></div>
+              <div class="kpi"><label>TSS</label><strong>10.4</strong><small>接近上限</small></div>
+            </div>
+            <svg class="chart" viewBox="0 0 560 180">
+              <path d="M20 110 C90 86 190 102 260 92 S390 76 540 96" stroke="#49c1b8" />
+              <path d="M20 134 C160 128 250 142 360 118 S460 108 540 116" stroke="#b94a4a" />
+            </svg>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>工艺控制摘要</h2>
+              <span>关键执行量</span>
+            </div>
+            <div class="control-band" style="grid-template-columns:1fr">
+              <div class="control-card"><small>好氧池 MLSS</small><strong>2,390</strong></div>
+              <div class="control-card"><small>厌氧 / 缺氧 / 好氧 DO</small><strong>0.12 / 0.28 / 2.12</strong></div>
+              <div class="control-card"><small>剩余污泥</small><strong>350 m3/d</strong></div>
+              <div class="control-card"><small>排泥建议</small><strong>维持</strong></div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="concept">
+        <header class="hero">
+          <div>
+            <p class="eyebrow">Concept 03 / Forecast & Dispatch</p>
+            <h1>预测调度驾驶舱</h1>
+            <p>突出未来 8 小时进出水预测，把排泥、曝气和回流作为调度动作入口。</p>
+          </div>
+          <div class="hero-actions">
+            <span class="time-pill">预测窗口 8 h</span>
+            <span class="mode-pill">调度建议</span>
+          </div>
+        </header>
+
+        <div class="dashboard dashboard-grid grid-c">
+          <section class="panel wide">
+            <div class="panel-head">
+              <h2>未来 8 小时预测矩阵</h2>
+              <span class="status warn">TSS 与 NH4-N 边缘风险</span>
+            </div>
+            <div class="forecast-strip">
+              <div class="hour"><strong>00:00</strong><b>Q 10.1k</b><span class="bar" style="height:40px"></span><small>OUT NH4 4.0</small></div>
+              <div class="hour"><strong>01:00</strong><b>Q 10.4k</b><span class="bar" style="height:48px"></span><small>OUT NH4 4.1</small></div>
+              <div class="hour"><strong>02:00</strong><b>Q 11.2k</b><span class="bar" style="height:64px"></span><small>OUT NH4 4.5</small></div>
+              <div class="hour"><strong>03:00</strong><b>Q 12.0k</b><span class="bar" style="height:82px"></span><small>OUT NH4 4.9</small></div>
+              <div class="hour"><strong>04:00</strong><b>Q 12.4k</b><span class="bar" style="height:90px;background:linear-gradient(180deg,#b87522,#b94a4a)"></span><small>OUT NH4 5.2</small></div>
+              <div class="hour"><strong>05:00</strong><b>Q 11.8k</b><span class="bar" style="height:76px"></span><small>OUT NH4 4.9</small></div>
+              <div class="hour"><strong>06:00</strong><b>Q 10.9k</b><span class="bar" style="height:58px"></span><small>OUT NH4 4.4</small></div>
+              <div class="hour"><strong>07:00</strong><b>Q 10.5k</b><span class="bar" style="height:52px"></span><small>OUT NH4 4.2</small></div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>进水与出水当前值</h2>
+              <span>实时采集</span>
+            </div>
+            <div class="two-col">
+              <div class="table">
+                <h3>进水</h3>
+                <div class="row"><strong>COD</strong><span>406.6</span><span>g/m3</span></div>
+                <div class="row"><strong>NH4-N</strong><span>31.6</span><span>g/m3</span></div>
+                <div class="row"><strong>TSS</strong><span>240</span><span>g/m3</span></div>
+                <div class="row"><strong>Q</strong><span>10,324</span><span>m3/d</span></div>
+              </div>
+              <div class="table">
+                <h3>出水</h3>
+                <div class="row"><strong>COD</strong><span>53.1</span><span>g/m3</span></div>
+                <div class="row"><strong>NH4-N</strong><span>4.1</span><span>g/m3</span></div>
+                <div class="row"><strong>TN</strong><span>11.6</span><span>g/m3</span></div>
+                <div class="row"><strong>TSS</strong><span>10.4</span><span>g/m3</span></div>
+              </div>
+            </div>
+            <svg class="chart" viewBox="0 0 560 180">
+              <path d="M20 134 C80 118 140 112 205 88 S330 86 400 114 S490 96 540 68" stroke="#20845a" />
+              <path d="M20 90 C120 104 180 80 260 92 S390 74 540 102" stroke="#2868b7" />
+              <path d="M20 146 C160 132 290 138 540 118" stroke="#b94a4a" />
+            </svg>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>调度动作建议</h2>
+              <span>未来 8 h</span>
+            </div>
+            <div class="table">
+              <div class="row"><strong>曝气</strong><span>+6%</span><span>03:00-05:00</span></div>
+              <div class="row"><strong>内回流</strong><span>+20%</span><span>削减 TN</span></div>
+              <div class="row"><strong>排泥</strong><span>维持</span><span>350 m3/d</span></div>
+              <div class="row"><strong>复核</strong><span>TSS</span><span>二沉池</span></div>
+            </div>
+            <div class="gauge">
+              <svg viewBox="0 0 160 160">
+                <circle cx="80" cy="80" r="58" fill="none" stroke="#e3ece6" stroke-width="16" />
+                <path d="M80 22 A58 58 0 0 1 134 102" fill="none" stroke="#b87522" stroke-width="16" stroke-linecap="round" />
+                <text x="80" y="78" text-anchor="middle" font-size="24" font-weight="900" fill="#17221d">中</text>
+                <text x="80" y="101" text-anchor="middle" font-size="12" fill="#627268">未来风险</text>
+              </svg>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>关键监控指标</h2>
+              <span>生物池 / 排泥</span>
+            </div>
+            <div class="control-band" style="grid-template-columns:1fr 1fr">
+              <div class="control-card"><small>MLSS</small><strong>2,390</strong></div>
+              <div class="control-card"><small>AN DO</small><strong>0.12</strong></div>
+              <div class="control-card"><small>AX DO</small><strong>0.28</strong></div>
+              <div class="control-card"><small>OX DO</small><strong>2.12</strong></div>
+              <div class="control-card"><small>WAS</small><strong>350</strong></div>
+              <div class="control-card"><small>SRT</small><strong>11.2 d</strong></div>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

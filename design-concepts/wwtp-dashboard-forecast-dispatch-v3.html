@@ -1,0 +1,714 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>预测调度驾驶舱 V3 - 区间预测</title>
+    <style>
+      :root {
+        --ink: #17221d;
+        --muted: #607268;
+        --line: #d8e2dc;
+        --panel: rgba(255, 255, 255, 0.9);
+        --green: #20845a;
+        --green-dark: #0f6542;
+        --blue: #2f68b4;
+        --cyan: #2a9294;
+        --amber: #b87522;
+        --red: #b94a4a;
+        --bg: #edf6f1;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-width: 1600px;
+        background:
+          radial-gradient(circle at 18% -4%, rgba(42, 146, 148, 0.18), transparent 32%),
+          radial-gradient(circle at 88% 8%, rgba(32, 132, 90, 0.14), transparent 32%),
+          var(--bg);
+        color: var(--ink);
+        font-family: Inter, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      }
+
+      .screen {
+        width: 1600px;
+        height: 1080px;
+        padding: 22px;
+      }
+
+      .shell {
+        height: 100%;
+        overflow: hidden;
+        border: 1px solid rgba(112, 132, 121, 0.28);
+        border-radius: 20px;
+        background: rgba(248, 252, 249, 0.94);
+        box-shadow: 0 28px 80px rgba(20, 35, 27, 0.16);
+      }
+
+      .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 18px 24px 16px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .eyebrow {
+        margin: 0 0 7px;
+        color: var(--green-dark);
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 30px;
+        line-height: 1.12;
+      }
+
+      .header p:last-child {
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .pill {
+        min-width: 126px;
+        padding: 9px 13px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 900;
+        text-align: center;
+      }
+
+      .pill.primary {
+        border-color: transparent;
+        background: var(--green);
+        color: #fff;
+      }
+
+      .content {
+        display: grid;
+        grid-template-columns: 1.24fr 0.76fr;
+        gap: 14px;
+        padding: 16px;
+      }
+
+      .main,
+      .side {
+        display: grid;
+        gap: 10px;
+      }
+
+      .panel {
+        display: grid;
+        gap: 8px;
+        min-width: 0;
+        padding: 13px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--panel);
+      }
+
+      .panel-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+      }
+
+      .panel-head h2 {
+        font-size: 18px;
+      }
+
+      .panel-head span {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .metric-switch {
+        display: inline-flex;
+        gap: 6px;
+        padding: 5px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: #fff;
+      }
+
+      .metric-switch button {
+        min-width: 74px;
+        height: 28px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--muted);
+        font: inherit;
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .metric-switch button.active {
+        background: #e8f2ec;
+        color: var(--green-dark);
+        box-shadow: inset 0 0 0 1px rgba(32, 132, 90, 0.2);
+      }
+
+      .kpi-row {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .kpi {
+        min-height: 66px;
+        padding: 9px;
+        border: 1px solid rgba(99, 113, 104, 0.16);
+        border-radius: 10px;
+        background: #fff;
+      }
+
+      .kpi label {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .kpi strong {
+        display: block;
+        margin-top: 5px;
+        font-size: 20px;
+        line-height: 1;
+      }
+
+      .kpi small {
+        display: block;
+        margin-top: 5px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .forecast-cards {
+        display: grid;
+        grid-template-columns: repeat(8, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .forecast-card {
+        display: grid;
+        gap: 6px;
+        min-height: 112px;
+        padding: 9px;
+        border: 1px solid rgba(99, 113, 104, 0.16);
+        border-radius: 12px;
+        background: #fff;
+        text-align: center;
+      }
+
+      .forecast-card.warn {
+        border-color: #e6c889;
+        background: #fffaf0;
+      }
+
+      .forecast-card strong {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .forecast-card b {
+        font-size: 18px;
+      }
+
+      .forecast-card small {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 800;
+        line-height: 1.35;
+      }
+
+      .range-bar {
+        position: relative;
+        height: 34px;
+        margin: 2px 0;
+      }
+
+      .range-bar i {
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        width: 16px;
+        height: var(--h);
+        transform: translateX(-50%);
+        border-radius: 999px;
+        background: linear-gradient(180deg, rgba(47, 104, 180, 0.85), rgba(42, 146, 148, 0.78));
+      }
+
+      .range-bar em {
+        position: absolute;
+        left: 50%;
+        bottom: calc(var(--h) * 0.46);
+        width: 44px;
+        height: 18px;
+        transform: translateX(-50%);
+        border-radius: 999px;
+        background: rgba(47, 104, 180, 0.16);
+        border: 1px solid rgba(47, 104, 180, 0.26);
+      }
+
+      .forecast-card.warn .range-bar i {
+        background: linear-gradient(180deg, var(--amber), var(--red));
+      }
+
+      .forecast-card.warn .range-bar em {
+        background: rgba(184, 117, 34, 0.18);
+        border-color: rgba(184, 117, 34, 0.32);
+      }
+
+      .chart-wrap {
+        position: relative;
+        min-height: 164px;
+        overflow: hidden;
+        border: 1px solid rgba(99, 113, 104, 0.14);
+        border-radius: 12px;
+        background:
+          linear-gradient(#e3ece6 1px, transparent 1px),
+          linear-gradient(90deg, #e3ece6 1px, transparent 1px),
+          #fff;
+        background-size: 100% 46px, 94px 100%, auto;
+      }
+
+      .chart-wrap svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+
+      .chart-wrap path {
+        fill: none;
+        stroke-width: 4;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .band {
+        fill: rgba(47, 104, 180, 0.12);
+        stroke: none;
+      }
+
+      .threshold-line {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 64px;
+        border-top: 2px dashed rgba(184, 117, 34, 0.7);
+      }
+
+      .threshold {
+        position: absolute;
+        right: 16px;
+        top: 48px;
+        padding: 3px 7px;
+        border-radius: 999px;
+        background: #fff4df;
+        color: #84520e;
+        font-size: 11px;
+        font-weight: 900;
+      }
+
+      .chart-y-axis {
+        position: absolute;
+        left: 16px;
+        top: 14px;
+        bottom: 28px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .risk-window {
+        position: absolute;
+        top: 12px;
+        bottom: 28px;
+        left: 50.5%;
+        width: 25%;
+        border-radius: 10px;
+        background: rgba(184, 117, 34, 0.08);
+        border: 1px solid rgba(184, 117, 34, 0.18);
+      }
+
+      .risk-window span {
+        position: absolute;
+        right: 8px;
+        top: 8px;
+        color: #84520e;
+        font-size: 11px;
+        font-weight: 900;
+      }
+
+      .chart-point {
+        fill: #fff;
+        stroke: var(--amber);
+        stroke-width: 3;
+      }
+
+      .chart-point.warn {
+        fill: #fff4df;
+        stroke: var(--red);
+      }
+
+      .chart-value-label {
+        fill: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .axis-note {
+        position: absolute;
+        left: 54px;
+        bottom: 8px;
+        right: 18px;
+        display: flex;
+        justify-content: space-between;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .legend i {
+        display: inline-block;
+        width: 18px;
+        height: 4px;
+        margin-right: 6px;
+        border-radius: 999px;
+        vertical-align: middle;
+      }
+
+      .risk-card {
+        display: grid;
+        gap: 9px;
+        padding: 12px;
+        border: 1px solid #e6c889;
+        border-radius: 12px;
+        background: #fffaf0;
+      }
+
+      .risk-card h3 {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 16px;
+      }
+
+      .risk-card h3 span {
+        padding: 4px 9px;
+        border-radius: 999px;
+        background: #f3dfbd;
+        color: #84520e;
+        font-size: 12px;
+      }
+
+      .risk-list {
+        display: grid;
+        gap: 7px;
+      }
+
+      .risk-item {
+        display: grid;
+        grid-template-columns: 92px minmax(0, 1fr);
+        gap: 10px;
+        padding: 8px 0;
+        border-top: 1px solid rgba(184, 117, 34, 0.18);
+      }
+
+      .risk-item strong {
+        color: #84520e;
+        font-size: 13px;
+      }
+
+      .risk-item span {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .action-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .action {
+        padding: 10px;
+        border: 1px solid rgba(99, 113, 104, 0.16);
+        border-radius: 10px;
+        background: #fff;
+      }
+
+      .action small {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .action strong {
+        display: block;
+        margin-top: 7px;
+        font-size: 19px;
+      }
+
+      .status-table {
+        display: grid;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 90px 78px;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(99, 113, 104, 0.14);
+        font-size: 12px;
+      }
+
+      .row strong {
+        font-size: 13px;
+      }
+
+      .row span {
+        color: var(--muted);
+        font-weight: 900;
+        text-align: right;
+      }
+
+      .sludge-gauge {
+        display: grid;
+        grid-template-columns: 160px minmax(0, 1fr);
+        gap: 12px;
+        align-items: center;
+      }
+
+      .gauge {
+        display: grid;
+        place-items: center;
+        min-height: 138px;
+        border-radius: 12px;
+        background: #fff;
+      }
+
+      .gauge svg {
+        width: 132px;
+        height: 132px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="screen">
+      <section class="shell">
+        <header class="header">
+          <div>
+            <p class="eyebrow">Forecast & Dispatch Cockpit</p>
+            <h1>预测调度驾驶舱</h1>
+            <p>预测结果采用区间与置信带表达，避免把未来水质误读为确定值；不同指标可切换查看。</p>
+          </div>
+          <div class="header-actions">
+            <span class="pill">数据频率 5 min</span>
+            <span class="pill">预测窗口 8 h</span>
+            <span class="pill primary">区间预测</span>
+          </div>
+        </header>
+
+        <div class="content">
+          <div class="main">
+            <section class="panel">
+              <div class="panel-head">
+                <h2>当前进出水概况</h2>
+                <span>实时值 / 当前模型边界</span>
+              </div>
+              <div class="kpi-row">
+                <div class="kpi"><label>进水 Q</label><strong>10,324</strong><small>m3/d</small></div>
+                <div class="kpi"><label>进水 COD</label><strong>406.6</strong><small>gCOD/m3</small></div>
+                <div class="kpi"><label>进水 NH4-N</label><strong>31.6</strong><small>gN/m3</small></div>
+                <div class="kpi"><label>出水 NH4-N</label><strong>4.1</strong><small>gN/m3</small></div>
+                <div class="kpi"><label>出水 TN</label><strong>11.6</strong><small>gN/m3</small></div>
+                <div class="kpi"><label>出水 TSS</label><strong style="color:var(--amber)">10.4</strong><small>接近上限</small></div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>未来 8 小时预测：进水负荷与预测出水</h2>
+                  <span>卡片显示预测区间，中间竖条为中位预测，浅色横带为 80% 置信区间</span>
+                </div>
+                <div class="metric-switch" aria-label="预测指标切换">
+                  <button class="active">NH4-N</button>
+                  <button>COD</button>
+                  <button>TN</button>
+                  <button>TP</button>
+                </div>
+              </div>
+              <div class="forecast-cards">
+                <div class="forecast-card"><strong>+1h</strong><b>3.8-4.3</b><div class="range-bar" style="--h:34px"><em></em><i></i></div><small>中位 4.0 gN/m3</small></div>
+                <div class="forecast-card"><strong>+2h</strong><b>3.9-4.5</b><div class="range-bar" style="--h:38px"><em></em><i></i></div><small>中位 4.2 gN/m3</small></div>
+                <div class="forecast-card"><strong>+3h</strong><b>4.1-4.9</b><div class="range-bar" style="--h:44px"><em></em><i></i></div><small>中位 4.5 gN/m3</small></div>
+                <div class="forecast-card warn"><strong>+4h</strong><b>4.4-5.3</b><div class="range-bar" style="--h:51px"><em></em><i></i></div><small>中位 4.8 gN/m3</small></div>
+                <div class="forecast-card warn"><strong>+5h</strong><b>4.6-5.7</b><div class="range-bar" style="--h:56px"><em></em><i></i></div><small>中位 5.1 gN/m3</small></div>
+                <div class="forecast-card warn"><strong>+6h</strong><b>4.3-5.4</b><div class="range-bar" style="--h:52px"><em></em><i></i></div><small>中位 4.9 gN/m3</small></div>
+                <div class="forecast-card"><strong>+7h</strong><b>4.0-4.8</b><div class="range-bar" style="--h:43px"><em></em><i></i></div><small>中位 4.4 gN/m3</small></div>
+                <div class="forecast-card"><strong>+8h</strong><b>3.8-4.6</b><div class="range-bar" style="--h:39px"><em></em><i></i></div><small>中位 4.1 gN/m3</small></div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <h2>未来 8 小时预测出水趋势</h2>
+                <span>中位线 + 80% 置信带 + 参考线</span>
+              </div>
+              <div class="chart-wrap">
+                <div class="threshold-line"></div>
+                <div class="threshold">NH4-N 参考 5.0</div>
+                <div class="risk-window"><span>+4h 至 +6h 风险窗口</span></div>
+                <div class="chart-y-axis">
+                  <span>6.0</span>
+                  <span>5.0</span>
+                  <span>4.0</span>
+                  <span>3.0</span>
+                </div>
+                <svg viewBox="0 0 980 252" preserveAspectRatio="none">
+                  <path class="band" d="M58 172 C165 166 270 148 385 128 S515 74 620 56 S785 96 946 122 L946 170 C785 152 620 108 515 122 S385 160 270 176 S165 190 58 194 Z" />
+                  <path d="M58 184 C165 176 270 158 385 140 S515 88 620 72 S785 118 946 146" stroke="#b87522" />
+                  <circle class="chart-point" cx="58" cy="184" r="6" />
+                  <circle class="chart-point" cx="185" cy="176" r="6" />
+                  <circle class="chart-point" cx="312" cy="158" r="6" />
+                  <circle class="chart-point warn" cx="439" cy="126" r="7" />
+                  <circle class="chart-point warn" cx="566" cy="82" r="7" />
+                  <circle class="chart-point warn" cx="693" cy="108" r="7" />
+                  <circle class="chart-point" cx="820" cy="132" r="6" />
+                  <circle class="chart-point" cx="946" cy="146" r="6" />
+                  <text class="chart-value-label" x="36" y="170">4.0</text>
+                  <text class="chart-value-label" x="420" y="112">4.8</text>
+                  <text class="chart-value-label" x="548" y="68">5.1</text>
+                  <text class="chart-value-label" x="674" y="94">4.9</text>
+                </svg>
+                <div class="axis-note">
+                  <span>+1h</span><span>+2h</span><span>+3h</span><span>+4h</span><span>+5h</span><span>+6h</span><span>+7h</span><span>+8h</span>
+                </div>
+              </div>
+              <div class="legend">
+                <span><i style="background:#b87522"></i>预测出水 NH4-N 中位线</span>
+                <span><i style="background:rgba(47,104,180,.22)"></i>80% 置信区间</span>
+                <span><i style="background:#e6c889"></i>排放参考线</span>
+              </div>
+            </section>
+          </div>
+
+          <aside class="side">
+            <section class="risk-card">
+              <h3>风险时段 <span>+4h 至 +6h</span></h3>
+              <div class="risk-list">
+                <div class="risk-item">
+                  <strong>当前指标</strong>
+                  <span>NH4-N 区间预测在 +5h 触及 4.6-5.7 gN/m3，上界超过 5.0 参考线，属于边缘超标风险。</span>
+                </div>
+                <div class="risk-item">
+                  <strong>置信解释</strong>
+                  <span>中位预测不是确定值；浅色带表示 80% 置信区间，带宽越大表示未来不确定性越高。</span>
+                </div>
+                <div class="risk-item">
+                  <strong>建议动作</strong>
+                  <span>提前提高好氧段 DO，复核硝化负荷和内回流，观察 +4h 后预测区间是否继续上移。</span>
+                </div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <h2>调度建议</h2>
+                <span>按预测风险生成</span>
+              </div>
+              <div class="action-grid">
+                <div class="action"><small>好氧池 DO</small><strong>2.0 → 2.3</strong></div>
+                <div class="action"><small>内回流比</small><strong>200% → 240%</strong></div>
+                <div class="action"><small>剩余污泥</small><strong>维持 350</strong></div>
+                <div class="action"><small>复核点位</small><strong>NH4 / DO</strong></div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <h2>关键监控指标</h2>
+                <span>生物池 / 工艺段</span>
+              </div>
+              <div class="status-table">
+                <div class="row"><strong>生物池 MLSS</strong><span>2,390</span><span>g/m3</span></div>
+                <div class="row"><strong>厌氧池 DO</strong><span>0.12</span><span>gO2/m3</span></div>
+                <div class="row"><strong>缺氧池 DO</strong><span>0.28</span><span>gO2/m3</span></div>
+                <div class="row"><strong>好氧池 DO</strong><span>2.12</span><span>gO2/m3</span></div>
+                <div class="row"><strong>RAS MLSS</strong><span>4,236</span><span>g/m3</span></div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <h2>排泥情况</h2>
+                <span>当前策略</span>
+              </div>
+              <div class="sludge-gauge">
+                <div class="gauge">
+                  <svg viewBox="0 0 160 160">
+                    <circle cx="80" cy="80" r="58" fill="none" stroke="#e3ece6" stroke-width="16" />
+                    <path d="M80 22 A58 58 0 1 1 34 116" fill="none" stroke="#20845a" stroke-width="16" stroke-linecap="round" />
+                    <text x="80" y="78" text-anchor="middle" font-size="24" font-weight="900" fill="#17221d">350</text>
+                    <text x="80" y="101" text-anchor="middle" font-size="12" fill="#607268">m3/d WAS</text>
+                  </svg>
+                </div>
+                <div class="status-table">
+                  <div class="row"><strong>今日排泥</strong><span>14.6</span><span>tDS</span></div>
+                  <div class="row"><strong>SRT 估算</strong><span>11.2</span><span>d</span></div>
+                  <div class="row"><strong>策略</strong><span>维持</span><span></span></div>
+                </div>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .ai_analysis import analyze_result, deepseek_config
+from .ai_analysis import analyze_result, chat_with_deepseek, deepseek_config
 from .calibration import bsm1_calibration_report, bsm1_mapping_report, calibration_optimize, calibration_stage_configs, run_calibration_stage
 from .engine_runner import normalize_engine_version, simulate_with_engine
 from .model_trust import (
@@ -43,19 +43,25 @@ from .platform import (
 )
 from .realtime import (
     clear_calculation_logs,
+    get_cleaning_settings,
     get_saved_params,
     ingest_input,
     insert_calculation_log,
+    insert_observation,
     latest,
     list_data_sources,
     list_calculation_logs,
+    list_observations,
     load_simulation_state,
     mock_status,
+    realtime_forecast,
     realtime_history,
     realtime_step,
     realtime_status,
+    realtime_trust,
     reset,
     reset_params_config,
+    save_cleaning_settings,
     save_params_config,
     save_simulation_state,
     start_mock,
@@ -63,10 +69,12 @@ from .realtime import (
 )
 from .schemas import (
     AIAnalysisRequest,
+    AIChatRequest,
     CalibrationPreviewRequest,
     Bsm1CalibrationReportRequest,
     Bsm1MappingRequest,
     CalibrationStageRunRequest,
+    CleaningSettingsRequest,
     CalibrationOptimizeRequest,
     InitialConditionRequest,
     ModelCredibilityRequest,
@@ -76,7 +84,10 @@ from .schemas import (
     ProjectUpdateRequest,
     ReferenceComparisonRequest,
     RealtimeIngestRequest,
+    RealtimeForecastRequest,
     RealtimeStepRequest,
+    RealtimeMockStartRequest,
+    RealtimeObservationRequest,
     SimulationRequest,
 )
 
@@ -127,6 +138,7 @@ def ai_status_endpoint() -> dict[str, Any]:
         "provider": config["provider"],
         "configured": config["configured"],
         "model": config["model"],
+        "models": config.get("models", []),
     }
 
 
@@ -139,6 +151,7 @@ def ai_analyze_endpoint(request: AIAnalysisRequest) -> dict[str, Any]:
             result=request.result,
             params=request.params,
             context={**request.context, "projectId": project_id},
+            model=request.model,
         )
         insert_calculation_log(
             "ai_analysis",
@@ -152,6 +165,38 @@ def ai_analyze_endpoint(request: AIAnalysisRequest) -> dict[str, Any]:
     except RuntimeError as exc:
         insert_calculation_log(
             "ai_analysis",
+            "failed",
+            str(exc),
+            {"projectId": project_id},
+            (perf_counter() - started) * 1000,
+            project_id,
+        )
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/api/ai/chat")
+def ai_chat_endpoint(request: AIChatRequest) -> dict[str, Any]:
+    started = perf_counter()
+    project_id = request.projectId or "default"
+    try:
+        result = chat_with_deepseek(
+            messages=request.messages,
+            params=request.params,
+            result=request.result,
+            context={**request.context, "projectId": project_id},
+        )
+        insert_calculation_log(
+            "ai_chat",
+            "success",
+            "AI platform chat completed.",
+            {"projectId": project_id, "provider": result.get("provider"), "model": result.get("model")},
+            (perf_counter() - started) * 1000,
+            project_id,
+        )
+        return result
+    except RuntimeError as exc:
+        insert_calculation_log(
+            "ai_chat",
             "failed",
             str(exc),
             {"projectId": project_id},
@@ -843,9 +888,115 @@ def realtime_history_endpoint(projectId: str = "default", hours: float = 12, lim
     return realtime_history(projectId, hours, limit)
 
 
+@app.post("/api/realtime/observations")
+def realtime_observation_endpoint(request: RealtimeObservationRequest) -> dict:
+    started = perf_counter()
+    try:
+        result = insert_observation(
+            timestamp=request.timestamp,
+            values=request.values,
+            source=request.source,
+            project_id=request.projectId,
+        )
+        insert_calculation_log(
+            "realtime_observation",
+            "success",
+            f"Realtime observation #{result['id']} saved.",
+            {"observationId": result["id"], "projectId": request.projectId, "source": request.source},
+            (perf_counter() - started) * 1000,
+            request.projectId,
+        )
+        return result
+    except ValueError as exc:
+        insert_calculation_log(
+            "realtime_observation",
+            "failed",
+            str(exc),
+            {"projectId": request.projectId, "source": request.source},
+            (perf_counter() - started) * 1000,
+            request.projectId,
+        )
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/realtime/observations")
+def realtime_observations_endpoint(projectId: str = "default", hours: float = 24, limit: int = 200) -> dict:
+    return list_observations(projectId, hours, limit)
+
+
+@app.get("/api/realtime/trust")
+def realtime_trust_endpoint(projectId: str = "default", hours: float = 24, maxLagHours: float = 2.0) -> dict:
+    return realtime_trust(projectId, hours, maxLagHours)
+
+
+@app.post("/api/realtime/forecast")
+def realtime_forecast_endpoint(request: RealtimeForecastRequest) -> dict:
+    started = perf_counter()
+    try:
+        result = realtime_forecast(
+            project_id=request.projectId,
+            horizon_hours=request.horizonHours,
+            step_hours=request.stepHours,
+            history_hours=request.historyHours,
+        )
+        insert_calculation_log(
+            "realtime_forecast",
+            "success",
+            "Realtime forecast completed.",
+            {
+                "projectId": request.projectId,
+                "runId": result.get("runId"),
+                "horizonHours": request.horizonHours,
+                "method": result.get("method"),
+            },
+            (perf_counter() - started) * 1000,
+            request.projectId,
+        )
+        return result
+    except ValueError as exc:
+        insert_calculation_log(
+            "realtime_forecast",
+            "failed",
+            str(exc),
+            {"projectId": request.projectId, "horizonHours": request.horizonHours},
+            (perf_counter() - started) * 1000,
+            request.projectId,
+        )
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        insert_calculation_log(
+            "realtime_forecast",
+            "failed",
+            str(exc),
+            {"projectId": request.projectId, "horizonHours": request.horizonHours},
+            (perf_counter() - started) * 1000,
+            request.projectId,
+        )
+        raise HTTPException(status_code=500, detail="Realtime forecast failed unexpectedly.") from exc
+
+
 @app.get("/api/realtime/sources")
 def realtime_sources_endpoint() -> dict:
     return list_data_sources()
+
+
+@app.get("/api/realtime/cleaning-settings")
+def realtime_cleaning_settings_endpoint(projectId: str = "default") -> dict:
+    return get_cleaning_settings(projectId)
+
+
+@app.post("/api/realtime/cleaning-settings")
+def save_realtime_cleaning_settings_endpoint(request: CleaningSettingsRequest) -> dict:
+    result = save_cleaning_settings(request.projectId, request.enabledRules)
+    insert_calculation_log(
+        "cleaning_settings",
+        "success",
+        "Realtime cleaning rules updated.",
+        {"projectId": request.projectId, "enabledRules": result["enabledRules"]},
+        None,
+        request.projectId,
+    )
+    return result
 
 
 @app.get("/api/realtime/status")
@@ -861,9 +1012,14 @@ def realtime_reset_endpoint(projectId: str = "default") -> dict:
 
 
 @app.post("/api/realtime/mock/start")
-async def realtime_mock_start_endpoint() -> dict:
+async def realtime_mock_start_endpoint(request: RealtimeMockStartRequest = RealtimeMockStartRequest()) -> dict:
     try:
-        result = await start_mock()
+        result = await start_mock(
+            interval_seconds=request.intervalSeconds,
+            project_id=request.projectId,
+            profile=request.profile,
+            warm_start=request.warmStart,
+        )
         insert_calculation_log("mock_start", "success", "Mock realtime runner started.", result)
         return result
     except ValueError as exc:

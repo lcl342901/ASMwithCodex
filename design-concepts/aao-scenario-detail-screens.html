@@ -1,0 +1,950 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AAO 方案工作台详细页面</title>
+  <style>
+    :root {
+      --bg: #edf4ef;
+      --panel: #fbfdfb;
+      --panel-2: #f5f9f6;
+      --ink: #12201a;
+      --muted: #66756d;
+      --line: #cfddd4;
+      --green: #0f7a4d;
+      --green-2: #0e8f62;
+      --blue: #2563eb;
+      --cyan: #0ea5a4;
+      --amber: #d97706;
+      --red: #dc2626;
+      --shadow: 0 18px 50px rgba(24, 48, 36, 0.14);
+      --soft-shadow: 0 10px 30px rgba(24, 48, 36, 0.10);
+      font-family: Inter, "SF Pro Display", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 78% 10%, rgba(14, 165, 164, 0.16), transparent 31%),
+        linear-gradient(135deg, #e7f1eb 0%, #f7fbf8 46%, #e8f1ec 100%);
+    }
+    button, input, select { font: inherit; }
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 86px 1fr;
+    }
+    .rail {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+      padding: 26px 16px;
+      background: rgba(246, 250, 247, 0.94);
+      border-right: 1px solid rgba(183, 204, 193, 0.72);
+      backdrop-filter: blur(18px);
+    }
+    .brand-mark {
+      width: 52px;
+      height: 52px;
+      display: grid;
+      place-items: center;
+      border-radius: 18px;
+      color: #fff;
+      background: linear-gradient(145deg, #0e7a4b, #0ea5a4);
+      box-shadow: 0 16px 28px rgba(15, 122, 77, 0.28);
+      font-size: 18px;
+      font-weight: 950;
+    }
+    .rail-button {
+      width: 52px;
+      height: 52px;
+      display: grid;
+      place-items: center;
+      border: 1px solid transparent;
+      border-radius: 17px;
+      color: #22332b;
+      background: transparent;
+    }
+    .rail-button svg { width: 25px; height: 25px; stroke-width: 2; }
+    .rail-button.active {
+      color: var(--green);
+      background: #e5f3ec;
+      border-color: #b7d8c6;
+      box-shadow: inset 0 0 0 1px rgba(15, 122, 77, 0.08);
+    }
+    .workspace {
+      min-width: 0;
+      padding: 22px 26px 30px;
+    }
+    .topbar {
+      height: 76px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 18px;
+    }
+    .kicker {
+      margin: 0 0 6px;
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 950;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0;
+      font-size: 31px;
+      line-height: 1.08;
+      letter-spacing: 0;
+    }
+    .mode-switch {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(251, 253, 251, 0.78);
+      box-shadow: var(--soft-shadow);
+    }
+    .mode-switch button {
+      height: 38px;
+      padding: 0 18px;
+      border: 0;
+      border-radius: 12px;
+      color: #405148;
+      background: transparent;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+    .mode-switch button.active {
+      color: #fff;
+      background: var(--green);
+      box-shadow: 0 10px 22px rgba(15, 122, 77, 0.24);
+    }
+    .actions { display: flex; align-items: center; gap: 10px; }
+    .ghost-action, .danger-action, .primary-action {
+      height: 46px;
+      padding: 0 18px;
+      border-radius: 14px;
+      font-size: 14px;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+    .ghost-action {
+      color: #33473c;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.78);
+    }
+    .danger-action {
+      color: #b42318;
+      border: 1px solid #f4c7c3;
+      background: #fff5f5;
+    }
+    .primary-action {
+      color: #fff;
+      border: 0;
+      background: linear-gradient(145deg, #0f7a4d, #0e8f62);
+      box-shadow: 0 16px 28px rgba(15, 122, 77, 0.24);
+    }
+    .card {
+      border: 1px solid rgba(198, 215, 204, 0.92);
+      border-radius: 22px;
+      background: rgba(251, 253, 251, 0.94);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .card-pad { padding: 18px; }
+    .card-header {
+      min-height: 72px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.64);
+    }
+    .card-title {
+      margin: 0 0 5px;
+      font-size: 18px;
+      font-weight: 950;
+      letter-spacing: 0;
+    }
+    .card-subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+      line-height: 1.45;
+    }
+    .badge {
+      height: 27px;
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 0 9px;
+      color: var(--green);
+      background: #e7f6ed;
+      font-size: 11px;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+    .badge.blue { color: var(--blue); background: #eff6ff; }
+    .badge.amber { color: #8a5200; background: #fff7ed; }
+    .badge.red { color: #b42318; background: #fff5f5; }
+    .scenario-layout {
+      display: grid;
+      grid-template-columns: 270px minmax(760px, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+    .flow-steps {
+      display: grid;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .step {
+      position: relative;
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      gap: 11px;
+      align-items: center;
+      min-height: 64px;
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #f8fbf8;
+    }
+    .step.active {
+      border-color: #93c9ae;
+      background: #e8f6ef;
+      box-shadow: inset 0 0 0 1px rgba(15, 122, 77, 0.08);
+    }
+    .step-num {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+      color: var(--green);
+      background: #e4f3eb;
+      font-weight: 950;
+    }
+    .step strong { display: block; margin-bottom: 2px; font-size: 14px; font-weight: 950; }
+    .step span { color: var(--muted); font-size: 12px; font-weight: 750; }
+    .step:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      left: 28px;
+      bottom: -11px;
+      width: 2px;
+      height: 10px;
+      background: #bdd2c6;
+    }
+    .mini-status {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+    .status-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      color: #405148;
+      font-size: 12px;
+      font-weight: 850;
+    }
+    .status-line strong { color: var(--ink); }
+    .source-tabs {
+      display: flex;
+      gap: 8px;
+      padding: 5px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #f4f8f5;
+    }
+    .source-tabs button {
+      height: 32px;
+      border: 0;
+      border-radius: 10px;
+      padding: 0 12px;
+      color: #4e6258;
+      background: transparent;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+    .source-tabs button.active { color: #fff; background: var(--green); }
+    .scenario-main {
+      display: grid;
+      gap: 18px;
+    }
+    .canvas {
+      position: relative;
+      height: 308px;
+      background:
+        linear-gradient(90deg, rgba(16, 86, 57, 0.055) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(16, 86, 57, 0.055) 1px, transparent 1px),
+        linear-gradient(180deg, #f8fbf8, #eef5f0);
+      background-size: 32px 32px, 32px 32px, auto;
+    }
+    .chip {
+      position: absolute;
+      z-index: 2;
+      min-width: 106px;
+      padding: 9px 10px;
+      border: 1px solid rgba(180, 207, 193, 0.94);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 12px 24px rgba(18, 32, 26, 0.12);
+      backdrop-filter: blur(10px);
+    }
+    .chip b {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+      color: #2e4438;
+      font-size: 11px;
+      font-weight: 950;
+    }
+    .chip strong { font-size: 18px; font-weight: 950; }
+    .chip small { color: var(--muted); font-weight: 800; }
+    .chip.in { left: 44px; top: 162px; }
+    .chip.an { left: 206px; top: 62px; }
+    .chip.ax { left: 386px; top: 58px; }
+    .chip.ox { left: 570px; top: 58px; }
+    .chip.sc { right: 82px; top: 88px; }
+    .content-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 330px;
+      gap: 18px;
+    }
+    .panel-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .panel-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .form-card, .metric, .data-card {
+      border: 1px solid var(--line);
+      border-radius: 17px;
+      background: #f8fbf8;
+    }
+    .form-card { padding: 14px; }
+    .form-card h3, .data-card h3 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      font-weight: 950;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 104px;
+      gap: 12px;
+      align-items: center;
+      min-height: 42px;
+      border-bottom: 1px solid #dce8e0;
+      font-size: 13px;
+      font-weight: 850;
+    }
+    .form-row:last-child { border-bottom: 0; }
+    .input-like, .select-like {
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 0 9px;
+      border: 1px solid #cadbd1;
+      border-radius: 9px;
+      background: #fff;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+    .select-like { justify-content: space-between; }
+    .metric {
+      min-height: 76px;
+      padding: 12px;
+    }
+    .metric label {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 850;
+    }
+    .metric strong { font-size: 22px; font-weight: 950; }
+    .metric small { color: var(--muted); font-weight: 750; }
+    .data-card { padding: 14px; }
+    .table-wrap {
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      overflow: hidden;
+      background: #fff;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #dce8e0;
+      text-align: left;
+      white-space: nowrap;
+    }
+    th {
+      color: var(--muted);
+      background: #f1f6f2;
+      font-weight: 950;
+    }
+    td { font-weight: 800; }
+    tr:last-child td { border-bottom: 0; }
+    .notice {
+      padding: 12px;
+      border: 1px solid #f7d49c;
+      border-radius: 15px;
+      color: #7c4a03;
+      background: #fff8eb;
+      font-size: 12px;
+      line-height: 1.45;
+      font-weight: 750;
+    }
+    .library-layout {
+      display: grid;
+      grid-template-columns: 300px minmax(680px, 1fr) 320px;
+      gap: 18px;
+      align-items: start;
+    }
+    .path-card {
+      display: grid;
+      gap: 12px;
+    }
+    .path-node {
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      gap: 10px;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #f8fbf8;
+    }
+    .path-node.active {
+      border-color: #93c9ae;
+      background: #e8f6ef;
+    }
+    .path-icon {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+      color: var(--green);
+      background: #e4f3eb;
+      font-weight: 950;
+    }
+    .path-node strong { display: block; margin-bottom: 2px; font-size: 13px; font-weight: 950; }
+    .path-node span { display: block; color: var(--muted); font-size: 12px; font-weight: 750; }
+    .library-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+    .search-box {
+      height: 38px;
+      min-width: 280px;
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      color: var(--muted);
+      background: #fff;
+      font-weight: 750;
+    }
+    .scenario-list {
+      display: grid;
+      gap: 12px;
+      padding: 18px;
+    }
+    .scenario-card {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #f8fbf8;
+    }
+    .scenario-card.active {
+      border-color: #8bc8aa;
+      background: linear-gradient(180deg, #e8f6ef, #f8fbf8);
+      box-shadow: inset 0 0 0 1px rgba(15, 122, 77, 0.08);
+    }
+    .scenario-card h3 {
+      margin: 0 0 6px;
+      font-size: 17px;
+      font-weight: 950;
+    }
+    .scenario-card p {
+      margin: 0 0 12px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      font-weight: 700;
+    }
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+    }
+    .storage-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 42px;
+      align-items: center;
+      border-bottom: 1px solid #dce8e0;
+      color: #405148;
+      font-size: 12px;
+      font-weight: 850;
+    }
+    .storage-line:last-child { border-bottom: 0; }
+    .chart-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    @media (max-width: 1280px) {
+      .library-layout { grid-template-columns: 280px 1fr; }
+      .library-layout .side { grid-column: 1 / -1; }
+      .scenario-layout { grid-template-columns: 250px 1fr; }
+      .content-grid { grid-template-columns: 1fr; }
+      .panel-grid.three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    const screen = new URLSearchParams(location.search).get("screen") || "library";
+    const stepMeta = [
+      ["boundary", "边界来源", "手动 / CSV"],
+      ["dimensions", "池体尺寸", "体积、回流、SRT"],
+      ["control", "控制边界", "DO、RAS、WAS"],
+      ["strategy", "运行策略", "天数、输出间隔"],
+      ["overlay", "结果叠加", "指标与单体曲线"]
+    ];
+    const contentTitles = {
+      library: ["Scenario Library", "方案库"],
+      dimensions: ["Scenario Simulation", "方案仿真 · 池体尺寸"],
+      control: ["Scenario Simulation", "方案仿真 · 控制边界"],
+      strategy: ["Scenario Simulation", "方案仿真 · 运行策略"],
+      overlay: ["Scenario Simulation", "方案仿真 · 结果叠加"],
+      csv: ["Scenario Simulation", "方案仿真 · CSV 历史"],
+      realtime: ["Scenario Simulation", "方案仿真 · 从实时复制"]
+    };
+    const activeStep = {
+      dimensions: "dimensions",
+      control: "control",
+      strategy: "strategy",
+      overlay: "overlay",
+      csv: "boundary",
+      realtime: "boundary"
+    };
+    function iconSvg(type) {
+      const icons = {
+        cube: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3 4 7.4v9.2L12 21l8-4.4V7.4L12 3Z"/><path d="M4 7.4 12 12l8-4.6"/><path d="M12 12v9"/></svg>',
+        doc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 3h9l3 3v15H6z"/><path d="M14 3v4h4"/><path d="M9 13h6"/><path d="M9 17h4"/></svg>',
+        chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19V5"/><path d="M20 19H4"/><path d="M8 16V9"/><path d="M13 16V6"/><path d="M18 16v-4"/></svg>',
+        db: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 7c0-2 3.1-3.5 7-3.5S19 5 19 7s-3.1 3.5-7 3.5S5 9 5 7Z"/><path d="M5 7v5c0 2 3.1 3.5 7 3.5s7-1.5 7-3.5V7"/><path d="M5 12v5c0 2 3.1 3.5 7 3.5s7-1.5 7-3.5v-5"/></svg>',
+        gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.8 1.8 0 0 0 .36 1.98l.04.04a2.1 2.1 0 0 1-2.97 2.97l-.04-.04a1.8 1.8 0 0 0-1.98-.36 1.8 1.8 0 0 0-1.09 1.65V21a2.1 2.1 0 0 1-4.2 0v-.06A1.8 1.8 0 0 0 8.4 19.3a1.8 1.8 0 0 0-1.98.36l-.04.04a2.1 2.1 0 0 1-2.97-2.97l.04-.04A1.8 1.8 0 0 0 3.8 14.7 1.8 1.8 0 0 0 2.15 13H2a2.1 2.1 0 0 1 0-4.2h.06A1.8 1.8 0 0 0 3.7 7.7a1.8 1.8 0 0 0-.36-1.98l-.04-.04a2.1 2.1 0 1 1 2.97-2.97l.04.04a1.8 1.8 0 0 0 1.98.36h.01A1.8 1.8 0 0 0 9.4 1.5V1.4a2.1 2.1 0 0 1 4.2 0v.06a1.8 1.8 0 0 0 1.1 1.65 1.8 1.8 0 0 0 1.98-.36l.04-.04a2.1 2.1 0 1 1 2.97 2.97l-.04.04a1.8 1.8 0 0 0-.36 1.98v.01A1.8 1.8 0 0 0 21 8.8h.1a2.1 2.1 0 0 1 0 4.2h-.06A1.8 1.8 0 0 0 19.4 15Z"/></svg>'
+      };
+      return icons[type];
+    }
+    function rail(active = "doc") {
+      return `<aside class="rail" aria-label="主导航">
+        <div class="brand-mark">AA</div>
+        ${["cube", "doc", "chart", "db", "gear"].map(type => `<div class="rail-button ${active === type ? "active" : ""}">${iconSvg(type)}</div>`).join("")}
+      </aside>`;
+    }
+    function topbar(kicker, title, center = "", actions = "") {
+      return `<header class="topbar">
+        <div><p class="kicker">${kicker}</p><h1>${title}</h1></div>
+        ${center || '<div></div>'}
+        ${actions || '<div class="actions"><button class="ghost-action">保存方案</button><button class="primary-action">运行仿真</button></div>'}
+      </header>`;
+    }
+    function flowNav(active = "boundary") {
+      return `<aside class="card card-pad">
+        <p class="card-title">方案流程</p>
+        <p class="card-subtitle">每一步只处理一类问题，运行前统一校验。</p>
+        <div class="flow-steps">
+          ${stepMeta.map(([id, name, desc], index) => `<div class="step ${active === id ? "active" : ""}"><div class="step-num">${index + 1}</div><div><strong>${name}</strong><span>${desc}</span></div></div>`).join("")}
+        </div>
+        <div class="mini-status">
+          <div class="status-line"><span>当前方案</span><strong>雨季高负荷方案</strong></div>
+          <div class="status-line"><span>保存位置</span><strong>项目数据库</strong></div>
+          <div class="status-line"><span>数据状态</span><strong>已通过</strong></div>
+          <div class="status-line"><span>解算器</span><strong>RK4 v2</strong></div>
+        </div>
+      </aside>`;
+    }
+    function sourceTabs(active) {
+      return `<div class="source-tabs">
+        <button class="${active === "manual" ? "active" : ""}">手动边界</button>
+        <button class="${active === "csv" ? "active" : ""}">CSV 历史</button>
+        <button class="${active === "realtime" ? "active" : ""}">从实时复制</button>
+      </div>`;
+    }
+    function miniMap(kind = "dims") {
+      const chips = {
+        dims: [
+          ["in", "IN 进水", "Q", "10000", "m3/d"],
+          ["an", "AN 厌氧", "V", "1800", "m3"],
+          ["ax", "AX 缺氧", "V", "2600", "m3"],
+          ["ox", "OX 好氧", "V", "5200", "m3"],
+          ["sc", "SC 二沉池", "H", "4.2", "m"]
+        ],
+        control: [
+          ["in", "IN 进水", "Q", "10000", "m3/d"],
+          ["an", "AN 厌氧", "IR", "120%", ""],
+          ["ax", "AX 缺氧", "RAS", "80%", ""],
+          ["ox", "OX 好氧", "DO", "2.0", "g/m3"],
+          ["sc", "SC 二沉池", "WAS", "350", "m3/d"]
+        ],
+        overlay: [
+          ["in", "IN 进水", "NH4", "32.0", "g/m3"],
+          ["an", "AN 厌氧", "NH4", "29.4", "g/m3"],
+          ["ax", "AX 缺氧", "NH4", "17.8", "g/m3"],
+          ["ox", "OX 好氧", "NH4", "2.1", "g/m3"],
+          ["sc", "OUT 出水", "NH4", "0.42", "g/m3"]
+        ],
+        copy: [
+          ["in", "IN 进水", "最新", "03:00", ""],
+          ["an", "AN 厌氧", "状态", "上次", ""],
+          ["ax", "AX 缺氧", "状态", "上次", ""],
+          ["ox", "OX 好氧", "DO", "2.0", ""],
+          ["sc", "SC 二沉池", "RAS", "80%", ""]
+        ]
+      }[kind] || [];
+      return `<div class="canvas">
+        <svg viewBox="0 0 920 308" width="100%" height="100%" aria-label="AAO map">
+          <defs>
+            <filter id="shadow-${kind}" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="#12201a" flood-opacity="0.18"/></filter>
+            <linearGradient id="water-${kind}" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#93d8d2"/><stop offset="0.48" stop-color="#4fb6b5"/><stop offset="1" stop-color="#1b8f95"/></linearGradient>
+            <linearGradient id="wall-${kind}" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#f4f7f3"/><stop offset="1" stop-color="#ccd9d0"/></linearGradient>
+            <linearGradient id="side-${kind}" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#dce7df"/><stop offset="1" stop-color="#aebfb4"/></linearGradient>
+            <linearGradient id="clarifier-${kind}" x1="0" x2="1"><stop stop-color="#a7dcd5"/><stop offset="0.52" stop-color="#69c2bd"/><stop offset="1" stop-color="#238a8a"/></linearGradient>
+            <marker id="arrow-${kind}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#31453a"/></marker>
+            <marker id="blueArrow-${kind}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#2563eb"/></marker>
+          </defs>
+          <g opacity="0.5" stroke="#31453a" stroke-width="8" stroke-linecap="round" fill="none">
+            <path d="M58 208 C120 176, 152 164, 200 144" marker-end="url(#arrow-${kind})"/>
+            <path d="M316 150 C346 138, 376 140, 404 154" marker-end="url(#arrow-${kind})"/>
+            <path d="M510 154 C540 140, 572 142, 600 156" marker-end="url(#arrow-${kind})"/>
+            <path d="M708 160 C740 145, 762 152, 792 172" marker-end="url(#arrow-${kind})"/>
+          </g>
+          <g filter="url(#shadow-${kind})">
+            ${["206", "400", "594"].map((x, i) => `<g transform="translate(${x} 120)">
+              <polygon points="0,42 80,0 176,39 92,82" fill="url(#wall-${kind})" stroke="#9fb5a8"/>
+              <polygon points="16,43 80,11 158,40 91,72" fill="url(#water-${kind})"/>
+              ${i === 2 ? '<circle cx="84" cy="41" r="3" fill="#e5fffb"/><circle cx="105" cy="34" r="3" fill="#e5fffb"/><circle cx="126" cy="47" r="3" fill="#e5fffb"/>' : ""}
+              <polygon points="0,42 92,82 92,132 0,92" fill="url(#side-${kind})" stroke="#9fb5a8"/>
+              <polygon points="92,82 176,39 176,91 92,132" fill="#bfcec4" stroke="#9fb5a8"/>
+              <text x="66" y="112" fill="#213329" font-size="13" font-weight="900">${["厌氧池", "缺氧池", "好氧池"][i]}</text>
+            </g>`).join("")}
+            <g transform="translate(760 150)">
+              <ellipse cx="48" cy="26" rx="54" ry="25" fill="url(#clarifier-${kind})" stroke="#1a7473"/>
+              <rect x="-6" y="26" width="108" height="66" fill="#d8e5dc"/>
+              <ellipse cx="48" cy="92" rx="54" ry="25" fill="#b9cabe" stroke="#93a99b"/>
+              <text x="20" y="65" fill="#213329" font-size="13" font-weight="900">二沉池</text>
+            </g>
+          </g>
+          <path d="M798 258 C662 312, 498 300, 320 250" fill="none" stroke="#2563eb" stroke-width="4" stroke-dasharray="9 8" marker-end="url(#blueArrow-${kind})"/>
+        </svg>
+        ${chips.map(([pos, name, key, value, unit]) => `<div class="chip ${pos}"><b>${name}<span>${key}</span></b><strong>${value}</strong> <small>${unit}</small></div>`).join("")}
+      </div>`;
+    }
+    function chartSvg(color = "#0f7a4d") {
+      return `<svg viewBox="0 0 680 124" width="100%" height="124" aria-label="trend">
+        <line x1="28" y1="12" x2="28" y2="108" stroke="#cbd8d1"/>
+        <line x1="28" y1="108" x2="660" y2="108" stroke="#cbd8d1"/>
+        <g stroke="#e1ebe5"><line x1="28" y1="76" x2="660" y2="76"/><line x1="28" y1="44" x2="660" y2="44"/><line x1="180" y1="12" x2="180" y2="108"/><line x1="340" y1="12" x2="340" y2="108"/><line x1="500" y1="12" x2="500" y2="108"/></g>
+        <path d="M30 26 C94 30, 128 42, 174 54 C224 68, 262 74, 318 78 C386 84, 448 90, 514 99 C586 108, 620 105, 656 102" fill="none" stroke="${color}" stroke-width="4" stroke-linecap="round"/>
+        <path d="M30 58 C132 58, 224 64, 316 70 C424 78, 540 82, 656 86" fill="none" stroke="#2563eb" stroke-width="3" stroke-linecap="round"/>
+      </svg>`;
+    }
+    function scenarioShell(inner, active, source = "manual") {
+      const [kicker, title] = contentTitles[screen] || contentTitles.dimensions;
+      return `<div class="app">${rail("doc")}<main class="workspace">
+        ${topbar(kicker, title, '<div class="mode-switch"><button>工艺画布</button><button class="active">方案编辑</button><button>结果叠加</button></div>')}
+        <section class="scenario-layout">
+          ${flowNav(active)}
+          <article class="card scenario-main">
+            <div class="card-header">
+              <div><p class="card-title">${title.replace("方案仿真 · ", "")}</p><p class="card-subtitle">${screenSubtitle(screen)}</p></div>
+              ${sourceTabs(source)}
+            </div>
+            ${inner}
+          </article>
+        </section>
+      </main></div>`;
+    }
+    function screenSubtitle(id) {
+      return {
+        dimensions: "把池体尺寸和二沉池结构作为方案资产保存，后续运行直接引用。",
+        control: "把 DO、回流、排泥等运行边界集中编辑，避免散落在结果页。",
+        strategy: "定义这一次方案运行的时长、初始状态、输出和进度策略。",
+        overlay: "选择指标后把方案计算结果叠加在 2.5D 工艺底图上。",
+        csv: "上传历史边界并完成字段映射、数据预览和清洗校验。",
+        realtime: "从在线边界或实时状态复制一段数据，快速形成新方案。"
+      }[id] || "";
+    }
+    function dimensionsScreen() {
+      return scenarioShell(`${miniMap("dims")}<div class="content-grid card-pad">
+        <div class="panel-grid">
+          <div class="form-card"><h3>AAO 池体尺寸</h3>
+            <div class="form-row"><span>厌氧池体积</span><span class="input-like">1800</span></div>
+            <div class="form-row"><span>缺氧池体积</span><span class="input-like">2600</span></div>
+            <div class="form-row"><span>好氧池体积</span><span class="input-like">5200</span></div>
+            <div class="form-row"><span>总 HRT</span><span class="input-like">23.0 h</span></div>
+          </div>
+          <div class="form-card"><h3>二沉池结构</h3>
+            <div class="form-row"><span>表面积</span><span class="input-like">1250</span></div>
+            <div class="form-row"><span>有效水深</span><span class="input-like">4.2</span></div>
+            <div class="form-row"><span>分层数</span><span class="input-like">10</span></div>
+            <div class="form-row"><span>进泥层</span><span class="input-like">5</span></div>
+          </div>
+        </div>
+        <aside class="data-card">
+          <h3>选中单体：好氧池</h3>
+          <div class="table-wrap"><table><tbody>
+            <tr><th>参数</th><th>当前值</th></tr>
+            <tr><td>L × W × H</td><td>42 × 31 × 4.0 m</td></tr>
+            <tr><td>曝气分区</td><td>3 zones</td></tr>
+            <tr><td>有效容积</td><td>5200 m3</td></tr>
+            <tr><td>编辑状态</td><td><span class="badge">已保存</span></td></tr>
+          </tbody></table></div>
+        </aside>
+      </div>`, "dimensions", "manual");
+    }
+    function controlScreen() {
+      return scenarioShell(`${miniMap("control")}<div class="content-grid card-pad">
+        <div class="panel-grid">
+          <div class="form-card"><h3>回流与排泥</h3>
+            <div class="form-row"><span>内回流 IR</span><span class="input-like">120%</span></div>
+            <div class="form-row"><span>RAS 回流比</span><span class="input-like">80%</span></div>
+            <div class="form-row"><span>WAS 排泥</span><span class="input-like">350</span></div>
+            <div class="form-row"><span>目标 SRT</span><span class="input-like">12 d</span></div>
+          </div>
+          <div class="form-card"><h3>曝气与 DO</h3>
+            <div class="form-row"><span>好氧池 DO</span><span class="input-like">2.0</span></div>
+            <div class="form-row"><span>曝气控制</span><span class="select-like">固定设定 <span>⌄</span></span></div>
+            <div class="form-row"><span>最低 DO</span><span class="input-like">1.2</span></div>
+            <div class="form-row"><span>最高 DO</span><span class="input-like">3.0</span></div>
+          </div>
+        </div>
+        <aside class="data-card">
+          <h3>控制影响预览</h3>
+          <div class="notice">当前 RAS 与 WAS 会影响二沉池泥位、系统 SRT 和回流污泥浓度。运行前建议通过校验检查沉降参数。</div>
+          <div class="panel-grid" style="margin-top:12px">
+            <div class="metric"><label>RAS Q</label><strong>8000</strong><small> m3/d</small></div>
+            <div class="metric"><label>WAS Q</label><strong>350</strong><small> m3/d</small></div>
+          </div>
+        </aside>
+      </div>`, "control", "manual");
+    }
+    function strategyScreen() {
+      return scenarioShell(`<div class="card-pad">
+        <div class="panel-grid three">
+          <div class="metric"><label>仿真总时长</label><strong>50</strong><small> d</small></div>
+          <div class="metric"><label>输出间隔</label><strong>1</strong><small> h</small></div>
+          <div class="metric"><label>初始状态</label><strong>上次最终状态</strong></div>
+        </div>
+      </div>
+      <div class="content-grid card-pad" style="padding-top:0">
+        <div class="panel-grid">
+          <div class="form-card"><h3>运行时间线</h3>
+            <div class="form-row"><span>开始时间</span><span class="input-like">0 d</span></div>
+            <div class="form-row"><span>结束时间</span><span class="input-like">50 d</span></div>
+            <div class="form-row"><span>输出间隔</span><span class="input-like">1 h</span></div>
+            <div class="form-row"><span>进度刷新</span><span class="input-like">每输出点</span></div>
+          </div>
+          <div class="form-card"><h3>解算策略</h3>
+            <div class="form-row"><span>默认引擎</span><span class="input-like">RK4 v2</span></div>
+            <div class="form-row"><span>内部步长上限</span><span class="input-like">0.0025 d</span></div>
+            <div class="form-row"><span>失败处理</span><span class="input-like">停止并记录</span></div>
+            <div class="form-row"><span>旧曲线</span><span class="input-like">运行时清空</span></div>
+          </div>
+        </div>
+        <aside class="data-card">
+          <h3>运行校验</h3>
+          <div class="table-wrap"><table><tbody>
+            <tr><td>边界条件</td><td><span class="badge">通过</span></td></tr>
+            <tr><td>池体尺寸</td><td><span class="badge">通过</span></td></tr>
+            <tr><td>二沉池参数</td><td><span class="badge amber">需关注</span></td></tr>
+            <tr><td>预计输出点</td><td>1201</td></tr>
+            <tr><td>预计耗时</td><td>18.5 s</td></tr>
+          </tbody></table></div>
+        </aside>
+      </div>`, "strategy", "manual");
+    }
+    function overlayScreen() {
+      return scenarioShell(`${miniMap("overlay")}<div class="content-grid card-pad">
+        <div class="data-card">
+          <div class="chart-title"><h3>节点过程曲线</h3><div class="source-tabs"><button class="active">NH4-N</button><button>NO3-N</button><button>TN</button><button>TSS</button></div></div>
+          ${chartSvg()}
+        </div>
+        <aside class="data-card">
+          <h3>叠加规则</h3>
+          <div class="table-wrap"><table><tbody>
+            <tr><td>视角</td><td>全流程指标</td></tr>
+            <tr><td>当前指标</td><td>NH4-N</td></tr>
+            <tr><td>颜色阈值</td><td><span class="badge">自动分级</span></td></tr>
+            <tr><td>点击节点</td><td>打开单体曲线</td></tr>
+          </tbody></table></div>
+        </aside>
+      </div>`, "overlay", "manual");
+    }
+    function csvScreen() {
+      return scenarioShell(`<div class="content-grid card-pad">
+        <div class="data-card">
+          <div class="chart-title"><h3>CSV 历史数据</h3><span class="badge">sample-data.csv</span></div>
+          <div class="panel-grid three">
+            <div class="metric"><label>记录数</label><strong>577</strong></div>
+            <div class="metric"><label>覆盖时长</label><strong>48</strong><small> h</small></div>
+            <div class="metric"><label>频率</label><strong>5</strong><small> min</small></div>
+          </div>
+          <div style="margin-top:14px">${chartSvg("#2563eb")}</div>
+        </div>
+        <aside class="data-card">
+          <h3>上传与校验</h3>
+          <div class="notice">CSV 只作为边界条件来源；仿真总时长仍由运行策略控制，超出 CSV 范围后保持最后边界。</div>
+          <div class="table-wrap" style="margin-top:12px"><table><tbody>
+            <tr><td>字段映射</td><td><span class="badge">6/6</span></td></tr>
+            <tr><td>质量问题</td><td>3</td></tr>
+            <tr><td>已清洗</td><td>3</td></tr>
+            <tr><td>使用方式</td><td>线性插值</td></tr>
+          </tbody></table></div>
+        </aside>
+      </div>
+      <div class="card-pad" style="padding-top:0">
+        <div class="table-wrap"><table>
+          <thead><tr><th>time</th><th>Q</th><th>COD</th><th>NH4</th><th>NO3</th><th>TSS</th><th>DO</th><th>质量状态</th></tr></thead>
+          <tbody><tr><td>00:00</td><td>10000</td><td>420</td><td>32.0</td><td>0.50</td><td>220</td><td>2.0</td><td>ok</td></tr><tr><td>00:05</td><td>10080</td><td>418</td><td>31.8</td><td>0.51</td><td>219</td><td>2.0</td><td>ok</td></tr><tr><td>00:10</td><td>10120</td><td>416</td><td>31.7</td><td>0.52</td><td>221</td><td>2.0</td><td>cleaned</td></tr></tbody>
+        </table></div>
+      </div>`, "boundary", "csv");
+    }
+    function realtimeScreen() {
+      return scenarioShell(`${miniMap("copy")}<div class="content-grid card-pad">
+        <div class="data-card">
+          <div class="chart-title"><h3>从实时数据复制</h3><span class="badge blue">最近 12 小时</span></div>
+          <div class="panel-grid three">
+            <div class="metric"><label>在线边界</label><strong>144</strong><small> 条</small></div>
+            <div class="metric"><label>实时结果</label><strong>144</strong><small> 步</small></div>
+            <div class="metric"><label>最新输入 ID</label><strong>184</strong></div>
+          </div>
+          <div style="margin-top:14px">${chartSvg("#0ea5a4")}</div>
+        </div>
+        <aside class="data-card">
+          <h3>复制方式</h3>
+          <div class="table-wrap"><table><tbody>
+            <tr><td>复制边界</td><td><span class="badge">开启</span></td></tr>
+            <tr><td>复制最终状态</td><td><span class="badge">开启</span></td></tr>
+            <tr><td>时间窗口</td><td>最近 12 h</td></tr>
+            <tr><td>生成方案</td><td>雨季高负荷方案 v2</td></tr>
+          </tbody></table></div>
+          <div class="notice" style="margin-top:12px">复制后会形成独立方案快照，不会反向影响实时计算状态。</div>
+        </aside>
+      </div>
+      <div class="card-pad" style="padding-top:0">
+        <div class="table-wrap"><table>
+          <thead><tr><th>时间</th><th>输入 ID</th><th>Q</th><th>COD</th><th>NH4</th><th>DO</th><th>出水 NH4</th><th>动作</th></tr></thead>
+          <tbody><tr><td>02:50</td><td>182</td><td>10040</td><td>419</td><td>31.9</td><td>2.0</td><td>0.46</td><td>复制</td></tr><tr><td>02:55</td><td>183</td><td>10080</td><td>421</td><td>32.1</td><td>2.0</td><td>0.44</td><td>复制</td></tr><tr><td>03:00</td><td>184</td><td>10120</td><td>417</td><td>31.8</td><td>2.0</td><td>0.42</td><td>复制</td></tr></tbody>
+        </table></div>
+      </div>`, "boundary", "realtime");
+    }
+    function libraryScreen() {
+      const center = '<div class="mode-switch"><button class="active">方案库</button><button>最近运行</button><button>模板</button></div>';
+      const actions = '<div class="actions"><button class="ghost-action">导入方案</button><button class="primary-action">新建方案</button></div>';
+      return `<div class="app">${rail("doc")}<main class="workspace">
+        ${topbar("Scenario Library", "方案库", center, actions)}
+        <section class="library-layout">
+          <aside class="card card-pad">
+            <p class="card-title">项目存储结构</p>
+            <p class="card-subtitle">方案存在项目数据库里，不是临时页面状态。后续可扩展为用户账号和云端项目。</p>
+            <div class="path-card" style="margin-top:16px">
+              <div class="path-node active"><div class="path-icon">P</div><div><strong>Default Project</strong><span>当前项目</span></div></div>
+              <div class="path-node"><div class="path-icon">S</div><div><strong>scenarios</strong><span>方案定义与版本</span></div></div>
+              <div class="path-node"><div class="path-icon">R</div><div><strong>simulation_runs</strong><span>运行任务和日志</span></div></div>
+              <div class="path-node"><div class="path-icon">D</div><div><strong>result_series</strong><span>曲线、表格、叠加结果</span></div></div>
+            </div>
+            <div class="mini-status">
+              <div class="storage-line"><span>本地保存</span><strong>SQLite</strong></div>
+              <div class="storage-line"><span>项目隔离</span><strong>project_id</strong></div>
+              <div class="storage-line"><span>版本策略</span><strong>保存即生成版本</strong></div>
+            </div>
+          </aside>
+          <article class="card">
+            <div class="library-toolbar">
+              <div><p class="card-title">方案列表</p><p class="card-subtitle">从这里新建、复制、打开、归档方案。</p></div>
+              <div class="search-box">搜索方案、运行标签或创建人</div>
+            </div>
+            <div class="scenario-list">
+              ${[
+                ["雨季高负荷方案", "基于最近 12 小时实时边界复制，调整了 RAS 和好氧 DO。", "已运行", "最后运行 03:00", "RK4 v2", true],
+                ["Default AAO Baseline", "默认 AAO 工艺方案，使用手动边界和默认模型参数。", "已保存", "最后运行 昨天", "RK4 v2", false],
+                ["CSV 50 天历史回放", "使用 sample-data.csv 作为边界输入，仿真总时长 50 天。", "待运行", "未运行", "RK4 baseline", false],
+                ["低 DO 对照方案", "用于比较 1.2 gO2/m3 与 2.0 gO2/m3 的硝化效果差异。", "草稿", "未运行", "RK4 v2", false]
+              ].map(([name, desc, status, time, solver, active]) => `<div class="scenario-card ${active ? "active" : ""}"><div><h3>${name}</h3><p>${desc}</p><div class="meta-row"><span class="badge">${status}</span><span>${time}</span><span>${solver}</span><span>v3</span></div></div><div class="actions"><button class="ghost-action">复制</button><button class="primary-action">打开</button></div></div>`).join("")}
+            </div>
+          </article>
+          <aside class="card card-pad side">
+            <p class="card-title">选中方案详情</p>
+            <p class="card-subtitle">方案保存的是参数快照，运行记录和结果单独挂在方案下面。</p>
+            <div class="panel-grid" style="grid-template-columns:1fr 1fr;margin-top:14px">
+              <div class="metric"><label>版本</label><strong>v3</strong></div>
+              <div class="metric"><label>运行数</label><strong>8</strong></div>
+              <div class="metric"><label>边界来源</label><strong>实时复制</strong></div>
+              <div class="metric"><label>结果状态</label><strong>完成</strong></div>
+            </div>
+            <div class="table-wrap" style="margin-top:14px"><table><tbody>
+              <tr><td>创建时间</td><td>2026-05-21 02:58</td></tr>
+              <tr><td>保存目录</td><td>Default Project / scenarios</td></tr>
+              <tr><td>最近结果</td><td>run #42</td></tr>
+              <tr><td>可操作</td><td>打开 / 复制 / 归档</td></tr>
+            </tbody></table></div>
+          </aside>
+        </section>
+      </main></div>`;
+    }
+    const screens = {
+      library: libraryScreen,
+      dimensions: dimensionsScreen,
+      control: controlScreen,
+      strategy: strategyScreen,
+      overlay: overlayScreen,
+      csv: csvScreen,
+      realtime: realtimeScreen
+    };
+    document.getElementById("app").innerHTML = (screens[screen] || libraryScreen)();
+  </script>
+</body>
+</html>

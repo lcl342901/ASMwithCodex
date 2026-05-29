@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AAO 方案仿真页面设计</title>
+  <style>
+    :root {
+      --bg: #edf4ef;
+      --panel: #fbfdfb;
+      --ink: #12201a;
+      --muted: #66756d;
+      --line: #cfddd4;
+      --green: #0f7a4d;
+      --blue: #2563eb;
+      --amber: #d97706;
+      --red: #dc2626;
+      --shadow: 0 18px 50px rgba(24, 48, 36, 0.14);
+      font-family: Inter, "SF Pro Display", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 78% 10%, rgba(14, 165, 164, 0.16), transparent 31%),
+        linear-gradient(135deg, #e7f1eb 0%, #f7fbf8 46%, #e8f1ec 100%);
+    }
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 86px 1fr;
+    }
+    .rail {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+      padding: 26px 16px;
+      background: rgba(246, 250, 247, 0.94);
+      border-right: 1px solid rgba(183, 204, 193, 0.72);
+      backdrop-filter: blur(18px);
+    }
+    .brand-mark {
+      width: 52px;
+      height: 52px;
+      display: grid;
+      place-items: center;
+      border-radius: 18px;
+      color: #fff;
+      background: linear-gradient(145deg, #0e7a4b, #0ea5a4);
+      box-shadow: 0 16px 28px rgba(15, 122, 77, 0.28);
+      font-size: 18px;
+      font-weight: 950;
+    }
+    .rail-button {
+      width: 52px;
+      height: 52px;
+      display: grid;
+      place-items: center;
+      border: 1px solid transparent;
+      border-radius: 17px;
+      color: #22332b;
+      background: transparent;
+    }
+    .rail-button svg {
+      width: 25px;
+      height: 25px;
+      stroke-width: 2;
+    }
+    .rail-button.active {
+      color: var(--green);
+      background: #e5f3ec;
+      border-color: #b7d8c6;
+      box-shadow: inset 0 0 0 1px rgba(15, 122, 77, 0.08);
+    }
+    .workspace {
+      min-width: 0;
+      padding: 22px 26px 30px;
+    }
+    .topbar {
+      height: 76px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 18px;
+    }
+    .kicker {
+      margin: 0 0 6px;
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 950;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0;
+      font-size: 31px;
+      line-height: 1.08;
+      letter-spacing: 0;
+    }
+    .mode-switch {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(251, 253, 251, 0.76);
+      box-shadow: 0 10px 30px rgba(24, 48, 36, 0.10);
+    }
+    .mode-switch button {
+      height: 38px;
+      padding: 0 18px;
+      border: 0;
+      border-radius: 12px;
+      color: #405148;
+      background: transparent;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+    .mode-switch button.active {
+      color: #fff;
+      background: var(--green);
+      box-shadow: 0 10px 22px rgba(15, 122, 77, 0.24);
+    }
+    .run-area {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .ghost-action,
+    .primary-action {
+      height: 46px;
+      padding: 0 18px;
+      border-radius: 14px;
+      font-size: 14px;
+      font-weight: 950;
+    }
+    .ghost-action {
+      color: #33473c;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.76);
+    }
+    .primary-action {
+      color: #fff;
+      border: 0;
+      background: linear-gradient(145deg, #0f7a4d, #0e8f62);
+      box-shadow: 0 16px 28px rgba(15, 122, 77, 0.24);
+    }
+    .board {
+      display: grid;
+      grid-template-columns: 260px minmax(680px, 1fr) 342px;
+      gap: 18px;
+      align-items: start;
+    }
+    .card {
+      border: 1px solid rgba(198, 215, 204, 0.92);
+      border-radius: 22px;
+      background: rgba(251, 253, 251, 0.94);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .card-pad { padding: 18px; }
+    .card-header {
+      min-height: 70px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.64);
+    }
+    .card-title {
+      margin: 0 0 5px;
+      font-size: 18px;
+      font-weight: 950;
+      letter-spacing: 0;
+    }
+    .card-subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+      line-height: 1.45;
+    }
+    .flow-steps {
+      display: grid;
+      gap: 10px;
+    }
+    .step {
+      position: relative;
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      gap: 11px;
+      align-items: center;
+      min-height: 64px;
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #f8fbf8;
+    }
+    .step.active {
+      border-color: #93c9ae;
+      background: #e8f6ef;
+      box-shadow: inset 0 0 0 1px rgba(15, 122, 77, 0.08);
+    }
+    .step-num {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+      color: #0f7a4d;
+      background: #e4f3eb;
+      font-weight: 950;
+    }
+    .step strong {
+      display: block;
+      margin-bottom: 2px;
+      font-size: 14px;
+      font-weight: 950;
+    }
+    .step span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+    }
+    .step:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      left: 28px;
+      bottom: -11px;
+      width: 2px;
+      height: 10px;
+      background: #bdd2c6;
+    }
+    .mini-status {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+    .status-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      color: #405148;
+      font-size: 12px;
+      font-weight: 850;
+    }
+    .status-line strong {
+      color: var(--ink);
+    }
+    .canvas-card {
+      min-height: 658px;
+    }
+    .canvas-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+    .source-tabs {
+      display: flex;
+      gap: 8px;
+      padding: 5px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #f4f8f5;
+    }
+    .source-tabs button {
+      height: 32px;
+      border: 0;
+      border-radius: 10px;
+      padding: 0 12px;
+      color: #4e6258;
+      background: transparent;
+      font-weight: 900;
+    }
+    .source-tabs button.active {
+      color: #fff;
+      background: var(--green);
+    }
+    .canvas {
+      position: relative;
+      height: 362px;
+      background:
+        linear-gradient(90deg, rgba(16, 86, 57, 0.055) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(16, 86, 57, 0.055) 1px, transparent 1px),
+        linear-gradient(180deg, #f8fbf8, #eef5f0);
+      background-size: 32px 32px, 32px 32px, auto;
+    }
+    .chip {
+      position: absolute;
+      z-index: 2;
+      min-width: 104px;
+      padding: 9px 10px;
+      border: 1px solid rgba(180, 207, 193, 0.94);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 12px 24px rgba(18, 32, 26, 0.12);
+      backdrop-filter: blur(10px);
+    }
+    .chip b {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+      color: #2e4438;
+      font-size: 11px;
+      font-weight: 950;
+    }
+    .chip strong {
+      font-size: 18px;
+      font-weight: 950;
+    }
+    .chip small {
+      color: var(--muted);
+      font-weight: 800;
+    }
+    .chip.in { left: 34px; top: 198px; }
+    .chip.an { left: 166px; top: 72px; }
+    .chip.ax { left: 338px; top: 64px; }
+    .chip.ox { left: 510px; top: 60px; }
+    .chip.sc { right: 86px; top: 98px; }
+    .editor-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      padding: 16px 18px 18px;
+    }
+    .form-card {
+      border: 1px solid var(--line);
+      border-radius: 17px;
+      padding: 14px;
+      background: #f8fbf8;
+    }
+    .form-card h3 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      font-weight: 950;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 100px;
+      gap: 12px;
+      align-items: center;
+      min-height: 42px;
+      border-bottom: 1px solid #dce8e0;
+      font-size: 13px;
+      font-weight: 850;
+    }
+    .form-row:last-child { border-bottom: 0; }
+    .input-like {
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 0 9px;
+      border: 1px solid #cadbd1;
+      border-radius: 9px;
+      background: #fff;
+      font-weight: 950;
+    }
+    .side-run {
+      display: grid;
+      gap: 14px;
+    }
+    .run-summary {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .metric {
+      min-height: 76px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      background: #f8fbf8;
+    }
+    .metric label {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 850;
+    }
+    .metric strong {
+      font-size: 22px;
+      font-weight: 950;
+    }
+    .metric small {
+      color: var(--muted);
+      font-weight: 750;
+    }
+    .notice {
+      padding: 12px;
+      border: 1px solid #f7d49c;
+      border-radius: 15px;
+      color: #7c4a03;
+      background: #fff8eb;
+      font-size: 12px;
+      line-height: 1.45;
+      font-weight: 750;
+    }
+    .button-stack {
+      display: grid;
+      gap: 10px;
+    }
+    .button-stack button {
+      height: 42px;
+      border-radius: 13px;
+      font-weight: 950;
+    }
+    .button-stack .primary {
+      border: 0;
+      color: #fff;
+      background: var(--green);
+    }
+    .button-stack .secondary {
+      border: 1px solid var(--line);
+      color: #33473c;
+      background: #fff;
+    }
+    .bottom-card {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: 1fr 342px;
+      min-height: 236px;
+    }
+    .chart {
+      padding: 18px 22px;
+      border-right: 1px solid var(--line);
+    }
+    .chart-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .tabs {
+      display: flex;
+      gap: 8px;
+    }
+    .tab {
+      height: 32px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 0 12px;
+      background: #fff;
+      color: #4e6258;
+      font-weight: 900;
+    }
+    .tab.active {
+      color: #fff;
+      background: var(--green);
+      border-color: var(--green);
+    }
+    .result-list {
+      padding: 18px;
+    }
+    .result-line {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      min-height: 42px;
+      border-bottom: 1px solid #dce8e0;
+      font-size: 13px;
+      font-weight: 850;
+    }
+    .result-line:last-child { border-bottom: 0; }
+    .ok { color: var(--green); }
+    @media (max-width: 1280px) {
+      .board { grid-template-columns: 240px 1fr; }
+      .side-run { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .bottom-card { grid-template-columns: 1fr; }
+      .chart { border-right: 0; border-bottom: 1px solid var(--line); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="rail" aria-label="主导航">
+      <div class="brand-mark">AA</div>
+      <div class="rail-button" title="工艺数字孪生"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3 4 7.4v9.2L12 21l8-4.4V7.4L12 3Z"/><path d="M4 7.4 12 12l8-4.6"/><path d="M12 12v9"/></svg></div>
+      <div class="rail-button active" title="方案仿真"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 3h9l3 3v15H6z"/><path d="M14 3v4h4"/><path d="M9 13h6"/><path d="M9 17h4"/></svg></div>
+      <div class="rail-button" title="实时展示"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19V5"/><path d="M20 19H4"/><path d="M8 16V9"/><path d="M13 16V6"/><path d="M18 16v-4"/></svg></div>
+      <div class="rail-button" title="在线数据清洗"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 7c0-2 3.1-3.5 7-3.5S19 5 19 7s-3.1 3.5-7 3.5S5 9 5 7Z"/><path d="M5 7v5c0 2 3.1 3.5 7 3.5s7-1.5 7-3.5V7"/><path d="M5 12v5c0 2 3.1 3.5 7 3.5s7-1.5 7-3.5v-5"/></svg></div>
+      <div class="rail-button" title="系统设置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.8 1.8 0 0 0 .36 1.98l.04.04a2.1 2.1 0 0 1-2.97 2.97l-.04-.04a1.8 1.8 0 0 0-1.98-.36 1.8 1.8 0 0 0-1.09 1.65V21a2.1 2.1 0 0 1-4.2 0v-.06A1.8 1.8 0 0 0 8.4 19.3a1.8 1.8 0 0 0-1.98.36l-.04.04a2.1 2.1 0 0 1-2.97-2.97l.04-.04A1.8 1.8 0 0 0 3.8 14.7 1.8 1.8 0 0 0 2.15 13H2a2.1 2.1 0 0 1 0-4.2h.06A1.8 1.8 0 0 0 3.7 7.7a1.8 1.8 0 0 0-.36-1.98l-.04-.04a2.1 2.1 0 1 1 2.97-2.97l.04.04a1.8 1.8 0 0 0 1.98.36h.01A1.8 1.8 0 0 0 9.4 1.5V1.4a2.1 2.1 0 0 1 4.2 0v.06a1.8 1.8 0 0 0 1.1 1.65 1.8 1.8 0 0 0 1.98-.36l.04-.04a2.1 2.1 0 1 1 2.97 2.97l-.04.04a1.8 1.8 0 0 0-.36 1.98v.01A1.8 1.8 0 0 0 21 8.8h.1a2.1 2.1 0 0 1 0 4.2h-.06A1.8 1.8 0 0 0 19.4 15Z"/></svg></div>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div>
+          <p class="kicker">Scenario Simulation</p>
+          <h1>方案仿真</h1>
+        </div>
+        <div class="mode-switch" aria-label="页面模式">
+          <button>工艺画布</button>
+          <button class="active">方案编辑</button>
+          <button>结果叠加</button>
+        </div>
+        <div class="run-area">
+          <button class="ghost-action">保存方案</button>
+          <button class="primary-action">运行仿真</button>
+        </div>
+      </header>
+
+      <section class="board">
+        <aside class="card card-pad">
+          <p class="card-title">方案流程</p>
+          <p class="card-subtitle">把一次仿真拆成清晰的编辑步骤，运行前先做校验。</p>
+          <div class="flow-steps" style="margin-top:16px">
+            <div class="step active"><div class="step-num">1</div><div><strong>边界来源</strong><span>手动 / CSV</span></div></div>
+            <div class="step"><div class="step-num">2</div><div><strong>池体尺寸</strong><span>体积、回流、SRT</span></div></div>
+            <div class="step"><div class="step-num">3</div><div><strong>控制边界</strong><span>DO、RAS、WAS</span></div></div>
+            <div class="step"><div class="step-num">4</div><div><strong>运行策略</strong><span>天数、输出间隔</span></div></div>
+            <div class="step"><div class="step-num">5</div><div><strong>结果叠加</strong><span>指标与单体曲线</span></div></div>
+          </div>
+          <div class="mini-status">
+            <div class="status-line"><span>当前方案</span><strong>Default Project</strong></div>
+            <div class="status-line"><span>边界状态</span><strong class="ok">已通过</strong></div>
+            <div class="status-line"><span>解算器</span><strong>RK4 v2</strong></div>
+            <div class="status-line"><span>预计耗时</span><strong>8.4 s</strong></div>
+          </div>
+        </aside>
+
+        <article class="card canvas-card">
+          <div class="canvas-top">
+            <div>
+              <p class="card-title">方案编辑画布</p>
+              <p class="card-subtitle">先选择边界来源，再在工艺底图上编辑关键单体参数。</p>
+            </div>
+            <div class="source-tabs">
+              <button class="active">手动边界</button>
+              <button>CSV 历史</button>
+              <button>从实时复制</button>
+            </div>
+          </div>
+          <div class="canvas">
+            <svg viewBox="0 0 780 362" width="100%" height="100%" aria-label="AAO scenario map">
+              <defs>
+                <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
+                  <feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="#12201a" flood-opacity="0.18"/>
+                </filter>
+                <linearGradient id="water" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#93d8d2"/><stop offset="0.48" stop-color="#4fb6b5"/><stop offset="1" stop-color="#1b8f95"/></linearGradient>
+                <linearGradient id="wall" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#f4f7f3"/><stop offset="1" stop-color="#ccd9d0"/></linearGradient>
+                <linearGradient id="side" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#dce7df"/><stop offset="1" stop-color="#aebfb4"/></linearGradient>
+                <linearGradient id="clarifier" x1="0" x2="1"><stop stop-color="#a7dcd5"/><stop offset="0.52" stop-color="#69c2bd"/><stop offset="1" stop-color="#238a8a"/></linearGradient>
+                <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#31453a"/></marker>
+                <marker id="blueArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#2563eb"/></marker>
+              </defs>
+              <g opacity="0.5" stroke="#31453a" stroke-width="8" stroke-linecap="round" fill="none">
+                <path d="M58 222 C112 195, 135 180, 180 160" marker-end="url(#arrow)"/>
+                <path d="M278 164 C303 155, 326 156, 352 166" marker-end="url(#arrow)"/>
+                <path d="M450 167 C477 156, 502 158, 528 168" marker-end="url(#arrow)"/>
+                <path d="M618 172 C642 166, 660 171, 682 186" marker-end="url(#arrow)"/>
+              </g>
+              <g filter="url(#shadow)">
+                <g transform="translate(176 136)">
+                  <polygon points="0,42 80,0 176,39 92,82" fill="url(#wall)" stroke="#9fb5a8"/>
+                  <polygon points="16,43 80,11 158,40 91,72" fill="url(#water)"/>
+                  <polygon points="0,42 92,82 92,132 0,92" fill="url(#side)" stroke="#9fb5a8"/>
+                  <polygon points="92,82 176,39 176,91 92,132" fill="#bfcec4" stroke="#9fb5a8"/>
+                  <text x="68" y="112" fill="#213329" font-size="13" font-weight="900">厌氧池</text>
+                </g>
+                <g transform="translate(348 136)">
+                  <polygon points="0,42 80,0 176,39 92,82" fill="url(#wall)" stroke="#9fb5a8"/>
+                  <polygon points="16,43 80,11 158,40 91,72" fill="url(#water)"/>
+                  <polygon points="0,42 92,82 92,132 0,92" fill="url(#side)" stroke="#9fb5a8"/>
+                  <polygon points="92,82 176,39 176,91 92,132" fill="#bfcec4" stroke="#9fb5a8"/>
+                  <text x="68" y="112" fill="#213329" font-size="13" font-weight="900">缺氧池</text>
+                </g>
+                <g transform="translate(520 136)">
+                  <polygon points="0,42 80,0 176,39 92,82" fill="url(#wall)" stroke="#9fb5a8"/>
+                  <polygon points="16,43 80,11 158,40 91,72" fill="url(#water)"/>
+                  <circle cx="84" cy="41" r="3" fill="#e5fffb"/><circle cx="105" cy="34" r="3" fill="#e5fffb"/><circle cx="126" cy="47" r="3" fill="#e5fffb"/>
+                  <polygon points="0,42 92,82 92,132 0,92" fill="url(#side)" stroke="#9fb5a8"/>
+                  <polygon points="92,82 176,39 176,91 92,132" fill="#bfcec4" stroke="#9fb5a8"/>
+                  <text x="68" y="112" fill="#213329" font-size="13" font-weight="900">好氧池</text>
+                </g>
+                <g transform="translate(668 164)">
+                  <ellipse cx="48" cy="26" rx="54" ry="25" fill="url(#clarifier)" stroke="#1a7473"/>
+                  <rect x="-6" y="26" width="108" height="66" fill="#d8e5dc"/>
+                  <ellipse cx="48" cy="92" rx="54" ry="25" fill="#b9cabe" stroke="#93a99b"/>
+                  <text x="20" y="65" fill="#213329" font-size="13" font-weight="900">二沉池</text>
+                </g>
+              </g>
+              <path d="M706 274 C590 334, 442 332, 280 264" fill="none" stroke="#2563eb" stroke-width="4" stroke-dasharray="9 8" marker-end="url(#blueArrow)"/>
+            </svg>
+            <div class="chip in"><b>IN 进水 <span>Q</span></b><strong>10000</strong> <small>m3/d</small></div>
+            <div class="chip an"><b>AN 厌氧 <span>V</span></b><strong>1800</strong> <small>m3</small></div>
+            <div class="chip ax"><b>AX 缺氧 <span>V</span></b><strong>2600</strong> <small>m3</small></div>
+            <div class="chip ox"><b>OX 好氧 <span>DO</span></b><strong>2.0</strong> <small>g/m3</small></div>
+            <div class="chip sc"><b>SC 二沉池 <span>H</span></b><strong>4.2</strong> <small>m</small></div>
+          </div>
+          <div class="editor-grid">
+            <div class="form-card">
+              <h3>边界条件</h3>
+              <div class="form-row"><span>进水 Q</span><span class="input-like">10000</span></div>
+              <div class="form-row"><span>COD</span><span class="input-like">420</span></div>
+              <div class="form-row"><span>NH4-N</span><span class="input-like">32</span></div>
+              <div class="form-row"><span>TSS</span><span class="input-like">220</span></div>
+            </div>
+            <div class="form-card">
+              <h3>控制边界</h3>
+              <div class="form-row"><span>RAS 回流比</span><span class="input-like">80%</span></div>
+              <div class="form-row"><span>WAS 排泥</span><span class="input-like">350</span></div>
+              <div class="form-row"><span>好氧 DO</span><span class="input-like">2.0</span></div>
+              <div class="form-row"><span>仿真天数</span><span class="input-like">20</span></div>
+            </div>
+          </div>
+        </article>
+
+        <aside class="side-run">
+          <article class="card card-pad">
+            <p class="card-title">运行摘要</p>
+            <p class="card-subtitle">运行前展示关键配置，避免用户不知道模型会按什么条件计算。</p>
+            <div class="run-summary" style="margin-top:14px">
+              <div class="metric"><label>总时长</label><strong>20</strong> <small>d</small></div>
+              <div class="metric"><label>输出间隔</label><strong>1</strong> <small>h</small></div>
+              <div class="metric"><label>初始状态</label><strong>上次</strong></div>
+              <div class="metric"><label>数据质量</label><strong class="ok">通过</strong></div>
+            </div>
+          </article>
+          <article class="card card-pad">
+            <p class="card-title">校验与执行</p>
+            <p class="card-subtitle">校验通过后才进入计算队列，结果回写到方案结果。</p>
+            <div class="notice" style="margin:14px 0">边界数据、池体尺寸和二沉池参数均已完成基础校验。计算将使用保存的最终状态作为初始状态。</div>
+            <div class="button-stack">
+              <button class="primary">运行仿真</button>
+              <button class="secondary">终止当前任务</button>
+              <button class="secondary">导入 CSV 边界</button>
+            </div>
+          </article>
+        </aside>
+
+        <article class="card bottom-card">
+          <div class="chart">
+            <div class="chart-head">
+              <div>
+                <p class="card-title">方案结果预览</p>
+                <p class="card-subtitle">运行时实时清空旧曲线，并按输出间隔逐步绘制新结果。</p>
+              </div>
+              <div class="tabs"><button class="tab active">出水</button><button class="tab">全流程</button><button class="tab">表格</button></div>
+            </div>
+            <svg viewBox="0 0 760 128" width="100%" height="128" aria-label="scenario result chart">
+              <line x1="28" y1="12" x2="28" y2="112" stroke="#cbd8d1"/>
+              <line x1="28" y1="112" x2="744" y2="112" stroke="#cbd8d1"/>
+              <g stroke="#e1ebe5"><line x1="28" y1="78" x2="744" y2="78"/><line x1="28" y1="44" x2="744" y2="44"/><line x1="184" y1="12" x2="184" y2="112"/><line x1="340" y1="12" x2="340" y2="112"/><line x1="496" y1="12" x2="496" y2="112"/><line x1="652" y1="12" x2="652" y2="112"/></g>
+              <path d="M30 26 C114 36, 158 52, 228 62 C312 75, 420 86, 514 98 C600 109, 666 107, 742 102" fill="none" stroke="#0f7a4d" stroke-width="4" stroke-linecap="round"/>
+              <path d="M30 58 C122 60, 224 66, 326 71 C438 77, 564 82, 742 86" fill="none" stroke="#2563eb" stroke-width="3" stroke-linecap="round"/>
+              <path d="M30 84 C180 82, 306 78, 456 74 C570 70, 642 67, 742 64" fill="none" stroke="#d97706" stroke-width="3" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="result-list">
+            <p class="card-title">末端指标</p>
+            <div class="result-line"><span>出水 COD</span><strong>34.2 g/m3</strong></div>
+            <div class="result-line"><span>出水 NH4-N</span><strong>0.42 g/m3</strong></div>
+            <div class="result-line"><span>出水 TN</span><strong>13.8 g/m3</strong></div>
+            <div class="result-line"><span>出水 TSS</span><strong>18.6 g/m3</strong></div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
