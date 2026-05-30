@@ -1838,6 +1838,76 @@ h2 {
   gap: 12px;
 }
 
+.periodic-calibration-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.periodic-calibration-grid label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.periodic-calibration-grid input,
+.periodic-calibration-grid select {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdfb;
+  color: var(--ink);
+  font: inherit;
+}
+
+.inline-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.inline-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.periodic-calibration-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.periodic-calibration-summary div {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdfb;
+  font-size: 12px;
+}
+
+.periodic-calibration-summary span {
+  display: block;
+  color: var(--muted);
+}
+
+.periodic-calibration-summary strong {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .cleaning-kpis {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

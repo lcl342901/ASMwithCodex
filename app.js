@@ -84,6 +84,20 @@ const calibrationObservationStatus = document.getElementById("calibrationObserva
 const calibrationStatus = document.getElementById("calibrationStatus");
 const calibrationSummary = document.getElementById("calibrationSummary");
 const calibrationRunList = document.getElementById("calibrationRunList");
+const periodicCalibrationName = document.getElementById("periodicCalibrationName");
+const periodicCalibrationCadence = document.getElementById("periodicCalibrationCadence");
+const periodicCalibrationWindow = document.getElementById("periodicCalibrationWindow");
+const periodicCalibrationStage = document.getElementById("periodicCalibrationStage");
+const periodicCalibrationIterations = document.getElementById("periodicCalibrationIterations");
+const periodicCalibrationStepFraction = document.getElementById("periodicCalibrationStepFraction");
+const periodicCalibrationEnabled = document.getElementById("periodicCalibrationEnabled");
+const periodicCalibrationUseProjectCsv = document.getElementById("periodicCalibrationUseProjectCsv");
+const periodicCalibrationApplyParams = document.getElementById("periodicCalibrationApplyParams");
+const savePeriodicCalibration = document.getElementById("savePeriodicCalibration");
+const runPeriodicCalibration = document.getElementById("runPeriodicCalibration");
+const refreshPeriodicCalibration = document.getElementById("refreshPeriodicCalibration");
+const periodicCalibrationStatus = document.getElementById("periodicCalibrationStatus");
+const periodicCalibrationSummary = document.getElementById("periodicCalibrationSummary");
 const evaluationTools = document.getElementById("evaluationTools");
 const refreshModelEvaluation = document.getElementById("refreshModelEvaluation");
 const compareBsm1Reference = document.getElementById("compareBsm1Reference");
@@ -528,6 +542,7 @@ function refreshActivePanelData() {
   if (activePanel === "calibration") {
     refreshCalibrationStages();
     refreshProjectCalibrationRuns();
+    refreshPeriodicCalibrationPlan();
   }
   if (activePanel === "evaluation") {
     refreshModelEvaluationPanel();
@@ -1485,9 +1500,125 @@ async function refreshCalibrationStages() {
         .map((stage) => `<option value="${escapeHtml(stage.id)}">${escapeHtml(stage.name)}</option>`)
         .join("");
       calibrationStageSelect.value = calibrationStages.some((stage) => stage.id === current) ? current : calibrationStages[0].id;
+      if (periodicCalibrationStage) {
+        const periodicCurrent = periodicCalibrationStage.value;
+        periodicCalibrationStage.innerHTML = calibrationStages
+          .map((stage) => `<option value="${escapeHtml(stage.id)}">${escapeHtml(stage.name)}</option>`)
+          .join("");
+        periodicCalibrationStage.value = calibrationStages.some((stage) => stage.id === periodicCurrent) ? periodicCurrent : calibrationStages[0].id;
+      }
     }
   } catch (error) {
     updateCalibrationStatus(`校准阶段加载失败：${error.message}`, true);
+  }
+}
+
+function updatePeriodicCalibrationStatus(message, isError = false) {
+  if (!periodicCalibrationStatus) return;
+  periodicCalibrationStatus.textContent = message;
+  periodicCalibrationStatus.classList.toggle("error", isError);
+}
+
+function stageById(stageId) {
+  return calibrationStages.find((stage) => stage.id === stageId);
+}
+
+function periodicCalibrationConfigFromForm() {
+  const stage = stageById(periodicCalibrationStage?.value || "nitrification");
+  return {
+    name: periodicCalibrationName?.value || "Weekly calibration check",
+    enabled: Boolean(periodicCalibrationEnabled?.checked),
+    cadence: periodicCalibrationCadence?.value || "weekly",
+    dataWindowHours: Number(periodicCalibrationWindow?.value || 72),
+    stageId: periodicCalibrationStage?.value || "nitrification",
+    targets: stage?.targets || ["effNh4"],
+    tunableParams: stage?.tunableParams || ["muA", "kNH"],
+    maxIterations: Number(periodicCalibrationIterations?.value || 1),
+    stepFraction: Number(periodicCalibrationStepFraction?.value || 0.05),
+    maxLagHours: 2,
+    useProjectCsv: Boolean(periodicCalibrationUseProjectCsv?.checked),
+    applyBestParams: Boolean(periodicCalibrationApplyParams?.checked),
+  };
+}
+
+function fillPeriodicCalibrationForm(payload) {
+  const config = payload?.config || {};
+  if (periodicCalibrationName) periodicCalibrationName.value = config.name || "Weekly calibration check";
+  if (periodicCalibrationCadence) periodicCalibrationCadence.value = config.cadence || "weekly";
+  if (periodicCalibrationWindow) periodicCalibrationWindow.value = config.dataWindowHours || 72;
+  if (periodicCalibrationStage) periodicCalibrationStage.value = config.stageId || "nitrification";
+  if (periodicCalibrationIterations) periodicCalibrationIterations.value = config.maxIterations || 1;
+  if (periodicCalibrationStepFraction) periodicCalibrationStepFraction.value = config.stepFraction || 0.05;
+  if (periodicCalibrationEnabled) periodicCalibrationEnabled.checked = Boolean(config.enabled || payload?.enabled);
+  if (periodicCalibrationUseProjectCsv) periodicCalibrationUseProjectCsv.checked = config.useProjectCsv !== false;
+  if (periodicCalibrationApplyParams) periodicCalibrationApplyParams.checked = Boolean(config.applyBestParams);
+}
+
+function renderPeriodicCalibrationSummary(payload) {
+  if (!periodicCalibrationSummary) return;
+  const config = payload?.config || {};
+  const lastRun = payload?.lastRunId
+    ? `最近运行 #${payload.lastRunId} · ${escapeHtml(payload.lastStatus || "--")}`
+    : "还没有运行记录";
+  periodicCalibrationSummary.innerHTML = `
+    <div><span>状态</span><strong>${config.enabled || payload?.enabled ? "已启用" : "未启用"}</strong></div>
+    <div><span>周期</span><strong>${escapeHtml(config.cadence || "--")}</strong></div>
+    <div><span>窗口</span><strong>${formatChartValue(config.dataWindowHours)} h</strong></div>
+    <div><span>阶段</span><strong>${escapeHtml(config.stageId || "--")}</strong></div>
+    <div><span>目标</span><strong>${escapeHtml((config.targets || []).join(", ") || "--")}</strong></div>
+    <div><span>记录</span><strong>${lastRun}</strong></div>
+  `;
+}
+
+async function refreshPeriodicCalibrationPlan() {
+  if (!periodicCalibrationSummary) return;
+  try {
+    const payload = await projectRequest(`/${encodeURIComponent(activeProjectId)}/periodic-calibration`);
+    fillPeriodicCalibrationForm(payload);
+    renderPeriodicCalibrationSummary(payload);
+    updatePeriodicCalibrationStatus(payload.updatedAt ? `已加载周期校准计划，更新于 ${payload.updatedAt}。` : "已加载默认周期校准计划。");
+  } catch (error) {
+    updatePeriodicCalibrationStatus(`周期校准计划加载失败：${error.message}`, true);
+  }
+}
+
+async function savePeriodicCalibrationPlan() {
+  updatePeriodicCalibrationStatus("正在保存周期校准计划...");
+  try {
+    const payload = await projectRequest(`/${encodeURIComponent(activeProjectId)}/periodic-calibration`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(periodicCalibrationConfigFromForm()),
+    });
+    fillPeriodicCalibrationForm(payload);
+    renderPeriodicCalibrationSummary(payload);
+    updatePeriodicCalibrationStatus("周期校准计划已保存。");
+  } catch (error) {
+    updatePeriodicCalibrationStatus(`周期校准计划保存失败：${error.message}`, true);
+  }
+}
+
+async function runPeriodicCalibrationPlan() {
+  updatePeriodicCalibrationStatus("周期校准运行中...");
+  const boundaryText = replayBoundaryCsvText.trim() ? replayBoundaryCsvText : csvText;
+  const boundaryName = replayBoundaryCsvText.trim() ? replayBoundaryCsvFileName : csvFileName;
+  try {
+    const payload = await projectRequest(`/${encodeURIComponent(activeProjectId)}/periodic-calibration/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        observations: calibrationObservations,
+        csvText: boundaryText,
+        csvFileName: boundaryName,
+        applyBestParams: Boolean(periodicCalibrationApplyParams?.checked),
+      }),
+    });
+    renderCalibrationSummary({ ...payload.result, savedRun: payload.savedRun });
+    renderPeriodicCalibrationSummary(payload.schedule);
+    updatePeriodicCalibrationStatus(`周期校准完成：${payload.observationSource === "request" ? "使用上传观测" : "使用实时可信度观测"}，最优误差 ${formatChartValue(payload.result.bestObjective)}。`);
+    await refreshProjectCalibrationRuns();
+  } catch (error) {
+    updatePeriodicCalibrationStatus(`周期校准失败：${error.message}`, true);
   }
 }
 
@@ -5490,6 +5621,15 @@ runBsm1CalibrationReport.addEventListener("click", async () => {
 });
 refreshCalibrationRuns.addEventListener("click", async () => {
   await refreshProjectCalibrationRuns();
+});
+savePeriodicCalibration?.addEventListener("click", async () => {
+  await savePeriodicCalibrationPlan();
+});
+runPeriodicCalibration?.addEventListener("click", async () => {
+  await runPeriodicCalibrationPlan();
+});
+refreshPeriodicCalibration?.addEventListener("click", async () => {
+  await refreshPeriodicCalibrationPlan();
 });
 runHistoricalReplay.addEventListener("click", async () => {
   await runHistoricalReplayWorkflow();

@@ -260,6 +260,9 @@ Calibration runs can now be saved into the active project:
 GET    /api/projects/{projectId}/calibration-runs
 GET    /api/projects/{projectId}/calibration-runs/{runId}
 DELETE /api/projects/{projectId}/calibration-runs/{runId}
+GET    /api/projects/{projectId}/periodic-calibration
+POST   /api/projects/{projectId}/periodic-calibration
+POST   /api/projects/{projectId}/periodic-calibration/run
 ```
 
 Set `saveRun: true` in `/api/calibration/optimize` to archive the request and result. The frontend includes a compact `校准` workspace that can run a quick NH4 calibration for the active project, upload observation CSV data, and list saved calibration records.
@@ -273,6 +276,14 @@ POST /api/calibration/historical-replay
 ```
 
 The request combines a historical boundary CSV (`csvText`) and measured effluent observations (`observations`). The backend runs the model in a replay sandbox, compares predicted effluent against observations, and returns per-metric `MAE`, `RMSE`, bias, maximum absolute error, comparison rows, and calibration suggestions. Historical replay does not update realtime model state. Set `saveRun: true` to archive the replay report in the project calibration run list.
+
+P11.5 adds a periodic calibration plan. Each project can store one calibration schedule with cadence, data window,
+calibration stage, target metrics, tunable parameters, iteration count, and whether project CSV should be used. The first
+implementation is deliberately worker-free: `/api/projects/{projectId}/periodic-calibration/run` triggers the plan manually
+and archives the result as a normal calibration run. If observations are not supplied in the request, the backend derives
+calibration observations from recent realtime trust comparisons. This keeps the workflow compatible with a future daily/weekly
+worker without adding a scheduler dependency now. Automatic parameter adoption is off by default; when enabled, the run saves
+the optimizer's `bestParams` back to the project parameter configuration.
 
 For a closer BSM1 structural experiment, `POST /api/simulate` also accepts:
 

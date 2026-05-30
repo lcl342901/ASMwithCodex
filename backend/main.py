@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .ai_analysis import analyze_result, chat_with_deepseek, deepseek_config
-from .calibration import bsm1_calibration_report, bsm1_mapping_report, calibration_optimize, calibration_stage_configs, historical_replay_report, run_calibration_stage
+from .calibration import bsm1_calibration_report, bsm1_mapping_report, calibration_optimize, calibration_stage_configs, historical_replay_report, infer_observation_targets, observations_from_trust_trend, run_calibration_stage
 from .engine_runner import normalize_engine_version, simulate_with_engine
 from .model_trust import (
     assess_result_credibility,
@@ -35,10 +35,13 @@ from .platform import (
     list_calibration_runs,
     get_project_csv,
     get_project_params,
+    get_periodic_calibration_schedule,
     list_projects,
     reset_project_params,
     save_project_csv,
     save_project_params,
+    save_periodic_calibration_schedule,
+    update_periodic_calibration_last_run,
     update_project,
 )
 from .realtime import (
@@ -88,6 +91,8 @@ from .schemas import (
     InitialConditionRequest,
     ModelCredibilityRequest,
     ParamConfigRequest,
+    PeriodicCalibrationRunRequest,
+    PeriodicCalibrationScheduleRequest,
     ProjectCsvRequest,
     ProjectRequest,
     ProjectUpdateRequest,
@@ -682,6 +687,124 @@ def calibration_historical_replay_endpoint(request: HistoricalReplayRequest) -> 
         return result
     except ValueError as exc:
         insert_calculation_log("historical_replay", "failed", str(exc), {}, (perf_counter() - started) * 1000, request.projectId)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/projects/{project_id}/periodic-calibration")
+def get_project_periodic_calibration_endpoint(project_id: str) -> dict:
+    try:
+        return get_periodic_calibration_schedule(project_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/projects/{project_id}/periodic-calibration")
+def save_project_periodic_calibration_endpoint(project_id: str, request: PeriodicCalibrationScheduleRequest) -> dict:
+    try:
+        return save_periodic_calibration_schedule(project_id, request.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/projects/{project_id}/periodic-calibration/run")
+def run_project_periodic_calibration_endpoint(project_id: str, request: PeriodicCalibrationRunRequest) -> dict:
+    started = perf_counter()
+    try:
+        schedule = get_periodic_calibration_schedule(project_id)
+        config = schedule["config"]
+        params_payload = get_project_params(project_id)
+        run_params = params_payload["params"]
+        observations = request.observations
+        observation_source = "request"
+        if not observations:
+            trust = realtime_trust(project_id, config["dataWindowHours"], config["maxLagHours"])
+            observations = observations_from_trust_trend(trust.get("trend", []))
+            observation_source = "realtime_trust"
+        if not observations:
+            raise ValueError("周期校准没有可用观测数据。请先接入实测出水，或在校准中心上传观测 CSV。")
+
+        available_targets = infer_observation_targets(observations, [])
+        selected_targets = [target for target in config["targets"] if target in available_targets] or available_targets
+        if not selected_targets:
+            raise ValueError("周期校准观测数据中没有可识别的校准指标。")
+
+        stages = {stage["id"]: stage for stage in calibration_stage_configs()["stages"]}
+        stage = stages.get(config["stageId"], stages["nitrification"])
+        selected_tunables = config["tunableParams"] or stage["tunableParams"]
+
+        csv_text = request.csvText or ""
+        csv_file_name = request.csvFileName or ""
+        if not csv_text.strip() and config["useProjectCsv"]:
+            csv_payload = get_project_csv(project_id)
+            csv_text = csv_payload.get("csvText") or ""
+            csv_file_name = csv_payload.get("csvFileName") or ""
+
+        horizon = max((float(row.get("time", 0) or 0) for row in observations), default=0.0)
+        run_params = {
+            **run_params,
+            "simulationDays": max(float(run_params.get("simulationDays") or 0), horizon, 0.05),
+            "outputIntervalHours": min(float(run_params.get("outputIntervalHours") or 1), 1),
+        }
+        result = calibration_optimize(
+            params=run_params,
+            observations=observations,
+            tunable_params=selected_tunables,
+            targets=selected_targets,
+            csv_text=csv_text,
+            csv_file_name=csv_file_name,
+            max_iterations=config["maxIterations"],
+            step_fraction=config["stepFraction"],
+        )
+        request_payload = {
+            "projectId": project_id,
+            "schedule": config,
+            "observationSource": observation_source,
+            "observationCount": len(observations),
+            "csvFileName": csv_file_name,
+            "applyBestParams": request.applyBestParams if request.applyBestParams is not None else config["applyBestParams"],
+        }
+        saved = insert_calibration_run(
+            project_id,
+            f"Periodic calibration: {config['name']}",
+            result["status"],
+            request_payload,
+            {**result, "stage": stage, "periodic": True, "observationSource": observation_source},
+        )
+        applied_params = None
+        if request_payload["applyBestParams"]:
+            applied_params = save_project_params(project_id, result["bestParams"])
+        schedule_after = update_periodic_calibration_last_run(project_id, saved["id"], result["status"])
+        insert_calculation_log(
+            "periodic_calibration",
+            "success",
+            "Periodic calibration completed.",
+            {
+                "projectId": project_id,
+                "runId": saved["id"],
+                "bestObjective": result["bestObjective"],
+                "targetCount": len(selected_targets),
+                "tunableCount": len(selected_tunables),
+                "observationSource": observation_source,
+            },
+            (perf_counter() - started) * 1000,
+            project_id,
+        )
+        return {
+            "status": "completed",
+            "projectId": project_id,
+            "schedule": schedule_after,
+            "savedRun": {"id": saved["id"], "name": saved["name"], "projectId": saved["projectId"]},
+            "appliedParams": applied_params,
+            "result": result,
+            "stage": stage,
+            "observationSource": observation_source,
+            "observationCount": len(observations),
+            "targets": selected_targets,
+            "tunableParams": selected_tunables,
+        }
+    except ValueError as exc:
+        update_periodic_calibration_last_run(project_id, None, "failed")
+        insert_calculation_log("periodic_calibration", "failed", str(exc), {}, (perf_counter() - started) * 1000, project_id)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 

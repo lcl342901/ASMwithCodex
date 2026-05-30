@@ -506,6 +506,59 @@
             </div>
             <p id="calibrationStatus">尚未运行校准任务。</p>
           </div>
+          <div class="tool-section periodic-calibration-section">
+            <div class="tool-section-heading">
+              <strong>周期校准计划</strong>
+              <span>日/周复核</span>
+            </div>
+            <div class="periodic-calibration-grid">
+              <label>
+                <span>计划名称</span>
+                <input id="periodicCalibrationName" type="text" value="Weekly calibration check" />
+              </label>
+              <label>
+                <span>周期</span>
+                <select id="periodicCalibrationCadence">
+                  <option value="manual">手动</option>
+                  <option value="daily">每日</option>
+                  <option value="weekly">每周</option>
+                </select>
+              </label>
+              <label>
+                <span>数据窗口 h</span>
+                <input id="periodicCalibrationWindow" type="number" min="1" max="720" step="1" value="72" />
+              </label>
+              <label>
+                <span>阶段</span>
+                <select id="periodicCalibrationStage">
+                  <option value="nitrification">Nitrification / NH4</option>
+                  <option value="denitrification_tn">Denitrification / TN</option>
+                  <option value="cod_bod">COD / BOD</option>
+                  <option value="clarifier_tss">Clarifier / TSS</option>
+                </select>
+              </label>
+              <label>
+                <span>迭代</span>
+                <input id="periodicCalibrationIterations" type="number" min="1" max="4" step="1" value="1" />
+              </label>
+              <label>
+                <span>步长比例</span>
+                <input id="periodicCalibrationStepFraction" type="number" min="0.001" max="0.25" step="0.001" value="0.05" />
+              </label>
+            </div>
+            <div class="inline-options">
+              <label><input id="periodicCalibrationEnabled" type="checkbox" /> 启用计划</label>
+              <label><input id="periodicCalibrationUseProjectCsv" type="checkbox" checked /> 使用方案 CSV</label>
+              <label><input id="periodicCalibrationApplyParams" type="checkbox" /> 运行后自动采纳参数</label>
+            </div>
+            <div class="realtime-actions">
+              <button id="savePeriodicCalibration" class="secondary-button" type="button">保存计划</button>
+              <button id="runPeriodicCalibration" class="secondary-button" type="button">立即运行</button>
+              <button id="refreshPeriodicCalibration" class="secondary-button" type="button">刷新计划</button>
+            </div>
+            <p id="periodicCalibrationStatus">尚未加载周期校准计划。</p>
+            <div id="periodicCalibrationSummary" class="periodic-calibration-summary"></div>
+          </div>
           <div id="calibrationSummary" class="calibration-summary"></div>
           <div id="calibrationRunList" class="log-list"></div>
         </div>

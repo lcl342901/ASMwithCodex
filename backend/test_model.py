@@ -6,9 +6,9 @@ import unittest
 from pathlib import Path
 from backend.engine_compare import compare_engines
 from backend.engine_runner import normalize_engine_version, simulate_with_engine
-from backend.main import calibration_bsm1_mapping_endpoint, calibration_bsm1_report_endpoint, calibration_optimize_endpoint, calibration_preview_endpoint, calibration_stage_run_endpoint, calibration_stages_endpoint, cancel_simulation_job_endpoint, clear_project_csv_endpoint, configured_api_token, create_project_endpoint, default_project_endpoint, delete_project_calibration_run_endpoint, get_project_calibration_run_endpoint, get_project_csv_endpoint, get_project_params_endpoint, create_simulation_job_endpoint, get_simulation_job_endpoint, get_simulation_job_result_endpoint, list_project_calibration_runs_endpoint, list_projects_endpoint, model_credibility_endpoint, model_initial_conditions_endpoint, model_metadata_endpoint, model_reference_case_compare_endpoint, model_reference_case_endpoint, model_reference_cases_endpoint, realtime_sources_endpoint, realtime_status_endpoint, request_api_token, reset_project_params_endpoint, save_project_csv_endpoint, save_project_params_endpoint, simulate_endpoint
+from backend.main import calibration_bsm1_mapping_endpoint, calibration_bsm1_report_endpoint, calibration_optimize_endpoint, calibration_preview_endpoint, calibration_stage_run_endpoint, calibration_stages_endpoint, cancel_simulation_job_endpoint, clear_project_csv_endpoint, configured_api_token, create_project_endpoint, default_project_endpoint, delete_project_calibration_run_endpoint, get_project_calibration_run_endpoint, get_project_csv_endpoint, get_project_params_endpoint, get_project_periodic_calibration_endpoint, create_simulation_job_endpoint, get_simulation_job_endpoint, get_simulation_job_result_endpoint, list_project_calibration_runs_endpoint, list_projects_endpoint, model_credibility_endpoint, model_initial_conditions_endpoint, model_metadata_endpoint, model_reference_case_compare_endpoint, model_reference_case_endpoint, model_reference_cases_endpoint, realtime_sources_endpoint, realtime_status_endpoint, request_api_token, reset_project_params_endpoint, run_project_periodic_calibration_endpoint, save_project_csv_endpoint, save_project_params_endpoint, save_project_periodic_calibration_endpoint, simulate_endpoint
 from backend.model import DEFAULT_PARAMS, csv_values_at, normalize_csv_records, simulate, SimulationContext, sanitize_params
-from backend.schemas import Bsm1CalibrationReportRequest, Bsm1MappingRequest, CalibrationOptimizeRequest, CalibrationPreviewRequest, CalibrationStageRunRequest, InitialConditionRequest, ModelCredibilityRequest, ParamConfigRequest, ProjectCsvRequest, ProjectRequest, ReferenceComparisonRequest, SimulationRequest
+from backend.schemas import Bsm1CalibrationReportRequest, Bsm1MappingRequest, CalibrationOptimizeRequest, CalibrationPreviewRequest, CalibrationStageRunRequest, InitialConditionRequest, ModelCredibilityRequest, ParamConfigRequest, PeriodicCalibrationRunRequest, PeriodicCalibrationScheduleRequest, ProjectCsvRequest, ProjectRequest, ReferenceComparisonRequest, SimulationRequest
 from backend.solver_benchmark import benchmark_v2_solvers, project_long_horizon_durations, step_consistency_report
 from backend.engine_v2 import clarifier_layer_rhs, continuous_step, hybrid_step, initial_vector_state, pack_state, run_vector_simulation_v2, unpack_state, vector_snapshot
 from backend import realtime
@@ -345,6 +345,41 @@ class ModelTest(unittest.TestCase):
         deleted = delete_project_calibration_run_endpoint(project["id"], saved["id"])
         self.assertEqual(deleted["deleted"], 1)
         self.assertEqual(list_project_calibration_runs_endpoint(project["id"])["runs"], [])
+
+    def test_periodic_calibration_schedule_runs_and_archives_result(self):
+        project = create_project_endpoint(ProjectRequest(name="Periodic calibration"))
+        saved_schedule = save_project_periodic_calibration_endpoint(
+            project["id"],
+            PeriodicCalibrationScheduleRequest(
+                name="Daily NH4 check",
+                enabled=True,
+                cadence="daily",
+                dataWindowHours=24,
+                stageId="nitrification",
+                targets=["effNh4"],
+                tunableParams=["muA"],
+                maxIterations=1,
+                stepFraction=0.05,
+                useProjectCsv=False,
+            ),
+        )
+
+        result = run_project_periodic_calibration_endpoint(
+            project["id"],
+            PeriodicCalibrationRunRequest(
+                observations=[{"time": 0.02, "effNh4": 2.5}],
+                applyBestParams=False,
+            ),
+        )
+        schedule = get_project_periodic_calibration_endpoint(project["id"])
+        runs = list_project_calibration_runs_endpoint(project["id"])
+
+        self.assertTrue(saved_schedule["config"]["enabled"])
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["observationSource"], "request")
+        self.assertEqual(schedule["lastRunId"], result["savedRun"]["id"])
+        self.assertEqual(runs["runs"][0]["id"], result["savedRun"]["id"])
+        self.assertEqual(runs["runs"][0]["method"], "coordinate_search")
 
     def test_realtime_step_persists_latest_result(self):
         step = realtime.realtime_step(values={"Q": 10000, "COD": 420, "NH4": 32, "NO3": 0.5, "TSS": 220}, step_hours=0.5)

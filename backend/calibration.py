@@ -367,6 +367,35 @@ def historical_replay_report(
     }
 
 
+def observations_from_trust_trend(trend: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    valid_rows = [
+        row
+        for row in trend
+        if finite_float(row.get("observed")) is not None and row.get("metric") in CALIBRATION_TARGETS
+    ]
+    if not valid_rows:
+        return []
+
+    def row_time(row: dict[str, Any]) -> float:
+        value = row.get("resultTime") or row.get("timestamp")
+        try:
+            from datetime import datetime
+
+            parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            return parsed.timestamp()
+        except (TypeError, ValueError):
+            return finite_float(value) or 0.0
+
+    base_time = min(row_time(row) for row in valid_rows)
+    grouped: dict[float, dict[str, Any]] = {}
+    for row in valid_rows:
+        relative_days = max(0.0, (row_time(row) - base_time) / 86400)
+        key = round(relative_days, 8)
+        record = grouped.setdefault(key, {"time": key})
+        record[str(row["metric"])] = float(row["observed"])
+    return [grouped[key] for key in sorted(grouped)]
+
+
 def objective_comparison_rows(initial_objective: dict[str, Any], best_objective: dict[str, Any]) -> list[dict[str, Any]]:
     best_lookup = {
         (error["time"], error["metric"]): error

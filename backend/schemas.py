@@ -179,3 +179,25 @@ class HistoricalReplayRequest(BaseModel):
     csvFileName: str = ""
     observations: list[dict[str, Any]] = Field(default_factory=list)
     targets: list[str] = Field(default_factory=list)
+
+
+class PeriodicCalibrationScheduleRequest(BaseModel):
+    name: str = "Weekly calibration check"
+    enabled: bool = False
+    cadence: str = "weekly"
+    dataWindowHours: float = 72
+    stageId: str = "nitrification"
+    targets: list[str] = Field(default_factory=lambda: ["effNh4"])
+    tunableParams: list[str] = Field(default_factory=lambda: ["muA", "kNH"])
+    maxIterations: int = 1
+    stepFraction: float = 0.05
+    maxLagHours: float = 2.0
+    useProjectCsv: bool = True
+    applyBestParams: bool = False
+
+
+class PeriodicCalibrationRunRequest(BaseModel):
+    observations: list[dict[str, Any]] = Field(default_factory=list)
+    csvText: Optional[str] = ""
+    csvFileName: Optional[str] = ""
+    applyBestParams: Optional[bool] = None
