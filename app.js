@@ -409,7 +409,6 @@ const C = {
 
 const workspaceLabels = {
   scenarioLibrary: ["模拟实验室", "方案库"],
-  process: ["模拟实验室", "工艺模型"],
   params: ["模拟实验室", "方案编辑"],
   results: ["模拟实验室", "结果查看"],
   realtimeDashboard: ["实时仿真", "运行驾驶舱"],
@@ -666,10 +665,11 @@ function drawNodes() {
     element.style.left = `${node.x}px`;
     element.style.top = `${node.y}px`;
     element.dataset.id = node.id;
+    const visualClass = node.type === "clarifier" ? "clarifier-vessel" : node.type === "reactor" ? "basin" : node.type === "pump" ? "pump-unit" : "terminal-unit";
     element.innerHTML = `
-      <span class="icon">${node.icon}</span>
-      <h3>${node.title}</h3>
-      <p>${node.subtitle}</p>
+      <span class="node-chip"><b>${node.icon}</b><span>${node.title}</span></span>
+      <span class="unit-visual ${visualClass}" aria-hidden="true"><i></i></span>
+      <span class="node-copy"><strong>${node.title}</strong><small>${node.subtitle}</small></span>
     `;
     element.addEventListener("pointerdown", startDrag);
     element.addEventListener("click", () => selectNode(node.id));
@@ -745,7 +745,7 @@ function selectNode(id) {
     anaerobic: "process",
     anoxic: "process",
     aerobic: "process",
-    clarifier: "model",
+    clarifier: "process",
     ras: "operation",
     was: "operation",
     effluent: "operation",
@@ -2017,10 +2017,10 @@ function renderForm() {
   paramTabs.hidden = !showingParams;
   parameterForm.hidden = !showingParams || activeTab === "boundaryData";
   parameterForm.innerHTML = "";
+  if (showingParams) {
+    window.requestAnimationFrame(drawEdges);
+  }
   if (!showingParams) {
-    if (activePanel === "process") {
-      drawEdges();
-    }
     if (activePanel === "results" && lastResult) {
       drawChart(lastResult, activeChart);
     }
@@ -5529,7 +5529,7 @@ function setSidebarCollapsed(collapsed) {
   sidebarToggle.title = collapsed ? "展开侧边栏" : "收起侧边栏";
   writeLocalStorage(SIDEBAR_COLLAPSED_KEY, collapsed ? "true" : "false");
   window.setTimeout(() => {
-    if (activePanel === "process") drawEdges();
+    if (activePanel === "params") drawEdges();
     if (activePanel === "results" && activeResultMode === "batch" && lastResult) {
       drawChart(lastResult, activeChart);
     }

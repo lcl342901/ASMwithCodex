@@ -129,15 +129,10 @@
             <span class="nav-text">方案库</span>
             <small>新建与打开</small>
           </button>
-          <button class="nav-item panel-tab" data-env="lab" data-panel="process" type="button" title="工艺模型">
-            <svg><use href="#icon-model"></use></svg>
-            <span class="nav-text">工艺模型</span>
-            <small>流程图与单体</small>
-          </button>
           <button class="nav-item panel-tab" data-env="lab" data-panel="params" type="button" title="方案编辑">
             <svg><use href="#icon-config"></use></svg>
             <span class="nav-text">方案编辑</span>
-            <small>边界与策略</small>
+            <small>工艺图与边界</small>
           </button>
           <button class="nav-item panel-tab" data-env="lab" data-panel="results" data-result-mode-target="batch" type="button" title="结果查看">
             <svg><use href="#icon-chart"></use></svg>
@@ -174,7 +169,7 @@
       <main class="workspace">
         <header class="topbar">
           <div>
-            <p id="workspaceEyebrow" class="eyebrow">工艺模型</p>
+            <p id="workspaceEyebrow" class="eyebrow">方案编辑</p>
             <h2 id="workspaceTitle">AAO 工艺流程</h2>
           </div>
           <div class="topbar-actions">
@@ -223,21 +218,6 @@
           </div>
         </section>
 
-        <section class="canvas-panel workspace-page" data-page="process" aria-label="AAO 工艺流程图">
-        <div class="panel-heading">
-          <div>
-            <h2>工艺流程</h2>
-            <p>拖动单元位置，点击节点编辑关键参数。</p>
-          </div>
-          <div class="panel-tools">
-            <button id="resetLayout" class="secondary-button" type="button">重置布局</button>
-          </div>
-        </div>
-        <div id="flowCanvas" class="flow-canvas">
-          <svg id="edgeLayer" class="edge-layer" aria-hidden="true"></svg>
-        </div>
-      </section>
-
       <section class="params-panel workspace-page" data-page="params" aria-label="参数设置">
         <div class="panel-heading compact">
           <div>
@@ -255,6 +235,23 @@
             </div>
           </div>
         </div>
+        <div class="scenario-model-board">
+          <div class="model-board-heading">
+            <div>
+              <h3>2.5D 工艺底图</h3>
+              <p>点击单体会定位到相关参数；底图用于核对方案结构、主水线、回流和排泥关系。</p>
+            </div>
+            <div class="model-board-legend" aria-label="工艺线图例">
+              <span><i class="legend-main"></i>主水线</span>
+              <span><i class="legend-recycle"></i>内/外回流</span>
+              <span><i class="legend-was"></i>剩余污泥</span>
+              <button id="resetLayout" class="secondary-button" type="button">重置布局</button>
+            </div>
+          </div>
+          <div id="flowCanvas" class="flow-canvas isometric-canvas">
+            <svg id="edgeLayer" class="edge-layer" aria-hidden="true"></svg>
+          </div>
+        </div>
         <div id="paramTabs" class="param-tabs workflow-tabs" role="tablist" aria-label="配置流程">
           <button class="tab param-tab active" data-tab="influent">进水</button>
           <button class="tab param-tab" data-tab="process">池体尺寸</button>
@@ -263,12 +260,16 @@
         </div>
         <form id="parameterForm" class="parameter-form"></form>
         <div id="dataTools" class="data-tools" hidden>
+          <div class="boundary-data-note">
+            <strong>边界数据用于动态仿真</strong>
+            <span>前面的“进水 / 池体尺寸 / 控制边界”是一组手动方案参数；这里上传的 CSV 是随时间变化的历史边界序列。上传后，CSV 中包含的字段会按时间驱动仿真；CSV 缺失的字段仍使用前面的手动配置。</span>
+          </div>
           <label class="file-picker">
             <span>上传 CSV 历史数据</span>
             <input id="csvFileInput" type="file" accept=".csv,text/csv" />
           </label>
           <button id="clearCsvData" class="secondary-button" type="button">清除数据</button>
-          <p id="csvStatus">尚未加载历史数据。CSV 作为边界条件序列，仿真总时长和计算步长由“运行”页设置。可直接使用 sample-data.csv。</p>
+          <p id="csvStatus">尚未加载历史数据。CSV 作为边界条件序列，仿真总时长和输出间隔由“控制边界”设置。可直接使用 sample-data.csv。</p>
         </div>
       </section>
 
