@@ -4350,6 +4350,42 @@ function renderForecastTrendLegend(meta) {
   });
 }
 
+function forecastPointTooltip(point, meta) {
+  const risk = forecastRiskText(point.risk);
+  const lines = [
+    `+${point.hour}h ${meta.label}`,
+    `中位：${formatForecastNumber(point.median)} ${point.unit || meta.unit}`,
+    `区间：${formatForecastNumber(point.low)}-${formatForecastNumber(point.high)} ${point.unit || meta.unit}`,
+    `参考：${formatForecastNumber(point.reference ?? meta.reference)} ${point.unit || meta.unit}`,
+    `状态：${risk}`,
+  ];
+  if (point.alignment?.applied) {
+    lines.push(`连续性修正：${formatForecastNumber(point.alignment.offset)} ${point.unit || meta.unit}`);
+  }
+  return lines.join("\n");
+}
+
+function attachForecastTrendTooltip() {
+  const tooltip = forecastTrend?.querySelector(".forecast-chart-tooltip");
+  if (!forecastTrend || !tooltip) return;
+  const show = (event, target) => {
+    tooltip.textContent = target.getAttribute("data-forecast-tooltip") || "";
+    tooltip.hidden = false;
+    const rect = forecastTrend.getBoundingClientRect();
+    const x = Math.min(Math.max(event.clientX - rect.left + 12, 8), rect.width - 180);
+    const y = Math.min(Math.max(event.clientY - rect.top + 12, 8), rect.height - 86);
+    tooltip.style.left = `${x}px`;
+    tooltip.style.top = `${y}px`;
+  };
+  forecastTrend.querySelectorAll("[data-forecast-tooltip]").forEach((target) => {
+    target.addEventListener("mousemove", (event) => show(event, target));
+    target.addEventListener("mouseenter", (event) => show(event, target));
+    target.addEventListener("mouseleave", () => {
+      tooltip.hidden = true;
+    });
+  });
+}
+
 function forecastInfluentMetric(point, metricName) {
   const boundaries = point?.boundaries || {};
   const scenarioValue = (scenario, key) => {
@@ -4636,6 +4672,15 @@ function renderForecastTrend(payload) {
     showRisk && Number.isFinite(Number(windowStart)) && Number.isFinite(Number(windowEnd))
       ? `<rect x="${x(windowStart) - 16}" y="${pad.top}" width="${x(windowEnd) - x(windowStart) + 32}" height="${height - pad.top - pad.bottom}" rx="8" fill="#fff7e8" stroke="#e8c88a" stroke-width="1" opacity="0.62"></rect>`
       : "";
+  const hoverZones = metricPoints
+    .map((point) => {
+      const center = x(point.hour);
+      const left = center - (width - pad.left - pad.right) / Math.max(metricPoints.length - 1, 1) / 2;
+      const zoneX = Math.max(pad.left, left);
+      const zoneWidth = Math.min(width - pad.right, center + (width - pad.left - pad.right) / Math.max(metricPoints.length - 1, 1) / 2) - zoneX;
+      return `<rect class="forecast-hover-zone" x="${zoneX.toFixed(1)}" y="${pad.top}" width="${Math.max(zoneWidth, 32).toFixed(1)}" height="${height - pad.top - pad.bottom}" fill="transparent" data-forecast-tooltip="${escapeHtml(forecastPointTooltip(point, meta))}"></rect>`;
+    })
+    .join("");
   forecastTrend.innerHTML = `
     <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" class="forecast-trend-svg" aria-label="${meta.label} 出水预测图">
       <rect width="${width}" height="${height}" fill="#ffffff"></rect>
@@ -4657,8 +4702,11 @@ function renderForecastTrend(payload) {
       ${riskRect ? `<text x="${x(windowStart)}" y="${pad.top + 14}" fill="#a27b4d" font-size="10.5" font-weight="600">风险窗口</text>` : ""}
       ${metricPoints.map((point) => `<text x="${x(point.hour)}" y="${height - 25}" fill="#7b8981" font-size="10.5" font-weight="500" text-anchor="middle">+${point.hour}h</text>`).join("")}
       <text x="${width - pad.right}" y="${height - 8}" fill="#7b8981" font-size="10.5" font-weight="500" text-anchor="end">预测时间 h</text>
+      ${hoverZones}
     </svg>
+    <div class="forecast-chart-tooltip" hidden></div>
   `;
+  attachForecastTrendTooltip();
 }
 
 function renderForecastSide(payload) {

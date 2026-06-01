@@ -467,6 +467,17 @@ class ModelTest(unittest.TestCase):
         cleared = realtime.clear_state_corrections("default")
         self.assertEqual(cleared["enabledCount"], 0)
 
+    def test_forecast_alignment_prevents_large_tn_jump_from_latest_result(self):
+        points = [
+            {"metrics": {"TN": {"low": 1.4, "median": 1.7, "high": 1.9, "risk": "ok"}}},
+            {"metrics": {"TN": {"low": 1.5, "median": 1.8, "high": 2.0, "risk": "ok"}}},
+        ]
+        aligned = realtime._align_forecast_metrics_to_current(points, {"result": {"effTn": 7.7}})
+
+        self.assertAlmostEqual(aligned[0]["metrics"]["TN"]["median"], 7.7)
+        self.assertTrue(aligned[0]["metrics"]["TN"]["alignment"]["applied"])
+        self.assertGreater(aligned[1]["metrics"]["TN"]["median"], 7.7)
+
     def test_realtime_forecast_uses_saved_state_without_advancing_realtime_state(self):
         step = realtime.realtime_step(values={"Q": 10000, "COD": 420, "NH4": 32, "NO3": 0.5, "TSS": 220}, step_hours=0.5)
         before = realtime.latest()["state"]["timestamp"]

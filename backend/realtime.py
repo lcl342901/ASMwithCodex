@@ -2107,6 +2107,43 @@ def _range_from_snapshots(metric: str, low: dict[str, Any], median: dict[str, An
     return values
 
 
+def _align_forecast_metrics_to_current(points: list[dict[str, Any]], latest_result: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not points or not latest_result:
+        return points
+    jump_limits = {"NH4": 1.5, "COD": 20.0, "TN": 3.0, "TSS": 5.0}
+    current_result = latest_result.get("result") if isinstance(latest_result, dict) else {}
+    for metric, meta in FORECAST_METRICS.items():
+        source = meta.get("source")
+        if not source:
+            continue
+        current = _finite((current_result or {}).get(source))
+        first = _finite(points[0].get("metrics", {}).get(metric, {}).get("median"))
+        if current is None or first is None:
+            continue
+        delta = current - first
+        if abs(delta) <= jump_limits.get(metric, 2.0):
+            continue
+        for point in points:
+            metric_payload = point.get("metrics", {}).get(metric)
+            if not metric_payload:
+                continue
+            corrected_values = []
+            for key in ("low", "median", "high"):
+                value = _finite(metric_payload.get(key))
+                corrected_values.append(None if value is None else max(0.0, value + delta))
+            finite_values = sorted(value for value in corrected_values if value is not None)
+            if len(finite_values) != 3:
+                continue
+            metric_payload["low"], metric_payload["median"], metric_payload["high"] = finite_values
+            metric_payload["risk"] = _risk_for(metric, metric_payload["high"])
+            metric_payload["alignment"] = {
+                "applied": True,
+                "offset": delta,
+                "reason": "Aligned forecast to latest effluent result to avoid discontinuity from output state correction.",
+            }
+    return points
+
+
 def _latest_effluent(latest_result: dict[str, Any] | None) -> dict[str, Any]:
     result = (latest_result or {}).get("result") or {}
     return {
@@ -2246,6 +2283,7 @@ def realtime_forecast(project_id: str | None = None, horizon_hours: int = 8, ste
             }
         )
 
+    points = _align_forecast_metrics_to_current(points, latest_result)
     advice = _forecast_advice(points, latest_result, params)
     payload = {
         "projectId": resolved_project_id,
