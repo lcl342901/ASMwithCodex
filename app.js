@@ -28,10 +28,8 @@ const pushAndStepRealtime = document.getElementById("pushAndStepRealtime");
 const stepRealtime = document.getElementById("stepRealtime");
 const refreshRealtime = document.getElementById("refreshRealtime");
 const resetRealtime = document.getElementById("resetRealtime");
-const startMockRealtime = document.getElementById("startMockRealtime");
-const stopMockRealtime = document.getElementById("stopMockRealtime");
 const refreshMockRealtime = document.getElementById("refreshMockRealtime");
-const mockProfileRealtime = document.getElementById("mockProfileRealtime");
+const openRealtimeSettings = document.getElementById("openRealtimeSettings");
 const warningPanel = document.getElementById("warningPanel");
 const exportResultsCsv = document.getElementById("exportResultsCsv");
 const exportBoundariesCsv = document.getElementById("exportBoundariesCsv");
@@ -160,6 +158,10 @@ const scenarioLibraryStatus = document.getElementById("scenarioLibraryStatus");
 const resultPanelTitle = document.getElementById("resultPanelTitle");
 const settingsSolverSummary = document.getElementById("settingsSolverSummary");
 const settingsModelSummary = document.getElementById("settingsModelSummary");
+const settingsSolverEditor = document.getElementById("settingsSolverEditor");
+const settingsModelEditor = document.getElementById("settingsModelEditor");
+const saveSolverSettings = document.getElementById("saveSolverSettings");
+const saveModelSettings = document.getElementById("saveModelSettings");
 const settingsMockSummary = document.getElementById("settingsMockSummary");
 const openSolverSettings = document.getElementById("openSolverSettings");
 const openModelSettings = document.getElementById("openModelSettings");
@@ -572,15 +574,6 @@ function activatePanel(panel, options = {}) {
   refreshActivePanelData();
 }
 
-function openParameterTab(tabName) {
-  if (activeEnvironment !== "lab") {
-    applyEnvironment("lab", { showApp: true });
-  }
-  activeTab = tabName;
-  document.querySelectorAll(".param-tab").forEach((item) => item.classList.toggle("active", item.dataset.tab === activeTab));
-  activatePanel("params", { defaultTab: tabName });
-}
-
 function applyEnvironment(environment, options = {}) {
   if (!environmentConfigs[environment]) return;
   activeEnvironment = environment;
@@ -931,6 +924,34 @@ function renderSystemSettings() {
       <div><span>最近结果</span><strong>--</strong></div>
       <div><span>最近错误</span><strong>--</strong></div>
     `;
+  }
+}
+
+function renderSettingsEditor(kind) {
+  const target = kind === "solver" ? settingsSolverEditor : settingsModelEditor;
+  if (!target) return;
+  target.innerHTML = "";
+  if (kind === "solver") {
+    appendParamSection("解算器参数", "统一控制方案仿真、实时推进和预测使用的求解设置。", fields.solver, target, { idPrefix: "settings-solver-" });
+    return;
+  }
+  params.clarifierLayers = clamp(Math.round(params.clarifierLayers), 4, 20);
+  params.clarifierFeedLayer = clamp(Math.round(params.clarifierFeedLayer), 1, params.clarifierLayers);
+  appendParamSection("活性污泥参数", "ASM1 动力学、产率、半饱和常数和温度修正。", fields.asm1, target, { idPrefix: "settings-asm1-" });
+  appendParamSection("二沉池参数", "二沉池层数、进水层、捕获效率和 Takacs 沉降参数。", fields.clarifier, target, { idPrefix: "settings-clarifier-" });
+}
+
+function toggleSettingsEditor(kind) {
+  const target = kind === "solver" ? settingsSolverEditor : settingsModelEditor;
+  const saveButton = kind === "solver" ? saveSolverSettings : saveModelSettings;
+  const openButton = kind === "solver" ? openSolverSettings : openModelSettings;
+  if (!target) return;
+  const willOpen = target.hidden;
+  target.hidden = !willOpen;
+  if (saveButton) saveButton.hidden = !willOpen;
+  if (openButton) openButton.textContent = willOpen ? "收起编辑" : (kind === "solver" ? "编辑解算器参数" : "编辑模型参数");
+  if (willOpen) {
+    renderSettingsEditor(kind);
   }
 }
 
@@ -1846,19 +1867,20 @@ async function clearCalculationLogs() {
   }
 }
 
-function createParamField([key, label, unit, min, max, options]) {
+function createParamField([key, label, unit, min, max, options], config = {}) {
+  const id = `${config.idPrefix || ""}${key}`;
   const fieldMax = key === "clarifierFeedLayer" ? params.clarifierLayers : max;
   const field = document.createElement("div");
   field.className = "field";
   field.innerHTML = `
-    <label for="${key}">
+    <label for="${id}">
       <span>${label}</span>
       <small>${unit}</small>
     </label>
     ${
       options
-        ? `<select id="${key}">${options.map((option) => `<option value="${option}"${params[key] === option ? " selected" : ""}>${option}</option>`).join("")}</select>`
-        : `<input id="${key}" type="number" value="${params[key]}" min="${min}" max="${fieldMax}" step="any" />`
+        ? `<select id="${id}">${options.map((option) => `<option value="${option}"${params[key] === option ? " selected" : ""}>${option}</option>`).join("")}</select>`
+        : `<input id="${id}" type="number" value="${params[key]}" min="${min}" max="${fieldMax}" step="any" />`
     }
   `;
   const input = field.querySelector("input, select");
@@ -1876,7 +1898,11 @@ function createParamField([key, label, unit, min, max, options]) {
       params[key] = key === "clarifierLayers" || key === "clarifierFeedLayer" ? Math.round(parsed) : parsed;
       if (key === "clarifierLayers") {
         params.clarifierFeedLayer = clamp(Math.round(params.clarifierFeedLayer), 1, params.clarifierLayers);
-        renderForm();
+        if (activePanel === "settings" && !settingsModelEditor?.hidden) {
+          renderSettingsEditor("model");
+        } else {
+          renderForm();
+        }
       }
       syncAsm1Params();
       updateParamStorageStatus("有未保存修改");
@@ -1888,7 +1914,7 @@ function createParamField([key, label, unit, min, max, options]) {
   return field;
 }
 
-function appendParamSection(title, description, fieldList) {
+function appendParamSection(title, description, fieldList, target = parameterForm, config = {}) {
   const section = document.createElement("section");
   section.className = "parameter-section";
   section.innerHTML = `
@@ -1897,8 +1923,8 @@ function appendParamSection(title, description, fieldList) {
       <p>${description}</p>
     </div>
   `;
-  fieldList.forEach((fieldConfig) => section.appendChild(createParamField(fieldConfig)));
-  parameterForm.appendChild(section);
+  fieldList.forEach((fieldConfig) => section.appendChild(createParamField(fieldConfig, config)));
+  target.appendChild(section);
 }
 
 async function showRealtimeResults() {
@@ -2000,16 +2026,11 @@ function renderForm() {
     }
     return;
   }
-  if (activeTab === "model") {
-    params.clarifierLayers = clamp(Math.round(params.clarifierLayers), 4, 20);
-    params.clarifierFeedLayer = clamp(Math.round(params.clarifierFeedLayer), 1, params.clarifierLayers);
+  if (!["influent", "process", "operation", "boundaryData"].includes(activeTab)) {
+    activeTab = "influent";
+    document.querySelectorAll(".param-tab").forEach((item) => item.classList.toggle("active", item.dataset.tab === activeTab));
   }
   if (activeTab === "boundaryData") {
-    return;
-  }
-  if (activeTab === "model") {
-    appendParamSection("活性污泥参数", "ASM1 动力学、产率、半饱和常数和温度修正。", fields.asm1);
-    appendParamSection("二沉池参数", "二沉池层数、进水层、捕获效率和 Takacs 沉降参数。", fields.clarifier);
     return;
   }
   fields[activeTab].forEach((fieldConfig) => {
@@ -4908,7 +4929,6 @@ function renderMockSummary(status) {
     if (settingsMockSummary) settingsMockSummary.innerHTML = "";
     return;
   }
-  if (mockProfileRealtime) mockProfileRealtime.value = status.profile || "normal";
   if (settingsMockProfile) settingsMockProfile.value = status.profile || "normal";
   const html = `
     <div><span>状态</span><strong>${status.running ? "运行中" : "已停止"}</strong></div>
@@ -4972,7 +4992,7 @@ async function resetRealtimeState() {
 }
 
 async function startRealtimeMock() {
-  const profile = settingsMockProfile?.value || mockProfileRealtime?.value || "normal";
+  const profile = settingsMockProfile?.value || "normal";
   const status = await realtimeRequest("/mock/start", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -5879,23 +5899,7 @@ resetRealtime.addEventListener("click", async () => {
   }
 });
 
-startMockRealtime.addEventListener("click", async () => {
-  try {
-    await startRealtimeMock();
-  } catch (error) {
-    updateRealtimeStatus(`启动 Mock 失败：${error.message}`, true);
-  }
-});
-
-stopMockRealtime.addEventListener("click", async () => {
-  try {
-    await stopRealtimeMock();
-  } catch (error) {
-    updateRealtimeStatus(`停止 Mock 失败：${error.message}`, true);
-  }
-});
-
-refreshMockRealtime.addEventListener("click", async () => {
+refreshMockRealtime?.addEventListener("click", async () => {
   try {
     await refreshRealtimeMockStatus();
   } catch (error) {
@@ -5903,12 +5907,27 @@ refreshMockRealtime.addEventListener("click", async () => {
   }
 });
 
+openRealtimeSettings?.addEventListener("click", () => {
+  applyEnvironment("management", { showApp: true });
+  activatePanel("settings");
+});
+
 openSolverSettings?.addEventListener("click", () => {
-  openParameterTab("solver");
+  toggleSettingsEditor("solver");
 });
 
 openModelSettings?.addEventListener("click", () => {
-  openParameterTab("model");
+  toggleSettingsEditor("model");
+});
+
+saveSolverSettings?.addEventListener("click", async () => {
+  await saveProjectParams();
+  renderSystemSettings();
+});
+
+saveModelSettings?.addEventListener("click", async () => {
+  await saveProjectParams();
+  renderSystemSettings();
 });
 
 settingsStartMock?.addEventListener("click", async () => {

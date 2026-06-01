@@ -260,8 +260,6 @@
           <button class="tab param-tab" data-tab="process">池体尺寸</button>
           <button class="tab param-tab" data-tab="operation">控制边界</button>
           <button class="tab param-tab" data-tab="boundaryData">边界数据</button>
-          <button class="tab param-tab" data-tab="solver">解算器</button>
-          <button class="tab param-tab" data-tab="model">模型参数</button>
         </div>
         <form id="parameterForm" class="parameter-form"></form>
         <div id="dataTools" class="data-tools" hidden>
@@ -293,6 +291,8 @@
             </div>
             <dl id="settingsSolverSummary"></dl>
             <button id="openSolverSettings" class="secondary-button" type="button">编辑解算器参数</button>
+            <div id="settingsSolverEditor" class="settings-editor" hidden></div>
+            <button id="saveSolverSettings" class="secondary-button" type="button" hidden>保存解算器参数</button>
           </article>
           <article class="settings-card">
             <div class="settings-card-head">
@@ -304,6 +304,8 @@
             </div>
             <dl id="settingsModelSummary"></dl>
             <button id="openModelSettings" class="secondary-button" type="button">编辑模型参数</button>
+            <div id="settingsModelEditor" class="settings-editor" hidden></div>
+            <button id="saveModelSettings" class="secondary-button" type="button" hidden>保存模型参数</button>
           </article>
           <article class="settings-card">
             <div class="settings-card-head">
@@ -919,17 +921,12 @@
             <div class="tool-section">
               <div class="tool-section-heading">
                 <strong>Mock 数据源</strong>
-                <span>开发演示</span>
+                <span>由系统设置统一管理</span>
               </div>
-              <p class="tool-note">Mock 会每 5 分钟自动生成一条模拟边界并推进模型。它不会阻止你手动推送边界，但开启后表格里会同时出现 mock 和手动/API 数据。</p>
+              <p class="tool-note">Mock 会每 5 分钟自动生成一条模拟边界并推进模型。启动、停止和工况模式统一在“模型管理 > 系统设置”中配置。</p>
               <div class="realtime-actions">
-                <select id="mockProfileRealtime" class="compact-select" aria-label="Mock 工况模式">
-                  <option value="normal">正常工况</option>
-                  <option value="shock">冲击负荷</option>
-                </select>
-                <button id="startMockRealtime" class="secondary-button" type="button">启动 Mock</button>
-                <button id="stopMockRealtime" class="secondary-button" type="button">停止 Mock</button>
-                <button id="refreshMockRealtime" class="secondary-button" type="button">Mock 状态</button>
+                <button id="refreshMockRealtime" class="secondary-button" type="button">刷新状态</button>
+                <button id="openRealtimeSettings" class="secondary-button" type="button">打开系统设置</button>
               </div>
               <div id="mockSummary" class="mock-summary"></div>
             </div>

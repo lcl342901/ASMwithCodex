@@ -1382,8 +1382,29 @@ h2 {
 }
 
 .settings-card > .secondary-button {
-  margin-top: auto;
   align-self: flex-start;
+}
+
+.settings-editor {
+  display: grid;
+  gap: 10px;
+  max-height: 420px;
+  overflow: auto;
+  padding-top: 4px;
+  border-top: 1px solid rgba(99, 113, 104, 0.16);
+}
+
+.settings-editor[hidden] {
+  display: none;
+}
+
+.settings-editor .parameter-section {
+  padding: 10px;
+  background: #ffffff;
+}
+
+.settings-editor .field {
+  min-height: 54px;
 }
 
 .topbar-actions {
