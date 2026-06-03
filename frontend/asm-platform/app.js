@@ -426,6 +426,7 @@ const ACTIVE_ENVIRONMENT_KEY = "aaoActiveEnvironment";
 const AI_MODEL_KEY = "aaoAiAnalysisModel";
 const SYSTEM_CHAT_SESSIONS_KEY = "aaoSystemChatSessions";
 const SYSTEM_CHAT_ACTIVE_KEY = "aaoSystemChatActiveSession";
+const THREE_D_RESULT_KEY = "aaoLatest3dTimelineResult";
 const environmentConfigs = {
   lab: {
     label: "模拟实验室",
@@ -461,6 +462,39 @@ function writeLocalStorage(key, value) {
   } catch {
     // The UI still works when browser privacy settings block localStorage.
   }
+}
+
+function saveResultFor3dTimeline(result) {
+  if (!result?.time?.length) return;
+  const unitIds = ["anaerobic", "anoxic", "aerobic", "clarifier", "effluent", "ras"];
+  const metricIds = ["COD", "NH4", "NO3", "TSS", "DO"];
+  const units = Object.fromEntries(
+    unitIds.map((unitId) => [
+      unitId,
+      Object.fromEntries(metricIds.map((metricId) => [metricId, result.units?.[unitId]?.[metricId] || []])),
+    ]),
+  );
+  const payload = {
+    savedAt: new Date().toISOString(),
+    mode: result.mode || "simulation",
+    sourceName: result.sourceName || "",
+    solverMethod: result.solverMethod || "",
+    engineVersion: result.engineVersion || "",
+    time: result.time || [],
+    units,
+    boundaries: {
+      q: result.boundaries?.q || [],
+      rasQ: result.boundaries?.rasQ || [],
+      irQ: result.boundaries?.irQ || [],
+      wasQ: result.boundaries?.wasQ || [],
+    },
+    clarifier: {
+      effluentTss: result.clarifier?.effluentTss || [],
+      underflowTss: result.clarifier?.underflowTss || [],
+      bottomTss: result.clarifier?.bottomTss || [],
+    },
+  };
+  writeLocalStorage(THREE_D_RESULT_KEY, JSON.stringify(payload));
 }
 
 function elementSupportsEnvironment(element, environment) {
@@ -6067,6 +6101,7 @@ runSimulationButton.addEventListener("click", async () => {
   drawChart(lastResult, activeChart);
   try {
     lastResult = await runBackendSimulation();
+    saveResultFor3dTimeline(lastResult);
     statusBadge.textContent = "已完成";
     finishProgress();
     updateMetrics(lastResult);

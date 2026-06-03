@@ -93,7 +93,7 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(partial_lengths, sorted(partial_lengths))
 
     def test_csv_simulation_uses_requested_simulation_horizon(self):
-        csv_text = Path("sample-data.csv").read_text(encoding="utf-8")
+        csv_text = Path("frontend/asm-platform/sample-data.csv").read_text(encoding="utf-8")
         params = rk4_params(simulationDays=50, outputIntervalHours=24, timeStepHours=1)
 
         result = simulate(params=params, csv_text=csv_text, csv_file_name="sample-data.csv")
@@ -544,7 +544,7 @@ class ModelTest(unittest.TestCase):
         self.assertTrue(summary["rolling"]["trend"])
 
     def test_historical_replay_report_compares_observations(self):
-        csv_text = Path("sample-data.csv").read_text()
+        csv_text = Path("frontend/asm-platform/sample-data.csv").read_text()
         report = historical_replay_report(
             params={**DEFAULT_PARAMS, "simulationDays": 2, "outputIntervalHours": 6},
             csv_text=csv_text,
@@ -857,7 +857,7 @@ class ModelTest(unittest.TestCase):
         assert_finite_tree(self, result)
 
     def test_engine_v2_csv_run_uses_requested_horizon(self):
-        csv_text = Path("sample-data.csv").read_text(encoding="utf-8")
+        csv_text = Path("frontend/asm-platform/sample-data.csv").read_text(encoding="utf-8")
         ctx = SimulationContext(params=rk4_params(simulationDays=0.2, timeStepHours=0.5, outputIntervalHours=2), source_name="sample-data.csv")
         records = normalize_csv_records(csv_text, ctx)
 
@@ -898,7 +898,7 @@ class ModelTest(unittest.TestCase):
         assert_finite_tree(self, comparison)
 
     def test_engine_compare_csv_returns_error_tables(self):
-        csv_text = Path("sample-data.csv").read_text(encoding="utf-8")
+        csv_text = Path("frontend/asm-platform/sample-data.csv").read_text(encoding="utf-8")
         comparison = compare_engines(
             rk4_params(simulationDays=0.2, timeStepHours=0.5, outputIntervalHours=2),
             csv_text=csv_text,

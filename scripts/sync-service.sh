@@ -17,7 +17,8 @@ FRONTEND_SERVICE_LABEL="com.asmwithcodex.frontend"
 USER_ID="$(id -u)"
 SERVICE_DOMAIN="gui/$USER_ID"
 HEALTH_URL="http://127.0.0.1:8000/api/health"
-FRONTEND_URL="http://127.0.0.1:4173/index.html"
+FRONTEND_SOURCE_DIR="$PROJECT_ROOT/frontend"
+FRONTEND_URL="http://127.0.0.1:4173/asm-platform/index.html"
 
 echo "Project: $PROJECT_ROOT"
 echo "Service: $SERVICE_ROOT"
@@ -40,12 +41,14 @@ rsync -a --delete \
   "$PROJECT_ROOT/backend/" \
   "$SERVICE_ROOT/backend/"
 
+if [[ ! -d "$FRONTEND_SOURCE_DIR" ]]; then
+  echo "Missing frontend source directory: $FRONTEND_SOURCE_DIR" >&2
+  exit 1
+fi
+
 echo "Syncing frontend files..."
 rsync -a --delete \
-  "$PROJECT_ROOT/index.html" \
-  "$PROJECT_ROOT/app.js" \
-  "$PROJECT_ROOT/styles.css" \
-  "$PROJECT_ROOT/sample-data.csv" \
+  "$FRONTEND_SOURCE_DIR/" \
   "$FRONTEND_DIR/"
 
 if [[ ! -x "$SERVICE_ROOT/.venv/bin/python" ]]; then

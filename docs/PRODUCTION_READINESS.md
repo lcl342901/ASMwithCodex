@@ -21,6 +21,17 @@ This project is still a local teaching MVP. The following checklist captures the
 - Serve the frontend as static files behind HTTPS.
 - Run FastAPI behind a process manager and reverse proxy.
 - Move long simulations, realtime polling, mock generation, and calibration runs into a worker process before multi-user deployment.
+- Keep frontend runtime resources synced as a complete static bundle. The local `scripts/sync-service.sh` now syncs the complete `frontend/` tree, including `asm-platform/` and `3d-process/`, into the service frontend directory.
+
+## Local Engineering Baseline
+
+Before treating the current local build as healthy, run:
+
+```bash
+./scripts/verify-p7.sh
+```
+
+This verifies frontend module syntax, backend unit tests, required service frontend files, backend health, and frontend static resource availability. Passing this script is the local P7 engineering gate; it is not a substitute for a public production launch review.
 
 ## Project And User Isolation
 
@@ -42,3 +53,4 @@ This project is still a local teaching MVP. The following checklist captures the
 - Backup/restore tested.
 - Project-level access control implemented.
 - Calibration and model credibility pages clearly marked as teaching/decision-support, not certified engineering output.
+- P7 local engineering verification passing after every deployment sync.

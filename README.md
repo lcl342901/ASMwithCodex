@@ -29,18 +29,27 @@ It is intended as a learning and experimentation platform for ASM1-based process
 - JSON export/import for simulation configuration.
 - Realtime MVP API with SQLite-backed input, model state, and latest result storage.
 - Optional API token protection for online deployment experiments.
+- Lightweight Three.js AAO 3D process prototype with simulation timeline playback, metric color legends, map/base-layer toggle, blower room, and modular visual/runtime helpers.
 
 ## Files
 
-- `index.html`: main UI.
-- `styles.css`: layout and visual styling.
-- `app.js`: ASM1 model, clarifier model, CSV replay, chart rendering, and UI logic.
-- `sample-data.csv`: example CSV that can be uploaded directly.
+- `frontend/asm-platform/index.html`: ASM learning/simulation platform UI.
+- `frontend/asm-platform/styles.css`: ASM platform layout and visual styling.
+- `frontend/asm-platform/app.js`: ASM1 model, clarifier model, CSV replay, chart rendering, and UI logic.
+- `frontend/asm-platform/sample-data.csv`: example CSV that can be uploaded directly.
+- `frontend/3d-process/wwtp-3d.html`: AAO 3D process prototype.
+- `frontend/3d-process/underground-line-3d.html`: underground WWTP one-line 3D process prototype.
+- `frontend/3d-process/wwtp-visual-config.js`: 3D metric color, legend, and button configuration.
+- `frontend/3d-process/wwtp-simulation-mapping.js`: backend simulation result to 3D timeline mapping and field-quality reporting.
+- `frontend/3d-process/wwtp-animation.js`: 3D water, particle, aeration, highlight, blower, and timeline animation control.
+- `frontend/3d-process/wwtp-scene-utils.js`: shared 3D pipe and particle construction helpers.
 - `backend/main.py`: FastAPI app and `/api/simulate` route.
 - `backend/model.py`: Python ASM1, AAO, RAS/WAS, Takacs clarifier, and CSV replay engine.
 - `backend/model_trust.py`: model metadata, unit notes, initial-condition snapshots, credibility screening, and calibration preview helpers.
 - `backend/schemas.py`: API request schema.
 - `backend/requirements.txt`: backend Python dependencies.
+- `docs/ASM_PLATFORM_TODO.md`: ASM learning platform development ledger.
+- `docs/3D_FLOW_TODO.md`: 3D process-view development ledger.
 - `docs/PRODUCTION_READINESS.md`: production readiness notes for API token, database, workers, and user/project isolation.
 
 ## API Token For Deployment Experiments
@@ -84,7 +93,7 @@ pip install -r backend/requirements.txt
 uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Then open `index.html` in a browser. The static frontend calls:
+Then open `frontend/asm-platform/index.html` in a browser. The static frontend calls:
 
 ```text
 http://127.0.0.1:8000/api/simulate
@@ -144,6 +153,36 @@ Logs:
 ```
 
 If backend code changes in the project directory, run `./scripts/sync-service.sh`. It copies `backend/` into `/Users/chenglin/aao-simulator-service/`, updates dependencies, installs the LaunchAgent plist, restarts the service, and checks `/api/health`.
+
+The same script also syncs the complete `frontend/` tree, including `asm-platform/` and `3d-process/`, into:
+
+```text
+/Users/chenglin/aao-simulator-service/frontend
+```
+
+After sync, the local service pages are:
+
+```text
+http://127.0.0.1:4173/asm-platform/index.html
+http://127.0.0.1:4173/3d-process/wwtp-3d.html
+http://127.0.0.1:4173/3d-process/underground-line-3d.html
+```
+
+## P7 Engineering Verification
+
+Run this before considering the local engineering baseline healthy:
+
+```bash
+./scripts/verify-p7.sh
+```
+
+It checks:
+
+- frontend JavaScript/module syntax
+- backend unit tests
+- required local and service frontend files
+- backend health at `http://127.0.0.1:8000/api/health`
+- frontend pages/modules at `http://127.0.0.1:4173/`
 
 ## API
 
