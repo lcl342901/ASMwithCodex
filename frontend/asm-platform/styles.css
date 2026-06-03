@@ -178,6 +178,7 @@ svg {
   color: var(--ink);
   cursor: pointer;
   text-align: left;
+  text-decoration: none;
 }
 
 .mode-card svg {
@@ -202,6 +203,15 @@ svg {
   border-color: rgba(31, 122, 79, 0.48);
   background: #e8f2ec;
   box-shadow: inset 0 0 0 1px rgba(31, 122, 79, 0.18);
+}
+
+.mode-link {
+  border-style: dashed;
+}
+
+.mode-link:hover {
+  border-color: rgba(31, 122, 79, 0.48);
+  background: #f2f8f4;
 }
 
 .login-submit {

@@ -72,6 +72,7 @@ Update it whenever a 3D feature, data mapping, scene module, workflow page, or d
 - [x] Added `scripts/verify-p7.sh` for frontend module checks, backend tests, service-file checks, and local service health checks.
 - [x] Updated `README.md` with 3D module and P7 verification notes.
 - [x] Updated `docs/PRODUCTION_READINESS.md` with engineering baseline notes.
+- [x] Added a login-page entry link from the ASM platform to the 3D process display.
 - [x] Verified `./scripts/sync-service.sh`.
 - [x] Verified `./scripts/verify-p7.sh`.
 - [x] Verified backend test suite: 73 tests passed.

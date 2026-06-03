@@ -3,6 +3,12 @@
 This file tracks the ASM learning and simulation platform work.
 Update it whenever the ASM frontend, backend simulation engine, realtime workflow, calibration workflow, project model, data handling, or deployment baseline changes.
 
+## Development Rule
+
+- Before starting ASM platform development, check this TODO list first and use it to choose the next scoped task.
+- After finishing ASM platform development, update this TODO list to reflect completed work, changed priorities, and any new follow-up items.
+- Keep 3D process-display work tracked separately in `docs/3D_FLOW_TODO.md`.
+
 ## Current Baseline
 
 - Source project: `/Users/chenglin/Projects/WEST model/Modelica2023TH/aao-simulator`
@@ -90,12 +96,14 @@ Update it whenever the ASM frontend, backend simulation engine, realtime workflo
 - [x] Verified backend test suite: 73 tests passed.
 - [x] Verified backend health and frontend service availability.
 - [x] Updated production readiness notes.
+- [x] Added a login-page entry link from the ASM platform to the 3D process display.
 
 ## To Develop
 
 ### P6 - Product Boundaries And Navigation
 
 - [ ] Clarify how ASM platform navigation links to the 3D process display.
+- [x] Add an explicit login-page entry point to the related 3D visualization.
 - [ ] Add an explicit entry point from ASM simulation results to the related 3D visualization.
 - [ ] Define which ASM result payload fields are required by the 3D process view.
 - [ ] Add user-facing labels that separate teaching simulation, realtime decision support, and 3D process display.
