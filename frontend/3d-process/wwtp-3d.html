@@ -612,7 +612,7 @@
         <button class="toggle-button active" data-toggle="sludge" type="button">污泥</button>
         <button class="toggle-button active" data-toggle="bubbles" type="button">曝气</button>
         <button class="toggle-button active" data-toggle="boost" type="button">增强效果</button>
-        <button class="toggle-button active" data-toggle="map" type="button">底图</button>
+        <button class="toggle-button" data-toggle="map" type="button">底图</button>
         <button class="toggle-button" data-toggle="transparent" type="button">透明</button>
         <button class="toggle-button" data-toggle="cutaway" type="button">剖切</button>
       </nav>
@@ -688,7 +688,7 @@
       <strong>操作：</strong>拖动旋转，滚轮缩放，右键平移。点击池体或管线可查看状态。透明和剖切用于观察池内状态。
     </div>
 
-    <div class="map-attribution">Map data © OpenStreetMap contributors · 航津路附近</div>
+    <div class="map-attribution" hidden>Map data © OpenStreetMap contributors · 航津路附近</div>
 
     <div id="hoverLabel" class="label" hidden></div>
 
@@ -728,6 +728,7 @@
       const sludgeObjects = new THREE.Group();
       const bubbleObjects = new THREE.Group();
       const mapObjects = new THREE.Group();
+      mapObjects.visible = false;
       const labels = [];
       const structures = [];
       const waterSurfaces = {};
