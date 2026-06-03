@@ -108,7 +108,7 @@ On this Mac, the backend can also run as a user-level `launchd` service. This ke
 The service runtime copy is located at:
 
 ```text
-/Users/chenglin/aao-simulator-service
+/Users/chenglin/Projects/WEST model/runtime/aao-simulator-service
 ```
 
 The tracked LaunchAgent template is:
@@ -152,12 +152,12 @@ Logs:
 /private/tmp/aao-fastapi.err.log
 ```
 
-If backend code changes in the project directory, run `./scripts/sync-service.sh`. It copies `backend/` into `/Users/chenglin/aao-simulator-service/`, updates dependencies, installs the LaunchAgent plist, restarts the service, and checks `/api/health`.
+If backend code changes in the project directory, run `./scripts/sync-service.sh`. It copies `backend/` into `/Users/chenglin/Projects/WEST model/runtime/aao-simulator-service/`, updates dependencies, installs the LaunchAgent plist, restarts the service, and checks `/api/health`.
 
 The same script also syncs the complete `frontend/` tree, including `asm-platform/` and `3d-process/`, into:
 
 ```text
-/Users/chenglin/aao-simulator-service/frontend
+/Users/chenglin/Projects/WEST model/runtime/aao-simulator-service/frontend
 ```
 
 After sync, the local service pages are:

@@ -7,7 +7,7 @@
 
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/chenglin/aao-simulator-service/.venv/bin/uvicorn</string>
+    <string>/Users/chenglin/Projects/WEST model/runtime/aao-simulator-service/.venv/bin/uvicorn</string>
     <string>backend.main:app</string>
     <string>--host</string>
     <string>127.0.0.1</string>
@@ -16,7 +16,7 @@
   </array>
 
   <key>WorkingDirectory</key>
-  <string>/Users/chenglin/aao-simulator-service</string>
+  <string>/Users/chenglin/Projects/WEST model/runtime/aao-simulator-service</string>
 
   <key>RunAtLoad</key>
   <true/>

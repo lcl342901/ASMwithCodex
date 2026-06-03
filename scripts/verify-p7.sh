@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-SERVICE_ROOT="${AAO_SERVICE_ROOT:-/Users/chenglin/aao-simulator-service}"
+SERVICE_ROOT="${AAO_SERVICE_ROOT:-/Users/chenglin/Projects/WEST model/runtime/aao-simulator-service}"
 FRONTEND_DIR="$SERVICE_ROOT/frontend"
 BACKEND_HEALTH_URL="${AAO_BACKEND_HEALTH_URL:-http://127.0.0.1:8000/api/health}"
 FRONTEND_BASE_URL="${AAO_FRONTEND_BASE_URL:-http://127.0.0.1:4173}"

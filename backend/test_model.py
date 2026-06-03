@@ -348,6 +348,10 @@ class ModelTest(unittest.TestCase):
 
     def test_periodic_calibration_schedule_runs_and_archives_result(self):
         project = create_project_endpoint(ProjectRequest(name="Periodic calibration"))
+        save_project_params_endpoint(
+            project["id"],
+            ParamConfigRequest(params=rk4_params(simulationDays=0.05, outputIntervalHours=1, timeStepHours=0.5)),
+        )
         saved_schedule = save_project_periodic_calibration_endpoint(
             project["id"],
             PeriodicCalibrationScheduleRequest(

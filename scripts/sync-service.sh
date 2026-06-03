@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-SERVICE_ROOT="${AAO_SERVICE_ROOT:-/Users/chenglin/aao-simulator-service}"
+SERVICE_ROOT="${AAO_SERVICE_ROOT:-/Users/chenglin/Projects/WEST model/runtime/aao-simulator-service}"
 LAUNCH_AGENT_DIR="/Users/chenglin/Library/LaunchAgents"
 LAUNCH_AGENT_NAME="com.asmwithcodex.backend.plist"
 LAUNCH_AGENT_SOURCE="$PROJECT_ROOT/deploy/$LAUNCH_AGENT_NAME"
@@ -19,6 +19,28 @@ SERVICE_DOMAIN="gui/$USER_ID"
 HEALTH_URL="http://127.0.0.1:8000/api/health"
 FRONTEND_SOURCE_DIR="$PROJECT_ROOT/frontend"
 FRONTEND_URL="http://127.0.0.1:4173/asm-platform/index.html"
+
+reload_launch_agent() {
+  local label="$1"
+  local plist_path="$2"
+  local name="$3"
+
+  if launchctl print "$SERVICE_DOMAIN/$label" >/dev/null 2>&1; then
+    echo "Reloading $name..."
+    launchctl bootout "$SERVICE_DOMAIN/$label" || true
+    for _ in {1..20}; do
+      if ! launchctl print "$SERVICE_DOMAIN/$label" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 0.2
+    done
+  else
+    echo "Loading $name..."
+  fi
+
+  launchctl bootstrap "$SERVICE_DOMAIN" "$plist_path"
+  launchctl kickstart -k "$SERVICE_DOMAIN/$label"
+}
 
 echo "Project: $PROJECT_ROOT"
 echo "Service: $SERVICE_ROOT"
@@ -63,31 +85,16 @@ echo "Installing LaunchAgent..."
 cp "$LAUNCH_AGENT_SOURCE" "$LAUNCH_AGENT_TARGET"
 cp "$FRONTEND_LAUNCH_AGENT_SOURCE" "$FRONTEND_LAUNCH_AGENT_TARGET"
 
-if launchctl print "$SERVICE_DOMAIN/$SERVICE_LABEL" >/dev/null 2>&1; then
-  echo "Restarting loaded service..."
-  launchctl kickstart -k "$SERVICE_DOMAIN/$SERVICE_LABEL"
-else
-  echo "Loading service..."
-  launchctl bootstrap "$SERVICE_DOMAIN" "$LAUNCH_AGENT_TARGET"
-  launchctl kickstart -k "$SERVICE_DOMAIN/$SERVICE_LABEL"
-fi
-
-if launchctl print "$SERVICE_DOMAIN/$FRONTEND_SERVICE_LABEL" >/dev/null 2>&1; then
-  echo "Restarting loaded frontend service..."
-  launchctl kickstart -k "$SERVICE_DOMAIN/$FRONTEND_SERVICE_LABEL"
-else
-  echo "Loading frontend service..."
-  launchctl bootstrap "$SERVICE_DOMAIN" "$FRONTEND_LAUNCH_AGENT_TARGET"
-  launchctl kickstart -k "$SERVICE_DOMAIN/$FRONTEND_SERVICE_LABEL"
-fi
+reload_launch_agent "$SERVICE_LABEL" "$LAUNCH_AGENT_TARGET" "service"
+reload_launch_agent "$FRONTEND_SERVICE_LABEL" "$FRONTEND_LAUNCH_AGENT_TARGET" "frontend service"
 
 echo "Checking backend health..."
-for attempt in {1..20}; do
+for attempt in {1..60}; do
   if curl -fsS "$HEALTH_URL" >/dev/null 2>&1; then
     echo "Backend is healthy: $HEALTH_URL"
     break
   fi
-  if [[ "$attempt" == "20" ]]; then
+  if [[ "$attempt" == "60" ]]; then
     echo "Backend did not become healthy. Check logs:" >&2
     echo "  /private/tmp/aao-fastapi.log" >&2
     echo "  /private/tmp/aao-fastapi.err.log" >&2
@@ -97,7 +104,7 @@ for attempt in {1..20}; do
 done
 
 echo "Checking frontend health..."
-for attempt in {1..20}; do
+for attempt in {1..60}; do
   if curl -fsS "$FRONTEND_URL" >/dev/null 2>&1; then
     echo "Frontend is healthy: $FRONTEND_URL"
     exit 0

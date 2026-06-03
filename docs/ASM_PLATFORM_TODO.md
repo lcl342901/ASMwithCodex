@@ -14,7 +14,7 @@ Update it whenever the ASM frontend, backend simulation engine, realtime workflo
 - Source project: `/Users/chenglin/Projects/WEST model/Modelica2023TH/aao-simulator`
 - ASM frontend: `frontend/asm-platform/`
 - Backend API: `backend/`
-- Runtime service copy: `/Users/chenglin/aao-simulator-service`
+- Runtime service copy: `/Users/chenglin/Projects/WEST model/runtime/aao-simulator-service`
 - Main ASM service URL: `http://127.0.0.1:4173/asm-platform/index.html`
 - Backend health URL: `http://127.0.0.1:8000/api/health`
 - Sync command: `./scripts/sync-service.sh`
@@ -90,11 +90,13 @@ Update it whenever the ASM frontend, backend simulation engine, realtime workflo
 
 ### P7 - Engineering Baseline
 
-- [x] Added `scripts/sync-service.sh` to sync backend and frontend into `/Users/chenglin/aao-simulator-service`.
+- [x] Added `scripts/sync-service.sh` to sync backend and frontend into the local runtime service directory.
 - [x] Added `scripts/verify-p7.sh` to run frontend syntax checks, backend tests, service-copy checks, and health checks.
 - [x] Updated sync logic to preserve the `frontend/asm-platform/` and `frontend/3d-process/` boundaries.
+- [x] Moved the default runtime service copy under the local project workspace at `/Users/chenglin/Projects/WEST model/runtime/aao-simulator-service`.
 - [x] Verified backend test suite: 73 tests passed.
 - [x] Verified backend health and frontend service availability.
+- [x] Verified runtime service migration with `./scripts/sync-service.sh` and `./scripts/verify-p7.sh`.
 - [x] Updated production readiness notes.
 - [x] Added a login-page entry link from the ASM platform to the 3D process display.
 

@@ -14,7 +14,7 @@
     <string>127.0.0.1</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>/Users/chenglin/aao-simulator-service/frontend</string>
+  <string>/Users/chenglin/Projects/WEST model/runtime/aao-simulator-service/frontend</string>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
