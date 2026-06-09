@@ -11,7 +11,7 @@ Update it whenever the ASM frontend, backend simulation engine, realtime workflo
 
 ## Current Baseline
 
-- Source project: `/Users/chenglin/Projects/WEST model/Modelica2023TH/aao-simulator`
+- Source project: `/Users/chenglin/Projects/WEST model/aao-simulator`
 - ASM frontend: `frontend/asm-platform/`
 - Backend API: `backend/`
 - Runtime service copy: `/Users/chenglin/Projects/WEST model/runtime/aao-simulator-service`

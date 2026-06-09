@@ -5,8 +5,8 @@ Update it whenever a 3D feature, data mapping, scene module, workflow page, or d
 
 ## Current Baseline
 
-- Source project: `/Users/chenglin/Projects/WEST model/Modelica2023TH/aao-simulator`
-- Runtime service copy: `/Users/chenglin/aao-simulator-service`
+- Source project: `/Users/chenglin/Projects/WEST model/aao-simulator`
+- Runtime service copy: `/Users/chenglin/Projects/WEST model/runtime/aao-simulator-service`
 - Main 3D page: `frontend/3d-process/wwtp-3d.html`
 - Underground process page: `frontend/3d-process/underground-line-3d.html`
 - ASM platform frontend: `frontend/asm-platform/`
@@ -73,6 +73,7 @@ Update it whenever a 3D feature, data mapping, scene module, workflow page, or d
 - [x] Updated `README.md` with 3D module and P7 verification notes.
 - [x] Updated `docs/PRODUCTION_READINESS.md` with engineering baseline notes.
 - [x] Added a login-page entry link from the ASM platform to the 3D process display.
+- [x] Added consistent 3D page navigation for returning to the ASM platform and switching process views.
 - [x] Verified `./scripts/sync-service.sh`.
 - [x] Verified `./scripts/verify-p7.sh`.
 - [x] Verified backend test suite: 73 tests passed.
@@ -85,7 +86,7 @@ Update it whenever a 3D feature, data mapping, scene module, workflow page, or d
 
 - [ ] Connect `underground-line-3d.html` to the same state, time-axis, and indicator system used by `wwtp-3d.html`.
 - [ ] Add multi-process-line switching between AAO view, underground line view, and future process views.
-- [ ] Add a consistent navigation model across all 3D pages.
+- [x] Add a consistent navigation model across all 3D pages.
 - [ ] Add more explicit scenario / timeline controls for demo and review use.
 - [ ] Add alarm event display and process-risk summary.
 
