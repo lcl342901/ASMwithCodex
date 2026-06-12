@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>引擎测试平台</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="工作区状态">
+        <div class="app-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M10 3h4M11 3v5l-5.8 9.5A2.2 2.2 0 0 0 7.1 21h9.8a2.2 2.2 0 0 0 1.9-3.5L13 8V3" />
+            <path d="M7.7 16.3h8.6" />
+          </svg>
+        </div>
+        <div class="side-title">
+          <strong>引擎测试平台</strong>
+          <span>Engine Testbench</span>
+          <span>v1.0.0</span>
+        </div>
+
+        <section class="side-section">
+          <h2>工作区状态</h2>
+          <p class="dot-line"><span class="dot"></span>就绪</p>
+        </section>
+
+        <section class="side-section">
+          <h2>当前测试对象</h2>
+          <dl class="side-facts">
+            <div><dt>引擎层级</dt><dd>工艺仿真引擎</dd></div>
+            <div><dt>不是</dt><dd>裸 ASM1 反应公式</dd></div>
+          </dl>
+        </section>
+
+        <section class="side-section">
+          <h2>当前会话</h2>
+          <dl class="side-facts">
+            <div><dt>会话 ID</dt><dd id="sessionId">sess_--</dd></div>
+            <div><dt>开始时间</dt><dd id="sessionStarted">--</dd></div>
+          </dl>
+        </section>
+
+        <section class="side-section history-section">
+          <h2>运行历史</h2>
+          <div id="runHistory" class="run-history">
+            <article>
+              <span class="mini-check"></span>
+              <div>
+                <strong>等待首次评估</strong>
+                <small>AAO-ASM1 v1</small>
+              </div>
+              <em>--</em>
+            </article>
+          </div>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div class="title-block">
+            <h1>AAO-ASM1 工艺引擎测试台</h1>
+            <p>当前验证对象是包含 AAO 工艺边界、ASM1 反应、沉淀池与回流假设的仿真引擎，不是单独的 ASM1 反应动力学内核。</p>
+          </div>
+
+          <div class="toolbar" aria-label="运行控制">
+            <label class="engine-picker">
+              <span>选择引擎</span>
+              <select id="engineSelect">
+                <option value="v1">AAO-ASM1 v1</option>
+              </select>
+            </label>
+            <button id="settingsToggle" class="icon-button" type="button" title="测试设置" aria-label="测试设置">
+              <svg viewBox="0 0 24 24">
+                <path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z" />
+                <path d="M19.4 15a8 8 0 0 0 .1-1.2 8 8 0 0 0-.1-1.2l2-1.5-2-3.5-2.4 1a8.7 8.7 0 0 0-2-1.2L14.7 5h-5.4L9 7.4a8.7 8.7 0 0 0-2 1.2l-2.4-1-2 3.5 2 1.5a8 8 0 0 0-.1 1.2 8 8 0 0 0 .1 1.2l-2 1.5 2 3.5 2.4-1a8.7 8.7 0 0 0 2 1.2l.3 2.4h5.4l.3-2.4a8.7 8.7 0 0 0 2-1.2l2.4 1 2-3.5-2-1.5Z" />
+              </svg>
+            </button>
+            <button id="runEvaluation" class="run-button" type="button">
+              <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7-11-7Z" /></svg>
+              运行评估
+            </button>
+            <button id="exportJson" class="export-button" type="button" disabled>
+              <svg viewBox="0 0 24 24"><path d="M12 3v11m0 0 4-4m-4 4-4-4M4 17v3h16v-3" /></svg>
+              导出报告
+            </button>
+            <div class="last-run">
+              <span>上次运行</span>
+              <strong id="lastRunTime">--</strong>
+              <small id="lastRunStatus"><span class="dot"></span>未运行</small>
+            </div>
+          </div>
+        </header>
+
+        <section id="settingsPanel" class="settings-panel" aria-label="测试设置" hidden>
+          <label>
+            <span>API 地址</span>
+            <input id="apiBaseInput" type="url" value="http://127.0.0.1:8001" />
+          </label>
+          <label class="check-control">
+            <input id="includeLongHorizon" type="checkbox" />
+            <span>包含长周期稳定性检查（1d / 5d / 20d）</span>
+          </label>
+          <button id="refreshCatalog" type="button">刷新引擎注册表</button>
+        </section>
+
+        <section class="layer-panel" aria-label="三层测试架构">
+          <div class="layer-head">
+            <h2>三层测试架构</h2>
+            <p>把“模型公式是否正确”、“工艺仿真器是否稳定”、“工程结果是否合理”分开看。</p>
+          </div>
+          <div id="testLayers" class="layer-grid">
+            <article class="layer-card layer-pending">
+              <span>L1 · 模型内核测试</span>
+              <strong>ASM1 Reaction Kernel</strong>
+              <p>只测反应速率、状态变量、单位、质量守恒、数值稳定性；这里没有池容和工艺流程。</p>
+              <em>待接入</em>
+            </article>
+            <article class="layer-card layer-active">
+              <span>L2 · 工艺引擎测试</span>
+              <strong>AAO + ASM1 + Clarifier + Recycle</strong>
+              <p>测进水、池容、HRT/SRT、DO、回流比、沉淀池等边界条件下是否稳定运行。</p>
+              <em>当前运行</em>
+            </article>
+            <article class="layer-card layer-review">
+              <span>L3 · 工程参考验证</span>
+              <strong>BSM1 / 实测数据 / 历史项目</strong>
+              <p>对比参考案例或实测数据，才判断工程上是否合理；当前 BSM1 只是参考门禁。</p>
+              <em>需复核</em>
+            </article>
+          </div>
+        </section>
+
+        <section class="metric-grid" aria-label="核心指标">
+          <article class="metric-card reliability-card">
+            <div class="metric-icon shield-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 3 4.8 6v5.3c0 4.5 3 8.4 7.2 9.7 4.2-1.3 7.2-5.2 7.2-9.7V6L12 3Z" /><path d="m8.7 12 2.2 2.2 4.7-5" /></svg>
+            </div>
+            <div>
+              <h2>可靠性 <span>(Reliability)</span></h2>
+              <strong id="reliabilityStatus">--</strong>
+              <p id="reliabilityDetail">等待评估</p>
+            </div>
+            <div class="trend">
+              <span>趋势<br />近 5 次</span>
+              <svg viewBox="0 0 120 42"><path d="M4 25 24 24 43 28 63 18 84 24 104 23 116 18" /></svg>
+            </div>
+          </article>
+
+          <article class="metric-card stability-card">
+            <div class="metric-icon pulse-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M3 12h4l2.2-5 5.1 11 2.3-6H21" /></svg>
+            </div>
+            <div>
+              <h2>稳定性 <span>(Stability)</span></h2>
+              <strong id="stabilityStatus">--</strong>
+              <p id="stabilityDetail">等待评估</p>
+            </div>
+            <div class="trend">
+              <span>趋势<br />近 5 次</span>
+              <svg viewBox="0 0 120 42"><path d="M4 19 24 24 43 14 63 25 84 32 104 22 116 21" /></svg>
+            </div>
+          </article>
+
+          <article class="metric-card generality-card">
+            <div class="metric-icon cube-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z" /><path d="M4 7.5 12 12l8-4.5M12 12v9" /></svg>
+            </div>
+            <div>
+              <h2>通用性 <span>(Generality)</span></h2>
+              <strong id="generalityStatus">--</strong>
+              <p id="generalityDetail">等待评估</p>
+            </div>
+            <div class="trend">
+              <span>趋势<br />近 5 次</span>
+              <svg viewBox="0 0 120 42"><path d="M4 18 24 23 43 13 63 21 84 22 104 31 116 27" /></svg>
+            </div>
+          </article>
+
+          <article class="metric-card runtime-card">
+            <div class="metric-icon clock-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17Z" /><path d="M12 7v5l4 2" /></svg>
+            </div>
+            <div>
+              <h2>运行耗时 <span>(Runtime)</span></h2>
+              <strong id="runtimeStatus">--</strong>
+              <p id="runtimeDetail">等待评估</p>
+            </div>
+            <div class="trend">
+              <span>趋势<br />近 5 次</span>
+              <svg viewBox="0 0 120 42"><path d="M4 26 24 21 43 14 63 32 84 22 104 26 116 31" /></svg>
+            </div>
+          </article>
+        </section>
+
+        <div class="content-grid">
+          <div class="left-stack">
+            <section id="scenarios" class="panel matrix-panel" aria-label="场景评估矩阵">
+              <div class="panel-head">
+                <h2>工况场景评估矩阵 <span id="matrixEngineLabel">（AAO-ASM1 v1）</span></h2>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>场景</th>
+                      <th>工艺边界</th>
+                      <th>状态</th>
+                      <th>样本数</th>
+                      <th>NH4-N <small>(mg/L)</small></th>
+                      <th>TN <small>(mg/L)</small></th>
+                      <th>TSS <small>(mg/L)</small></th>
+                      <th>最大相对误差</th>
+                    </tr>
+                  </thead>
+                  <tbody id="scenarioRows">
+                    <tr><td colspan="8">运行评估后显示 AAO-ASM1 工艺边界场景结果。</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="matrix-foot">
+                <span>注：这里测的是工艺仿真引擎在不同边界条件下能否稳定运行，不等同于 ASM1 机理认证。</span>
+                <strong id="scenarioPassRate">总体通过率：--</strong>
+              </div>
+            </section>
+
+            <div class="lower-grid">
+              <section id="stability" class="panel stability-panel" aria-label="稳定性检查">
+                <div class="panel-head">
+                  <h2>数值稳定性检查 <span>（同一工艺边界下的重复性与求解器一致性）</span></h2>
+                </div>
+                <div id="stabilityChecks" class="stability-list">
+                  <article><span>数值稳定性（无发散 / NaN）</span><strong>等待评估</strong></article>
+                  <article><span>重复运行一致性</span><strong>等待评估</strong></article>
+                  <article><span>求解器一致性</span><strong>等待评估</strong></article>
+                </div>
+              </section>
+
+              <section class="panel log-panel" aria-label="运行日志">
+                <div class="panel-head">
+                  <h2>运行日志 <span>(Run Log)</span></h2>
+                  <button id="clearLog" type="button">清空日志</button>
+                </div>
+                <pre id="runLog">等待操作。</pre>
+              </section>
+            </div>
+          </div>
+
+          <aside class="right-stack">
+            <section class="panel contract-panel" aria-label="引擎接入合同">
+              <div class="panel-head">
+                <h2>引擎接入合同 <span>(Process Engine Contract)</span></h2>
+              </div>
+              <dl class="contract-table">
+                <div><dt>接口类型</dt><dd>CalculationEngine</dd></div>
+                <div><dt>引擎标识</dt><dd id="contractEngineId">AAO-ASM1</dd></div>
+                <div><dt>模型内核</dt><dd>ASM1 Reaction Kernel</dd></div>
+                <div><dt>工艺外壳</dt><dd>AAO + Clarifier + Recycle</dd></div>
+                <div><dt>版本</dt><dd>v1.0.0</dd></div>
+                <div><dt>模型来源</dt><dd>Activated Sludge Model No.1</dd></div>
+                <div><dt>状态</dt><dd id="contractStatus" class="status-pass"><span class="dot"></span>注册成功</dd></div>
+                <div><dt>最后更新</dt><dd id="contractUpdated">--</dd></div>
+              </dl>
+              <h3>接口方法</h3>
+              <code>run(options: RunOptions) -> RunResult</code>
+              <h3>输入要求 <span>(RunOptions)</span></h3>
+              <ul class="contract-requirements">
+                <li>influent：时间序列 Q、Ss、Si、Xb、Xi、NH4-N、TN、TP、TSS、Temp、DO</li>
+                <li>process：池容、分区、水力停留时间、内回流、污泥回流、排泥假设</li>
+                <li>initial_state：初始状态向量（可选）</li>
+                <li>dt：步长（s）</li>
+                <li>duration：仿真时长（s）</li>
+                <li>config：模型参数与求解器配置（可选）</li>
+              </ul>
+            </section>
+
+            <section id="catalog" class="panel scenario-pack-panel" aria-label="场景包">
+              <div class="panel-head">
+                <h2>场景包 <span>(Scenario Pack)</span></h2>
+                <span id="catalogStatus">本地合同占位</span>
+              </div>
+              <div id="engineCatalog" class="scenario-pack">
+                <article>
+                  <strong>默认场景包 v1.0</strong>
+                  <span>覆盖典型工况、极端工况与冲击工况</span>
+                  <em>5 个场景</em>
+                </article>
+              </div>
+            </section>
+
+            <section class="panel reference-panel" aria-label="参考案例门禁">
+              <div class="panel-head">
+                <h2>工程参考门禁 <span>(BSM1, reference-only)</span></h2>
+              </div>
+              <div id="referenceGates" class="reference-list">
+                <p>运行评估后显示参考案例门禁。</p>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

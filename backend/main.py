@@ -14,6 +14,8 @@ from fastapi.responses import JSONResponse
 from .ai_analysis import analyze_result, chat_with_deepseek, deepseek_config
 from .calibration import bsm1_calibration_report, bsm1_mapping_report, calibration_optimize, calibration_stage_configs, historical_replay_report, infer_observation_targets, observations_from_trust_trend, run_calibration_stage
 from .engine_runner import normalize_engine_version, simulate_with_engine
+from .engine_testing import evaluate_asm1_engine
+from .engines import list_engines
 from .model_trust import (
     assess_result_credibility,
     calibration_preview,
@@ -512,6 +514,32 @@ def clear_logs_endpoint(projectId: str = "default") -> dict:
 @app.get("/api/model/metadata")
 def model_metadata_endpoint() -> dict:
     return model_metadata()
+
+
+@app.get("/api/engines")
+def engines_endpoint() -> dict:
+    return {
+        "engines": [
+            {
+                "id": item.id,
+                "modelId": item.model_id,
+                "modelFamily": item.model_family,
+                "componentCount": item.component_count,
+                "status": item.status,
+                "resultContract": item.result_contract,
+                "notes": list(item.notes),
+            }
+            for item in list_engines()
+        ]
+    }
+
+
+@app.post("/api/engines/{engine_id}/evaluate")
+def engine_evaluate_endpoint(engine_id: str, includeLongHorizon: bool = False) -> dict:
+    normalized = engine_id.strip().lower()
+    if normalized not in {"v1", "asm1", "asm1_v1"}:
+        raise HTTPException(status_code=404, detail="Engine evaluation is only available for ASM1 v1.")
+    return evaluate_asm1_engine(include_long_horizon=includeLongHorizon)
 
 
 @app.get("/api/model/reference-cases")

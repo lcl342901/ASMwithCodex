@@ -4,11 +4,11 @@ from typing import Any, Callable
 
 from .engine_bsm1 import run_bsm1_simulation
 from .engine_v2 import V2_SOLVER_METHODS, run_vector_simulation_v2
+from .engines import EngineRunOptions, get_engine
 from .model import (
     SimulationContext,
     normalize_csv_records,
     sanitize_params,
-    simulate,
     validate_csv_records,
     validate_params,
 )
@@ -55,15 +55,16 @@ def simulate_with_engine(
 ) -> dict[str, Any]:
     engine_version = normalize_engine_version(params)
     if engine_version == "v1":
-        result = simulate(
-            params=params,
-            csv_text=csv_text,
-            csv_file_name=csv_file_name,
-            progress_callback=progress_callback,
-            partial_result_callback=partial_result_callback,
-            initial_state=initial_state,
+        result = get_engine("v1").run(
+            EngineRunOptions(
+                params=params,
+                csv_text=csv_text,
+                csv_file_name=csv_file_name,
+                progress_callback=progress_callback,
+                partial_result_callback=partial_result_callback,
+                initial_state=initial_state,
+            )
         )
-        result["engineVersion"] = "v1"
         result["credibility"] = assess_result_credibility(result, params)
         return result
 

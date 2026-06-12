@@ -1,7 +1,19 @@
 # ASMwithCodex AAO Simulator
 
-This project is a browser-based AAO/A2O wastewater process simulator prototype.
-It is intended as a learning and experimentation platform for ASM1-based process simulation.
+Open-source wastewater treatment process modeling toolkit for ASM-based AAO/A2O simulation and calculation-engine validation.
+
+The project started as a browser-based AAO simulator, and is now being separated into two related surfaces:
+
+- **ASM learning and simulation platform**: an interactive AAO/A2O wastewater process simulator for experimentation, visualization, and operating-parameter exploration.
+- **Engine Testbench**: a standalone validation workspace for calculation engines. It currently evaluates an `AAO-ASM1 Process Engine` and is designed to expand toward ASM2d, ASM2d_NDHA, and other activated-sludge model engines.
+
+The engine testbench intentionally separates three levels of evidence:
+
+1. **Model-kernel tests**: ASM reaction-rate equations, state variables, units, mass balance, and numerical stability. This layer does not include reactor volumes, plant layout, clarifiers, or recycle loops.
+2. **Process-engine tests**: AAO + ASM1 + clarifier + recycle + influent/process boundary conditions. This is the currently implemented pass/fail layer.
+3. **Engineering-reference validation**: BSM1, measured plant data, and historical project data. This layer is currently `reference-only` until mapping, averaging windows, and tolerance gates are formalized.
+
+The goal is to make environmental process simulation more reproducible by giving each model engine a clear contract, scenario pack, stability test suite, and reference-validation path.
 
 ## Current Features
 
@@ -30,6 +42,8 @@ It is intended as a learning and experimentation platform for ASM1-based process
 - Realtime MVP API with SQLite-backed input, model state, and latest result storage.
 - Optional API token protection for online deployment experiments.
 - Lightweight Three.js AAO 3D process prototype with simulation timeline playback, metric color legends, map/base-layer toggle, blower room, and modular visual/runtime helpers.
+- Standalone calculation-engine package and registry for independently running the current ASM1-based engine.
+- Standalone Engine Testbench UI for engine registration, scenario evaluation, stability checks, three-layer test status, and JSON report export.
 
 ## Files
 
@@ -37,6 +51,9 @@ It is intended as a learning and experimentation platform for ASM1-based process
 - `frontend/asm-platform/styles.css`: ASM platform layout and visual styling.
 - `frontend/asm-platform/app.js`: ASM1 model, clarifier model, CSV replay, chart rendering, and UI logic.
 - `frontend/asm-platform/sample-data.csv`: example CSV that can be uploaded directly.
+- `frontend/engine-testbench/index.html`: standalone AAO-ASM1 calculation-engine testbench.
+- `frontend/engine-testbench/styles.css`: desktop engineering-workbench UI for engine validation.
+- `frontend/engine-testbench/app.js`: engine catalog, evaluation, three-layer status, scenario matrix, and JSON export logic.
 - `frontend/3d-process/wwtp-3d.html`: AAO 3D process prototype.
 - `frontend/3d-process/underground-line-3d.html`: underground WWTP one-line 3D process prototype.
 - `frontend/3d-process/wwtp-visual-config.js`: 3D metric color, legend, and button configuration.
@@ -45,12 +62,30 @@ It is intended as a learning and experimentation platform for ASM1-based process
 - `frontend/3d-process/wwtp-scene-utils.js`: shared 3D pipe and particle construction helpers.
 - `backend/main.py`: FastAPI app and `/api/simulate` route.
 - `backend/model.py`: Python ASM1, AAO, RAS/WAS, Takacs clarifier, and CSV replay engine.
+- `backend/engines/`: calculation-engine interface, ASM1 engine adapter, and engine registry.
+- `backend/engine_scenarios/`: scenario-pack definitions for engine evaluation.
+- `backend/engine_testing.py`: standalone evaluation harness and JSON report generator.
 - `backend/model_trust.py`: model metadata, unit notes, initial-condition snapshots, credibility screening, and calibration preview helpers.
 - `backend/schemas.py`: API request schema.
 - `backend/requirements.txt`: backend Python dependencies.
 - `docs/ASM_PLATFORM_TODO.md`: ASM learning platform development ledger.
+- `docs/ENGINE_TESTBENCH_TODO.md`: standalone engine-testbench development ledger.
+- `docs/ROADMAP.md`: open-source roadmap and release plan.
+- `docs/CODEX_FOR_OSS_APPLICATION.md`: draft material for a Codex for Open Source application.
 - `docs/3D_FLOW_TODO.md`: 3D process-view development ledger.
 - `docs/PRODUCTION_READINESS.md`: production readiness notes for API token, database, workers, and user/project isolation.
+
+## Open Source Status
+
+This repository is being prepared as an open-source project for wastewater-process simulation and model-engine validation.
+
+- License: MIT, see `LICENSE`.
+- Current engine: `AAO-ASM1 Process Engine`.
+- Current model kernel: ASM1-style 13-component activated-sludge model.
+- Current process boundary: anaerobic/anoxic/aerobic CSTR zones, Takacs-style secondary clarifier, RAS/WAS sludge handling, and configurable influent/process parameters.
+- Current validation maturity: process-engine tests are implemented; pure model-kernel tests and engineering-grade BSM1/plant-data gates are still roadmap items.
+
+See `docs/ROADMAP.md` for planned releases and `docs/CODEX_FOR_OSS_APPLICATION.md` for a concise project-impact summary.
 
 ## API Token For Deployment Experiments
 
@@ -86,7 +121,6 @@ DEEPSEEK_API_URL=https://api.deepseek.com/chat/completions
 Start the backend first:
 
 ```bash
-cd aao-simulator
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r backend/requirements.txt
@@ -183,6 +217,64 @@ It checks:
 - required local and service frontend files
 - backend health at `http://127.0.0.1:8000/api/health`
 - frontend pages/modules at `http://127.0.0.1:4173/`
+
+## ASM1 Engine Evaluation
+
+The backend now exposes the calculation engine through a standalone engine package:
+
+```python
+from backend.engines import EngineRunOptions, get_engine
+
+asm1 = get_engine("asm1")
+result = asm1.run(
+    EngineRunOptions(
+        params={
+            "simulationDays": 0.05,
+            "timeStepHours": 0.5,
+            "outputIntervalHours": 0.5,
+        }
+    )
+)
+```
+
+The backend also includes an engine evaluation harness for the current AAO-ASM1 process engine:
+
+```bash
+python3 -m backend.engine_testing
+```
+
+For a standalone engine-only workspace, open:
+
+```text
+frontend/engine-testbench/index.html
+```
+
+This page intentionally excludes the broader AAO simulation platform shell and focuses only on engine registration, three-layer testing status, scenario testing, stability checks, reference gates, and future model integration contracts. It calls:
+
+```text
+GET /api/engines
+POST /api/engines/v1/evaluate
+```
+
+The report currently evaluates:
+
+- model-kernel layer: declared as `not_implemented` until ASM1 reaction-rate tests are extracted from the process engine
+- process-engine layer: required result keys, finite numeric outputs, matching series lengths, runnable scenario coverage, repeatability, RK4 internal-step consistency, short-horizon RK4-vs-LSODA agreement, and stress axes for baseline, load, temperature, hydraulics, and oxygen
+- engineering-reference layer: BSM1 reference gate, currently `needs_review` / reference-only until formal mapping and tolerance bands are added
+
+Future engines such as `ASM2d_NDHA` can reuse the same package and harness by adding a `CalculationEngine` implementation, registering it in `backend.engines.registry`, and adding model-specific scenario packs.
+
+## Contributing
+
+Contributions are welcome once the repository is public. Good first areas include:
+
+- adding ASM1 model-kernel tests
+- expanding AAO process-boundary scenarios
+- formalizing BSM1 reference-case mapping
+- improving report export formats
+- adding scenario packs for future ASM2d or ASM2d_NDHA engines
+
+See `CONTRIBUTING.md` for development and contribution notes.
 
 ## API
 

@@ -6,7 +6,9 @@ import unittest
 from pathlib import Path
 from backend.engine_compare import compare_engines
 from backend.engine_runner import normalize_engine_version, simulate_with_engine
-from backend.main import calibration_bsm1_mapping_endpoint, calibration_bsm1_report_endpoint, calibration_optimize_endpoint, calibration_preview_endpoint, calibration_stage_run_endpoint, calibration_stages_endpoint, cancel_simulation_job_endpoint, clear_project_csv_endpoint, configured_api_token, create_project_endpoint, default_project_endpoint, delete_project_calibration_run_endpoint, get_project_calibration_run_endpoint, get_project_csv_endpoint, get_project_params_endpoint, get_project_periodic_calibration_endpoint, create_simulation_job_endpoint, get_simulation_job_endpoint, get_simulation_job_result_endpoint, list_project_calibration_runs_endpoint, list_projects_endpoint, model_credibility_endpoint, model_initial_conditions_endpoint, model_metadata_endpoint, model_reference_case_compare_endpoint, model_reference_case_endpoint, model_reference_cases_endpoint, realtime_sources_endpoint, realtime_status_endpoint, request_api_token, reset_project_params_endpoint, run_project_periodic_calibration_endpoint, save_project_csv_endpoint, save_project_params_endpoint, save_project_periodic_calibration_endpoint, simulate_endpoint
+from backend.engine_testing import EngineScenario, asm1_adapter, evaluate_asm1_engine, evaluate_engine
+from backend.engines import EngineRunOptions, get_engine, list_engines
+from backend.main import calibration_bsm1_mapping_endpoint, calibration_bsm1_report_endpoint, calibration_optimize_endpoint, calibration_preview_endpoint, calibration_stage_run_endpoint, calibration_stages_endpoint, cancel_simulation_job_endpoint, clear_project_csv_endpoint, configured_api_token, create_project_endpoint, default_project_endpoint, delete_project_calibration_run_endpoint, engine_evaluate_endpoint, engines_endpoint, get_project_calibration_run_endpoint, get_project_csv_endpoint, get_project_params_endpoint, get_project_periodic_calibration_endpoint, create_simulation_job_endpoint, get_simulation_job_endpoint, get_simulation_job_result_endpoint, list_project_calibration_runs_endpoint, list_projects_endpoint, model_credibility_endpoint, model_initial_conditions_endpoint, model_metadata_endpoint, model_reference_case_compare_endpoint, model_reference_case_endpoint, model_reference_cases_endpoint, realtime_sources_endpoint, realtime_status_endpoint, request_api_token, reset_project_params_endpoint, run_project_periodic_calibration_endpoint, save_project_csv_endpoint, save_project_params_endpoint, save_project_periodic_calibration_endpoint, simulate_endpoint
 from backend.model import DEFAULT_PARAMS, csv_values_at, normalize_csv_records, simulate, SimulationContext, sanitize_params
 from backend.schemas import Bsm1CalibrationReportRequest, Bsm1MappingRequest, CalibrationOptimizeRequest, CalibrationPreviewRequest, CalibrationStageRunRequest, InitialConditionRequest, ModelCredibilityRequest, ParamConfigRequest, PeriodicCalibrationRunRequest, PeriodicCalibrationScheduleRequest, ProjectCsvRequest, ProjectRequest, ReferenceComparisonRequest, SimulationRequest
 from backend.solver_benchmark import benchmark_v2_solvers, project_long_horizon_durations, step_consistency_report
@@ -208,6 +210,36 @@ class ModelTest(unittest.TestCase):
         self.assertIn(result["credibility"]["status"], {"ok", "caution", "needs_review", "invalid"})
         self.assertGreaterEqual(result["credibility"]["score"], 0)
         self.assertLessEqual(result["credibility"]["score"], 100)
+
+    def test_asm1_engine_is_registered_and_independently_runnable(self):
+        metadata = list_engines()
+        asm1 = get_engine("asm1")
+        result = asm1.run(
+            EngineRunOptions(params=rk4_params(simulationDays=0.02, timeStepHours=0.5, outputIntervalHours=0.5))
+        )
+
+        self.assertTrue(any(item.model_id == "ASM1" for item in metadata))
+        self.assertEqual(asm1.metadata.id, "v1")
+        self.assertEqual(result["engineVersion"], "v1")
+        self.assertEqual(result["modelId"], "ASM1")
+        self.assertEqual(result["engineMetadata"]["resultContract"], "frontend_series_v1")
+        self.assertGreater(len(result["time"]), 1)
+        assert_finite_tree(self, result)
+
+    def test_engine_api_lists_and_evaluates_asm1(self):
+        engines = engines_endpoint()
+        report = engine_evaluate_endpoint("asm1")
+
+        self.assertEqual(engines["engines"][0]["modelId"], "ASM1")
+        self.assertEqual(engines["engines"][0]["resultContract"], "frontend_series_v1")
+        self.assertIn("schemaVersion", report)
+        self.assertIn("runId", report)
+        self.assertIn("createdAt", report)
+        self.assertEqual(report["engine"]["supportedModelIds"], ["ASM1"])
+        self.assertEqual(report["reliability"]["status"], "pass")
+        self.assertEqual(report["referenceGates"][0]["caseId"], "bsm1_alignment_placeholder")
+        self.assertEqual(report["referenceGates"][0]["status"], "needs_review")
+        assert_finite_tree(self, report)
 
     def test_credibility_endpoint_flags_missing_metrics(self):
         report = model_credibility_endpoint(
@@ -1065,6 +1097,49 @@ class ModelTest(unittest.TestCase):
             time.sleep(0.05)
 
         self.assertEqual(final_job["status"], "cancelled")
+
+    def test_asm1_engine_evaluation_reports_reliability_stability_and_generality(self):
+        report = evaluate_asm1_engine(
+            rk4_params(simulationDays=0.03, timeStepHours=0.5, outputIntervalHours=0.5)
+        )
+
+        self.assertEqual(report["type"], "engine_evaluation")
+        self.assertEqual(report["schemaVersion"], "2026-06-10.engine-evaluation.v1")
+        self.assertTrue(report["runId"])
+        self.assertIn("summary", report)
+        self.assertIn("criteria", report)
+        self.assertIn("warnings", report)
+        self.assertIn("failures", report)
+        self.assertEqual(report["engine"]["supportedModelIds"], ["ASM1"])
+        self.assertEqual(report["engine"]["componentCount"], 13)
+        self.assertEqual(report["reliability"]["status"], "pass")
+        self.assertGreaterEqual(report["reliability"]["scenarioCount"], 5)
+        self.assertEqual(report["generality"]["status"], "pass")
+        self.assertIn("baseline", report["generality"]["coveredAxes"])
+        self.assertTrue(report["generality"]["futureModelHook"]["requiredFields"])
+        self.assertIn(report["stability"]["status"], {"pass", "needs_review"})
+        self.assertFalse(report["stability"]["includeLongHorizon"])
+        self.assertTrue(all("checkId" in check for check in report["stability"]["checks"]))
+        self.assertTrue(all("scenarioId" in run for run in report["reliability"]["runs"]))
+        self.assertEqual(report["referenceGates"][0]["comparisonStatus"], "reference_only")
+        self.assertTrue(all(check["status"] in {"pass", "needs_review"} for check in report["stability"]["checks"]))
+        assert_finite_tree(self, report)
+
+    def test_engine_evaluation_contract_is_reusable_with_custom_scenarios(self):
+        scenarios = [
+            EngineScenario(
+                "smoke_custom_load",
+                "baseline",
+                {"simulationDays": 0.02, "timeStepHours": 0.5, "outputIntervalHours": 0.5},
+            )
+        ]
+        report = evaluate_engine(asm1_adapter(), rk4_params(), scenarios)
+
+        self.assertEqual(report["reliability"]["scenarioCount"], 1)
+        self.assertEqual(report["reliability"]["runs"][0]["name"], "smoke_custom_load")
+        self.assertEqual(report["reliability"]["runs"][0]["status"], "pass")
+        self.assertEqual(report["generality"]["status"], "needs_review")
+        self.assertIn("load", report["generality"]["missingAxes"])
 
 
 if __name__ == "__main__":
