@@ -5,8 +5,8 @@ Update it whenever a 3D feature, data mapping, scene module, workflow page, or d
 
 ## Current Baseline
 
-- Source project: `/Users/chenglin/Projects/WEST model/aao-simulator`
-- Runtime service copy: `/Users/chenglin/Projects/WEST model/runtime/aao-simulator-service`
+- Source project: repository root
+- Runtime service copy: local runtime service directory
 - Main 3D page: `frontend/3d-process/wwtp-3d.html`
 - Underground process page: `frontend/3d-process/underground-line-3d.html`
 - ASM platform frontend: `frontend/asm-platform/`

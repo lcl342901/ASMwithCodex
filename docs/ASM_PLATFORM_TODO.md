@@ -11,10 +11,10 @@ Update it whenever the ASM frontend, backend simulation engine, realtime workflo
 
 ## Current Baseline
 
-- Source project: `/Users/chenglin/Projects/WEST model/aao-simulator`
+- Source project: repository root
 - ASM frontend: `frontend/asm-platform/`
 - Backend API: `backend/`
-- Runtime service copy: `/Users/chenglin/Projects/WEST model/runtime/aao-simulator-service`
+- Runtime service copy: local runtime service directory
 - Main ASM service URL: `http://127.0.0.1:4173/asm-platform/index.html`
 - Backend health URL: `http://127.0.0.1:8000/api/health`
 - Sync command: `./scripts/sync-service.sh`
@@ -93,7 +93,7 @@ Update it whenever the ASM frontend, backend simulation engine, realtime workflo
 - [x] Added `scripts/sync-service.sh` to sync backend and frontend into the local runtime service directory.
 - [x] Added `scripts/verify-p7.sh` to run frontend syntax checks, backend tests, service-copy checks, and health checks.
 - [x] Updated sync logic to preserve the `frontend/asm-platform/` and `frontend/3d-process/` boundaries.
-- [x] Moved the default runtime service copy under the local project workspace at `/Users/chenglin/Projects/WEST model/runtime/aao-simulator-service`.
+- [x] Moved the default runtime service copy under the local project workspace.
 - [x] Verified backend test suite: 73 tests passed.
 - [x] Verified backend health and frontend service availability.
 - [x] Verified runtime service migration with `./scripts/sync-service.sh` and `./scripts/verify-p7.sh`.

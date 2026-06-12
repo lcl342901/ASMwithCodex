@@ -12,7 +12,7 @@ Update it whenever engine interfaces, scenario suites, validation criteria, repo
 
 ## Current Baseline
 
-- Source project: `/Users/chenglin/Projects/WEST model/aao-simulator-worktree`
+- Source project: repository root
 - Engine package: `backend/engines/`
 - Engine evaluation harness: `backend/engine_testing.py`
 - Testbench frontend: `frontend/engine-testbench/`
@@ -24,9 +24,9 @@ Update it whenever engine interfaces, scenario suites, validation criteria, repo
 - Static-server local URL: `http://127.0.0.1:4175/engine-testbench/index.html`
 - Sync command: `./scripts/sync-service.sh`
 - Engineering verification:
-  - `/Users/chenglin/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node --check frontend/engine-testbench/app.js`
-  - `/Users/chenglin/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3 -m unittest backend.test_model.ModelTest.test_engine_api_lists_and_evaluates_asm1 backend.test_model.ModelTest.test_asm1_engine_is_registered_and_independently_runnable`
-  - `/Users/chenglin/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3 -m backend.engine_testing`
+  - `node --check frontend/engine-testbench/app.js`
+  - `python3 -m unittest backend.test_model.ModelTest.test_engine_api_lists_and_evaluates_asm1 backend.test_model.ModelTest.test_asm1_engine_is_registered_and_independently_runnable`
+  - `python3 -m backend.engine_testing`
 
 ## Developed
 

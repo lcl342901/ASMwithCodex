@@ -137,12 +137,12 @@ The page still contains the original JavaScript model as a reference path, but t
 
 ## Persistent Backend Service
 
-On this Mac, the backend can also run as a user-level `launchd` service. This keeps the API running after the terminal window is closed and starts it again after login.
+For local macOS experiments, the backend can also run as a user-level `launchd` service. This keeps the API running after the terminal window is closed and starts it again after login.
 
-The service runtime copy is located at:
+Example service runtime copy:
 
 ```text
-/Users/chenglin/Projects/WEST model/runtime/aao-simulator-service
+<runtime-service-dir>
 ```
 
 The tracked LaunchAgent template is:
@@ -151,10 +151,10 @@ The tracked LaunchAgent template is:
 deploy/com.asmwithcodex.backend.plist
 ```
 
-Installed plist location:
+Example installed plist location:
 
 ```text
-/Users/chenglin/Library/LaunchAgents/com.asmwithcodex.backend.plist
+~/Library/LaunchAgents/com.asmwithcodex.backend.plist
 ```
 
 Useful commands:
@@ -170,10 +170,10 @@ launchctl kickstart -k gui/501/com.asmwithcodex.backend
 launchctl bootout gui/501/com.asmwithcodex.backend
 
 # Load again after unloading
-launchctl bootstrap gui/501 /Users/chenglin/Library/LaunchAgents/com.asmwithcodex.backend.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.asmwithcodex.backend.plist
 
 # Inspect status
-launchctl print gui/501/com.asmwithcodex.backend
+launchctl print gui/$(id -u)/com.asmwithcodex.backend
 
 # Check API health
 curl http://127.0.0.1:8000/api/health
@@ -182,16 +182,16 @@ curl http://127.0.0.1:8000/api/health
 Logs:
 
 ```text
-/private/tmp/aao-fastapi.log
-/private/tmp/aao-fastapi.err.log
+<local-log-dir>/aao-fastapi.log
+<local-log-dir>/aao-fastapi.err.log
 ```
 
-If backend code changes in the project directory, run `./scripts/sync-service.sh`. It copies `backend/` into `/Users/chenglin/Projects/WEST model/runtime/aao-simulator-service/`, updates dependencies, installs the LaunchAgent plist, restarts the service, and checks `/api/health`.
+If backend code changes in the project directory, run `./scripts/sync-service.sh`. It copies `backend/` into the configured runtime service directory, updates dependencies, installs the LaunchAgent plist, restarts the service, and checks `/api/health`.
 
 The same script also syncs the complete `frontend/` tree, including `asm-platform/` and `3d-process/`, into:
 
 ```text
-/Users/chenglin/Projects/WEST model/runtime/aao-simulator-service/frontend
+<runtime-service-dir>/frontend
 ```
 
 After sync, the local service pages are:
